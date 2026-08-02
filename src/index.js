@@ -42,6 +42,40 @@ export default {
       });
     }
 
+    if (url.pathname === "/oauth/callback") {
+      const code = url.searchParams.get("code");
+      const state = url.searchParams.get("state");
+      const error = url.searchParams.get("error");
+
+    if (error) {
+      return Response.json({ ok: false, error }, { status: 400 });
+    }
+
+    if (!code || !state) {
+      return Response.json(
+        { ok: false, error: "Missing code or state" },
+        { status: 400 }
+      );
+    }
+
+    const savedState = await env.THREADS_KV.get(`oauth_state:${state}`);
+
+      if (savedState !== "valid") {
+        return Response.json(
+          { ok: false, error: "Invalid or expired OAuth state" },
+          { status: 400 }
+        );
+      }
+
+      await env.THREADS_KV.delete(`oauth_state:${state}`);
+
+      return Response.json({
+        ok: true,
+        code_received: true,
+        state_verified: true,
+      });
+    }
+
     if (url.pathname === "/oauth/start") {
       const state = crypto.randomUUID();
 
