@@ -311,6 +311,23 @@ export default {
     }
 
     if (url.pathname === "/admin/post" && request.method === "GET") {
+      const cookie = request.headers.get("cookie") || "";
+      const sessionId = cookie
+        .split(";")
+        .map((item) => item.trim())
+        .find((item) => item.startsWith("admin_session="))
+        ?.split("=")[1];
+      
+      const sessionValid = sessionId
+        ? await env.THREADS_KV.get(`admin_session:${sessionId}`)
+        : null;
+      
+      if (sessionValid !== "valid") {
+        return Response.redirect(
+          "https://mysecondhorizon-threads.secondhorizon-official.workers.dev/admin/login",
+          302
+        );
+      }
       return new Response(
         `<!DOCTYPE html>
     <html lang="ko">
