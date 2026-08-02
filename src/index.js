@@ -355,13 +355,99 @@ export default {
 
     if (url.pathname === "/admin/post" && request.method === "POST") {
       const formData = await request.formData();
-      const text = formData.get("text");
+      const text = String(formData.get("text") || "").trim();
+    
+      if (!text) {
+        return Response.json(
+          { ok: false, error: "게시 내용을 입력하세요." },
+          { status: 400 }
+        );
+      }
+    
+      const auth = await env.THREADS_KV.get("threads_auth", "json");
+    
+      if (!auth?.access_token) {
+        return Response.json(
+          { ok: false, error: "Threads 연결 정보가 없습니다." },
+          { status: 400 }
+        );
+      }
+    
+      // 실제 Threads 사용자 ID 확인
+      const meUrl = new URL("https://graph.threads.net/v1.0/me");
+      meUrl.searchParams.set("fields", "id,username");
+      meUrl.searchParams.set("access_token", auth.access_token);
+    
+      const meResponse = await fetch(meUrl);
+      const meData = await meResponse.json();
+    
+      if (!meResponse.ok || !meData.id) {
+        return Response.json(
+          { ok: false, step: "get_profile", details: meData },
+          { status: 400 }
+        );
+      }
+    
+      // 게시 컨테이너 생성
+      const createBody = new URLSearchParams({
+        media_type: "TEXT",
+        text,
+        access_token: auth.access_token,
+      });
+    
+      const createResponse = await fetch(
+        `https://graph.threads.net/v1.0/${meData.id}/threads`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+          },
+          body: createBody,
+        }
+      );
+    
+      const createData = await createResponse.json();
+    
+      if (!createResponse.ok || !createData.id) {
+        return Response.json(
+          { ok: false, step: "create_container", details: createData },
+          { status: 400 }
+        );
+      }
+    
+      // 실제 게시
+      const publishBody = new URLSearchParams({
+        creation_id: createData.id,
+        access_token: auth.access_token,
+      });
+    
+      const publishResponse = await fetch(
+        `https://graph.threads.net/v1.0/${meData.id}/threads_publish`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+          },
+          body: publishBody,
+        }
+      );
+    
+      const publishData = await publishResponse.json();
+    
+      if (!publishResponse.ok || !publishData.id) {
+        return Response.json(
+          { ok: false, step: "publish", details: publishData },
+          { status: 400 }
+        );
+      }
     
       return Response.json({
         ok: true,
-        received: text,
+        username: meData.username,
+        post_id: publishData.id,
+        text,
       });
-    }    
+    }
 
     return new Response("Second Horizon is running! 🚀");
   },
