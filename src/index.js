@@ -235,11 +235,6 @@ export default {
 
       const threadsUserId = meData.id;
 
-      return Response.json({
-        auth_user_id: auth.user_id,
-        verified_user_id: threadsUserId,
-      });
-    
       // 1. 게시 컨테이너 생성
       const createResponse = await fetch(
         `https://graph.threads.net/v1.0/${threadsUserId}/threads`,
