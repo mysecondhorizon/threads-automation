@@ -115,6 +115,66 @@ export default {
       return Response.json(JSON.parse(token));
     }
 
+    if (url.pathname === "/admin/exchange-token") {
+      const savedToken = await env.THREADS_KV.get(
+        "threads_short_lived_token",
+        "json"
+      );
+    
+      if (!savedToken?.access_token) {
+        return Response.json(
+          { ok: false, error: "Short-lived token not found" },
+          { status: 400 }
+        );
+      }
+    
+      const exchangeUrl = new URL(
+        "https://graph.threads.net/access_token"
+      );
+    
+      exchangeUrl.searchParams.set("grant_type", "th_exchange_token");
+      exchangeUrl.searchParams.set(
+        "client_secret",
+        env.THREADS_APP_SECRET
+      );
+      exchangeUrl.searchParams.set(
+        "access_token",
+        savedToken.access_token
+      );
+    
+      const tokenResponse = await fetch(exchangeUrl);
+      const tokenData = await tokenResponse.json();
+    
+      if (!tokenResponse.ok || !tokenData.access_token) {
+        return Response.json(
+          {
+            ok: false,
+            error: "Long-lived token exchange failed",
+            details: tokenData,
+          },
+          { status: 400 }
+        );
+      }
+    
+      await env.THREADS_KV.put(
+        "threads_auth",
+        JSON.stringify({
+          access_token: tokenData.access_token,
+          user_id: savedToken.user_id,
+          token_type: tokenData.token_type,
+          expires_in: tokenData.expires_in,
+          saved_at: new Date().toISOString(),
+        })
+      );
+    
+      return Response.json({
+        ok: true,
+        long_lived_token_saved: true,
+        user_id: savedToken.user_id,
+        expires_in: tokenData.expires_in,
+      });
+    }
+
     if (url.pathname === "/oauth/start") {
       const state = crypto.randomUUID();
 
