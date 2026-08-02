@@ -102,6 +102,19 @@ export default {
       });
     }
 
+    if (url.pathname === "/admin/token") {
+      const token = await env.THREADS_KV.get("threads_short_lived_token");
+    
+      if (!token) {
+        return Response.json({
+          ok: false,
+          message: "No token found",
+        });
+      }
+    
+      return Response.json(JSON.parse(token));
+    }
+
     if (url.pathname === "/oauth/start") {
       const state = crypto.randomUUID();
 
