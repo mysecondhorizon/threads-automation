@@ -35,30 +35,18 @@ export default {
       const state = url.searchParams.get("state");
       const error = url.searchParams.get("error");
 
-      return Response.json({
-        code_received: Boolean(code),
-        state_received: Boolean(state),
-        error,
-      });
-    }
+      if (error) {
+        return Response.json({ ok: false, error }, { status: 400 });
+      }
 
-    if (url.pathname === "/oauth/callback") {
-      const code = url.searchParams.get("code");
-      const state = url.searchParams.get("state");
-      const error = url.searchParams.get("error");
+      if (!code || !state) {
+        return Response.json(
+          { ok: false, error: "Missing code or state" },
+          { status: 400 }
+        );
+      }
 
-    if (error) {
-      return Response.json({ ok: false, error }, { status: 400 });
-    }
-
-    if (!code || !state) {
-      return Response.json(
-        { ok: false, error: "Missing code or state" },
-        { status: 400 }
-      );
-    }
-
-    const savedState = await env.THREADS_KV.get(`oauth_state:${state}`);
+      const savedState = await env.THREADS_KV.get(`oauth_state:${state}`);
 
       if (savedState !== "valid") {
         return Response.json(
