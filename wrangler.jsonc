@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mysecondhorizon-threads",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-02",
+  "observability": {
+    "enabled": true
+  },
+  "kv_namespaces": [
+    {
+      "binding": "THREADS_KV",
+      "id": "50e4051bef5048189637a5428fe16a80"
+    }
+  ]
+}
