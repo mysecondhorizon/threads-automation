@@ -34,33 +34,71 @@ export default {
       const code = url.searchParams.get("code");
       const state = url.searchParams.get("state");
       const error = url.searchParams.get("error");
-
-      if (error) {
-        return Response.json({ ok: false, error }, { status: 400 });
-      }
-
-      if (!code || !state) {
+    
+      if (error || !code || !state) {
         return Response.json(
-          { ok: false, error: "Missing code or state" },
+          { ok: false, error: error || "Missing code or state" },
           { status: 400 }
         );
       }
-
+    
       const savedState = await env.THREADS_KV.get(`oauth_state:${state}`);
-
+    
       if (savedState !== "valid") {
         return Response.json(
           { ok: false, error: "Invalid or expired OAuth state" },
           { status: 400 }
         );
       }
-
+    
       await env.THREADS_KV.delete(`oauth_state:${state}`);
-
+    
+      const form = new URLSearchParams({
+        client_id: env.THREADS_APP_ID,
+        client_secret: env.THREADS_APP_SECRET,
+        grant_type: "authorization_code",
+        redirect_uri: REDIRECT_URI,
+        code,
+      });
+    
+      const tokenResponse = await fetch(
+        "https://graph.threads.net/oauth/access_token",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+          },
+          body: form,
+        }
+      );
+    
+      const tokenData = await tokenResponse.json();
+    
+      if (!tokenResponse.ok || !tokenData.access_token) {
+        return Response.json(
+          {
+            ok: false,
+            error: "Token exchange failed",
+            details: tokenData,
+          },
+          { status: 400 }
+        );
+      }
+    
+      await env.THREADS_KV.put(
+        "threads_short_lived_token",
+        JSON.stringify({
+          access_token: tokenData.access_token,
+          user_id: tokenData.user_id,
+          saved_at: new Date().toISOString(),
+        }),
+        { expirationTtl: 3600 }
+      );
+    
       return Response.json({
         ok: true,
-        code_received: true,
-        state_verified: true,
+        token_received: true,
+        user_id: tokenData.user_id,
       });
     }
 
