@@ -191,6 +191,18 @@ export default {
     
       const response = await fetch(meUrl);
       const data = await response.json();
+
+      if (response.ok && data.id) {
+        await env.THREADS_KV.put(
+          "threads_auth",
+          JSON.stringify({
+            ...auth,
+            user_id: data.id,
+            username: data.username,
+            updated_at: new Date().toISOString(),
+          })
+        );
+      }
     
       return Response.json({
         ok: response.ok,
