@@ -1,6 +1,8 @@
 const REDIRECT_URI =
   "https://mysecondhorizon-threads.secondhorizon-official.workers.dev/oauth/callback";
 
+const ADMIN_SESSION_TTL = 60 * 60 * 8; // 8시간
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -446,6 +448,55 @@ export default {
         username: meData.username,
         post_id: publishData.id,
         text,
+      });
+    }
+
+    if (url.pathname === "/admin/login" && request.method === "GET") {
+      return new Response(
+        `<!DOCTYPE html>
+    <html lang="ko">
+    <body style="font-family:Arial;max-width:420px;margin:60px auto;padding:20px;">
+      <h1>Second Horizon Admin</h1>
+      <form method="POST" action="/admin/login">
+        <input
+          type="password"
+          name="admin_key"
+          placeholder="ADMIN_KEY"
+          required
+          style="width:100%;padding:12px;box-sizing:border-box;"
+        >
+        <br><br>
+        <button type="submit" style="padding:12px 20px;">로그인</button>
+      </form>
+    </body>
+    </html>`,
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    
+    if (url.pathname === "/admin/login" && request.method === "POST") {
+      const formData = await request.formData();
+      const adminKey = String(formData.get("admin_key") || "");
+    
+      if (adminKey !== env.ADMIN_KEY) {
+        return new Response("관리자 키가 올바르지 않습니다.", { status: 401 });
+      }
+    
+      const sessionId = crypto.randomUUID();
+    
+      await env.THREADS_KV.put(
+        `admin_session:${sessionId}`,
+        "valid",
+        { expirationTtl: ADMIN_SESSION_TTL }
+      );
+    
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: "/admin/post",
+          "set-cookie":
+            `admin_session=${sessionId}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${ADMIN_SESSION_TTL}`,
+        },
       });
     }
 
