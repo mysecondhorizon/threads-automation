@@ -14,9 +14,11 @@ export default {
   <h1>🚀 Second Horizon</h1>
   <p>Threads 연결을 시작합니다.</p>
 
-  <button disabled>
-    Connect Threads (Coming Soon)
-  </button>
+  <a href="/oauth/start">
+    <button>
+      Connect Threads
+    </button>
+  </a>
 </body>
 </html>
         `,
