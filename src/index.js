@@ -219,10 +219,25 @@ export default {
           { status: 400 }
         );
       }
+
+      const meResponse = await fetch(
+        `https://graph.threads.net/v1.0/me?fields=id&access_token=${encodeURIComponent(auth.access_token)}`
+      );
+      
+      const meData = await meResponse.json();
+      
+      if (!meResponse.ok || !meData.id) {
+        return Response.json(
+          { ok: false, step: "get_profile", details: meData },
+          { status: 400 }
+        );
+      }
+
+      const threadsUserId = meData.id;
     
       // 1. 게시 컨테이너 생성
       const createResponse = await fetch(
-        `https://graph.threads.net/v1.0/${auth.user_id}/threads`,
+        `https://graph.threads.net/v1.0/${threadsUserId}/threads`,
         {
           method: "POST",
           headers: {
@@ -251,7 +266,7 @@ export default {
     
       // 2. 게시 실행
       const publishResponse = await fetch(
-        `https://graph.threads.net/v1.0/${auth.user_id}/threads_publish`,
+        `https://graph.threads.net/v1.0/${threadsUserId}/threads_publish`,
         {
           method: "POST",
           headers: {
