@@ -198,6 +198,69 @@ export default {
       });
     }
 
+    if (url.pathname === "/admin/post-test") {
+      const auth = await env.THREADS_KV.get("threads_auth", "json");
+    
+      if (!auth?.access_token) {
+        return Response.json(
+          { ok: false, error: "Long-lived token not found" },
+          { status: 400 }
+        );
+      }
+    
+      // 1. 게시 컨테이너 생성
+      const createResponse = await fetch(
+        `https://graph.threads.net/v1.0/${auth.user_id}/threads`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            media_type: "TEXT",
+            text: "🚀 Hello from Second Horizon!\n\n첫 번째 자동 게시 테스트입니다.",
+            access_token: auth.access_token,
+          }),
+        }
+      );
+    
+      const createData = await createResponse.json();
+    
+      if (!createResponse.ok) {
+        return Response.json(
+          {
+            ok: false,
+            step: "create_container",
+            details: createData,
+          },
+          { status: 400 }
+        );
+      }
+    
+      // 2. 게시 실행
+      const publishResponse = await fetch(
+        `https://graph.threads.net/v1.0/${auth.user_id}/threads_publish`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            creation_id: createData.id,
+            access_token: auth.access_token,
+          }),
+        }
+      );
+    
+      const publishData = await publishResponse.json();
+    
+      return Response.json({
+        ok: publishResponse.ok,
+        create: createData,
+        publish: publishData,
+      });
+    }
+
     if (url.pathname === "/oauth/start") {
       const state = crypto.randomUUID();
 
