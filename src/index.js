@@ -308,6 +308,51 @@ export default {
       return Response.redirect(authUrl.toString(), 302);
     }
 
+    if (url.pathname === "/admin/post" && request.method === "GET") {
+      return new Response(
+        `<!DOCTYPE html>
+    <html lang="ko">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Second Horizon Admin</title>
+    </head>
+    <body style="font-family: Arial, sans-serif; max-width: 680px; margin: 40px auto; padding: 0 20px;">
+      <h1>Second Horizon</h1>
+      <h2>Threads 게시</h2>
+    
+      <form method="POST" action="/admin/post">
+        <label for="text">게시 내용</label><br><br>
+    
+        <textarea
+          id="text"
+          name="text"
+          rows="10"
+          maxlength="500"
+          required
+          style="width: 100%; padding: 12px; box-sizing: border-box;"
+          placeholder="Threads에 게시할 내용을 입력하세요."
+        ></textarea>
+    
+        <br><br>
+    
+        <button
+          type="submit"
+          style="padding: 12px 20px; cursor: pointer;"
+        >
+          Threads에 게시
+        </button>
+      </form>
+    </body>
+    </html>`,
+        {
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+          },
+        }
+      );
+    }
+
     return new Response("Second Horizon is running! 🚀");
   },
 };
