@@ -175,6 +175,29 @@ export default {
       });
     }
 
+    if (url.pathname === "/admin/me") {
+      const auth = await env.THREADS_KV.get("threads_auth", "json");
+    
+      if (!auth?.access_token) {
+        return Response.json(
+          { ok: false, error: "Long-lived token not found" },
+          { status: 400 }
+        );
+      }
+    
+      const meUrl = new URL("https://graph.threads.net/v1.0/me");
+      meUrl.searchParams.set("fields", "id,username");
+      meUrl.searchParams.set("access_token", auth.access_token);
+    
+      const response = await fetch(meUrl);
+      const data = await response.json();
+    
+      return Response.json({
+        ok: response.ok,
+        profile: data,
+      });
+    }
+
     if (url.pathname === "/oauth/start") {
       const state = crypto.randomUUID();
 
