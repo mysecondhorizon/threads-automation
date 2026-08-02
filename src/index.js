@@ -353,6 +353,16 @@ export default {
       );
     }
 
+    if (url.pathname === "/admin/post" && request.method === "POST") {
+      const formData = await request.formData();
+      const text = formData.get("text");
+    
+      return Response.json({
+        ok: true,
+        received: text,
+      });
+    }    
+
     return new Response("Second Horizon is running! 🚀");
   },
 };
