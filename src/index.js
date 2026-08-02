@@ -30,6 +30,18 @@ export default {
       );
     }
 
+    if (url.pathname === "/oauth/callback") {
+      const code = url.searchParams.get("code");
+      const state = url.searchParams.get("state");
+      const error = url.searchParams.get("error");
+
+      return Response.json({
+        code_received: Boolean(code),
+        state_received: Boolean(state),
+        error,
+      });
+    }
+
     if (url.pathname === "/oauth/start") {
       const state = crypto.randomUUID();
 
