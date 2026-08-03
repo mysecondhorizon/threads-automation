@@ -17,6 +17,7 @@ export const config = {
     scopes: [
       "threads_basic",
       "threads_content_publish",
+      "threads_manage_insights",
     ],
   },
 
