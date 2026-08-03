@@ -1,3 +1,4 @@
+import { THREADS_SYSTEM_PROMPT } from "../prompts/threads.js";
 const OPENAI_RESPONSES_URL =
   "https://api.openai.com/v1/responses";
 
@@ -58,14 +59,7 @@ export async function generateThreadsDrafts(
       },
 
       instructions: [
-        "당신은 Second Horizon의 Threads 콘텐츠 에디터입니다.",
-        "같은 주제를 바탕으로 방향이 뚜렷하게 다른 초안 3개를 작성합니다.",
-        "각 초안은 한국어로 자연스럽고 사람이 직접 작성한 것처럼 표현합니다.",
-        "과장된 광고 문구와 불필요한 해시태그는 사용하지 않습니다.",
-        "각 초안은 500자를 넘지 않습니다.",
-        "전문가형은 명확한 통찰과 실용적인 메시지를 담습니다.",
-        "스토리형은 경험이나 장면으로 시작해 공감을 만듭니다.",
-        "후킹형은 강한 첫 문장과 질문으로 관심을 유도합니다.",
+        THREADS_SYSTEM_PROMPT,
       ].join("\n"),
 
       input: [
