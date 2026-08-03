@@ -93,41 +93,185 @@ export async function handleAdminPostPage(request, env) {
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
   <title>Second Horizon Admin</title>
 </head>
+
 <body style="font-family:Arial,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;">
   <h1>Second Horizon</h1>
-  <h2>Threads 게시</h2>
 
-  <form method="POST" action="/admin/post">
-    <label for="text">게시 내용</label>
+  <section>
+    <h2>🤖 AI 초안 생성</h2>
+
+    <label for="topic">주제</label>
 
     <br><br>
 
-    <textarea
-      id="text"
-      name="text"
-      rows="10"
-      maxlength="500"
-      required
+    <input
+      id="topic"
+      type="text"
+      maxlength="300"
       style="width:100%;padding:12px;box-sizing:border-box;"
-      placeholder="Threads에 게시할 내용을 입력하세요."
-    ></textarea>
+      placeholder="예: 직장인이 사이드 프로젝트를 시작해야 하는 이유"
+    >
+
+    <br><br>
+
+    <label for="tone">톤</label>
+
+    <br><br>
+
+    <select
+      id="tone"
+      style="width:100%;padding:12px;box-sizing:border-box;"
+    >
+      <option value="친근하고 통찰력 있는">
+        친근하고 통찰력 있는
+      </option>
+      <option value="전문적이고 신뢰감 있는">
+        전문적이고 신뢰감 있는
+      </option>
+      <option value="동기부여가 되는">
+        동기부여가 되는
+      </option>
+      <option value="가볍고 유머러스한">
+        가볍고 유머러스한
+      </option>
+    </select>
 
     <br><br>
 
     <button
-      type="submit"
+      id="generate-button"
+      type="button"
       style="padding:12px 20px;cursor:pointer;"
     >
-      Threads에 게시
+      AI 초안 생성
     </button>
-  </form>
+
+    <p id="ai-status"></p>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Threads 게시</h2>
+
+    <form method="POST" action="/admin/post">
+      <label for="text">게시 내용</label>
+
+      <br><br>
+
+      <textarea
+        id="text"
+        name="text"
+        rows="12"
+        maxlength="500"
+        required
+        style="width:100%;padding:12px;box-sizing:border-box;"
+        placeholder="직접 작성하거나 AI 초안을 생성하세요."
+      ></textarea>
+
+      <p>
+        <span id="character-count">0</span> / 500
+      </p>
+
+      <button
+        type="submit"
+        style="padding:12px 20px;cursor:pointer;"
+      >
+        Threads에 게시
+      </button>
+    </form>
+  </section>
+
+  <script>
+    const topicInput = document.getElementById("topic");
+    const toneSelect = document.getElementById("tone");
+    const textArea = document.getElementById("text");
+    const generateButton =
+      document.getElementById("generate-button");
+    const statusElement =
+      document.getElementById("ai-status");
+    const characterCount =
+      document.getElementById("character-count");
+
+    function updateCharacterCount() {
+      characterCount.textContent = textArea.value.length;
+    }
+
+    textArea.addEventListener(
+      "input",
+      updateCharacterCount
+    );
+
+    generateButton.addEventListener(
+      "click",
+      async function () {
+        const topic = topicInput.value.trim();
+        const tone = toneSelect.value;
+
+        if (!topic) {
+          statusElement.textContent =
+            "글의 주제를 입력하세요.";
+          topicInput.focus();
+          return;
+        }
+
+        generateButton.disabled = true;
+        generateButton.textContent = "생성 중...";
+        statusElement.textContent =
+          "AI가 초안을 작성하고 있습니다.";
+
+        try {
+          const formData = new FormData();
+          formData.set("topic", topic);
+          formData.set("tone", tone);
+
+          const response = await fetch(
+            "/admin/ai/draft",
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
+
+          const data = await response.json();
+
+          if (!response.ok || !data.ok) {
+            throw new Error(
+              data.error ||
+              data.reason ||
+              "AI 초안 생성에 실패했습니다."
+            );
+          }
+
+          textArea.value = data.draft;
+          updateCharacterCount();
+
+          statusElement.textContent =
+            "AI 초안이 게시 입력란에 반영됐습니다.";
+
+          textArea.focus();
+        } catch (error) {
+          statusElement.textContent =
+            error.message ||
+            "AI 초안 생성 중 오류가 발생했습니다.";
+        } finally {
+          generateButton.disabled = false;
+          generateButton.textContent = "AI 초안 생성";
+        }
+      }
+    );
+
+    updateCharacterCount();
+  </script>
 </body>
 </html>`);
 }
-
 export async function handleAdminPost(request, env) {
   const adminAuth = await requireAdminApiSession(
     request,
