@@ -1,4 +1,8 @@
-import { putJson, listKeys, getJson } from "./kv.js";
+import {
+  putJson,
+  listKeys,
+  getJson,
+} from "./kv.js";
 
 export async function logPostSuccess(
   env,
@@ -6,7 +10,8 @@ export async function logPostSuccess(
   postId,
   text
 ) {
-  const key = `post_log:${Date.now()}:${crypto.randomUUID()}`;
+  const key =
+    `post_log:${Date.now()}:${crypto.randomUUID()}`;
 
   await putJson(env, key, {
     status: "published",
@@ -23,7 +28,8 @@ export async function logPostFailure(
   text,
   details
 ) {
-  const key = `post_log:${Date.now()}:${crypto.randomUUID()}`;
+  const key =
+    `post_log:${Date.now()}:${crypto.randomUUID()}`;
 
   await putJson(env, key, {
     status: "failed",
@@ -35,15 +41,31 @@ export async function logPostFailure(
 }
 
 export async function getPostLogs(env) {
-  const list = await listKeys(env, "post_log:");
+  const list = await listKeys(
+    env,
+    "post_log:"
+  );
 
   const logs = await Promise.all(
-    list.keys.map((item) => getJson(env, item.name))
+    list.keys.map((item) =>
+      getJson(env, item.name)
+    )
   );
 
   return logs
     .filter(Boolean)
     .sort((a, b) =>
-      b.created_at.localeCompare(a.created_at)
+      String(b.created_at).localeCompare(
+        String(a.created_at)
+      )
     );
+}
+
+export async function getRecentPostLogs(
+  env,
+  limit = 30
+) {
+  const logs = await getPostLogs(env);
+
+  return logs.slice(0, limit);
 }
