@@ -547,6 +547,27 @@ export default {
       });
     }
 
+    if (url.pathname === "/admin/logs" && request.method === "GET") {
+      const list = await env.THREADS_KV.list({ prefix: "post_log:" });
+    
+      const logs = await Promise.all(
+        list.keys.map(async (item) => {
+          const data = await env.THREADS_KV.get(item.name, "json");
+          return data;
+        })
+      );
+    
+      logs.sort((a, b) =>
+        String(b.created_at).localeCompare(String(a.created_at))
+      );
+    
+      return Response.json({
+        ok: true,
+        count: logs.length,
+        logs,
+      });
+    }
+    
     return new Response("Second Horizon is running! 🚀");
   },
 };
