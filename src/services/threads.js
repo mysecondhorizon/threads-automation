@@ -64,4 +64,22 @@ export async function publishTextPost(
   const publishResponse = await fetch(
     `${config.threads.graphBase}/${userId}/threads_publish`,
     {
-     
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: publishBody,
+    }
+  );
+
+  const publishData = await publishResponse.json();
+
+  if (!publishResponse.ok || !publishData.id) {
+    throw new ThreadsApiError("publish", publishData);
+  }
+
+  return {
+    containerId: createData.id,
+    postId: publishData.id,
+  };
+}
