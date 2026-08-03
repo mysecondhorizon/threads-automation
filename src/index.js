@@ -373,6 +373,23 @@ export default {
     }
 
     if (url.pathname === "/admin/post" && request.method === "POST") {
+      const cookie = request.headers.get("cookie") || "";
+      const sessionId = cookie
+        .split(";")
+        .map((item) => item.trim())
+        .find((item) => item.startsWith("admin_session="))
+        ?.split("=")[1];
+      
+      const sessionValid = sessionId
+        ? await env.THREADS_KV.get(`admin_session:${sessionId}`)
+        : null;
+      
+      if (sessionValid !== "valid") {
+        return Response.json(
+          { ok: false, error: "Unauthorized" },
+          { status: 401 }
+        );
+      }
       const formData = await request.formData();
       const text = String(formData.get("text") || "").trim();
     
