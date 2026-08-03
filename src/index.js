@@ -244,6 +244,12 @@ export default {
       const meData = await meResponse.json();
       
       if (!meResponse.ok || !meData.id) {
+        await savePostFailureLog(
+          env,
+          "get_profile",
+          text,
+          meData
+        );
         return Response.json(
           { ok: false, step: "get_profile", details: meData },
           { status: 400 }
@@ -495,8 +501,14 @@ export default {
       );
     
       const publishData = await publishResponse.json();
-    
+      
       if (!publishResponse.ok || !publishData.id) {
+        await savePostFailureLog(
+          env,
+          "publish",
+          text,
+          publishData
+        );
         return Response.json(
           { ok: false, step: "publish", details: publishData },
           { status: 400 }
