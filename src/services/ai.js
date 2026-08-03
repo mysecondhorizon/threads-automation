@@ -30,7 +30,7 @@ function extractOutputText(data) {
   return texts.join("\n").trim();
 }
 
-export async function generateThreadsDraft(
+export async function generateThreadsDrafts(
   env,
   {
     topic,
@@ -51,21 +51,66 @@ export async function generateThreadsDraft(
     },
     body: JSON.stringify({
       model: env.OPENAI_MODEL || "gpt-5.6",
+      store: false,
+
       reasoning: {
         effort: "low",
       },
+
       instructions: [
         "당신은 Second Horizon의 Threads 콘텐츠 에디터입니다.",
-        "한국어로 자연스럽고 사람이 직접 쓴 듯한 글을 작성합니다.",
-        "과장된 광고 문구와 불필요한 해시태그는 피합니다.",
-        "출력은 Threads 게시문 본문만 제공합니다.",
-        "전체 길이는 500자를 넘지 않습니다.",
+        "같은 주제를 바탕으로 방향이 뚜렷하게 다른 초안 3개를 작성합니다.",
+        "각 초안은 한국어로 자연스럽고 사람이 직접 작성한 것처럼 표현합니다.",
+        "과장된 광고 문구와 불필요한 해시태그는 사용하지 않습니다.",
+        "각 초안은 500자를 넘지 않습니다.",
+        "전문가형은 명확한 통찰과 실용적인 메시지를 담습니다.",
+        "스토리형은 경험이나 장면으로 시작해 공감을 만듭니다.",
+        "후킹형은 강한 첫 문장과 질문으로 관심을 유도합니다.",
       ].join("\n"),
+
       input: [
         `주제: ${topic}`,
-        `톤: ${tone}`,
-        "첫 문장은 독자의 관심을 끌고, 마지막 문장은 여운이나 질문으로 끝내세요.",
+        `기본 톤: ${tone}`,
+        "세 초안의 문장 구조와 도입부가 서로 겹치지 않게 작성하세요.",
       ].join("\n"),
+
+      text: {
+        format: {
+          type: "json_schema",
+          name: "threads_drafts",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              drafts: {
+                type: "array",
+                minItems: 3,
+                maxItems: 3,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    style: {
+                      type: "string",
+                      enum: [
+                        "전문가형",
+                        "스토리형",
+                        "후킹형",
+                      ],
+                    },
+                    text: {
+                      type: "string",
+                    },
+                  },
+                  required: ["style", "text"],
+                },
+              },
+            },
+            required: ["drafts"],
+          },
+        },
+      },
     }),
   });
 
@@ -78,14 +123,38 @@ export async function generateThreadsDraft(
     );
   }
 
-  const text = extractOutputText(data);
+  const outputText = extractOutputText(data);
 
-  if (!text) {
+  if (!outputText) {
     throw new AiServiceError(
       "OpenAI returned no text",
       data
     );
   }
 
-  return text.slice(0, 500);
+  let parsed;
+
+  try {
+    parsed = JSON.parse(outputText);
+  } catch {
+    throw new AiServiceError(
+      "OpenAI returned invalid JSON",
+      { outputText }
+    );
+  }
+
+  if (
+    !Array.isArray(parsed.drafts) ||
+    parsed.drafts.length !== 3
+  ) {
+    throw new AiServiceError(
+      "OpenAI returned an invalid draft list",
+      parsed
+    );
+  }
+
+  return parsed.drafts.map((draft) => ({
+    style: draft.style,
+    text: String(draft.text).trim().slice(0, 500),
+  }));
 }
