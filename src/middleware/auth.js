@@ -1,7 +1,11 @@
-import { getCookieValue } from "../utils.js";
+import { getCookieValue } from "../utils/cookie.js";
+import { fail } from "../utils/response.js";
 
 export async function requireAdminSession(request, env) {
-  const sessionId = getCookieValue(request, "admin_session");
+  const sessionId = getCookieValue(
+    request,
+    "admin_session"
+  );
 
   if (!sessionId) {
     return {
@@ -33,8 +37,14 @@ export async function requireAdminSession(request, env) {
   };
 }
 
-export async function requireAdminApiSession(request, env) {
-  const result = await requireAdminSession(request, env);
+export async function requireAdminApiSession(
+  request,
+  env
+) {
+  const result = await requireAdminSession(
+    request,
+    env
+  );
 
   if (result.ok) {
     return result;
@@ -42,12 +52,6 @@ export async function requireAdminApiSession(request, env) {
 
   return {
     ok: false,
-    response: Response.json(
-      {
-        ok: false,
-        error: "Unauthorized",
-      },
-      { status: 401 }
-    ),
+    response: fail("Unauthorized", 401),
   };
 }
