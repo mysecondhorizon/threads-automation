@@ -1,4 +1,5 @@
 import { handleGenerateDraft } from "./routes/ai.js";
+import { handlePostInsights } from "./routes/insights.js";
 import {
   handleConnectPage,
   handleOAuthStart,
@@ -67,6 +68,13 @@ export default {
 
     if (pathname === "/admin/logs" && method === "GET") {
       return handleLogs(request, env);
+    }
+
+    if (
+      pathname === "/admin/insights" &&
+      method === "GET"
+    ) {
+      return handlePostInsights(request, env, url);
     }
 
     if (pathname === "/admin/token" && method === "GET") {
