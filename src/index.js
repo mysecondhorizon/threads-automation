@@ -3,6 +3,21 @@ const REDIRECT_URI =
 
 const ADMIN_SESSION_TTL = 60 * 60 * 8; // 8시간
 
+async function savePostFailureLog(env, step, text, details) {
+  const logId = `post_log:${Date.now()}:${crypto.randomUUID()}`;
+
+  await env.THREADS_KV.put(
+    logId,
+    JSON.stringify({
+      status: "failed",
+      step,
+      text,
+      details,
+      created_at: new Date().toISOString(),
+    })
+  );
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -445,8 +460,19 @@ export default {
       const createData = await createResponse.json();
     
       if (!createResponse.ok || !createData.id) {
+        await savePostFailureLog(
+          env,
+          "create_container",
+          text,
+          createData
+        );
+      
         return Response.json(
-          { ok: false, step: "create_container", details: createData },
+          {
+            ok: false,
+            step: "create_container",
+            details: createData,
+          },
           { status: 400 }
         );
       }
