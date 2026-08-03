@@ -476,7 +476,20 @@ export default {
           { status: 400 }
         );
       }
-    
+
+      const logId = `post_log:${Date.now()}:${crypto.randomUUID()}`;
+
+      await env.THREADS_KV.put(
+        logId,
+        JSON.stringify({
+          status: "published",
+          username: meData.username,
+          post_id: publishData.id,
+          text,
+          created_at: new Date().toISOString(),
+        })
+      );
+      
       return Response.json({
         ok: true,
         username: meData.username,
