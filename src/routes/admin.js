@@ -100,11 +100,11 @@ export async function handleAdminPostPage(request, env) {
   <title>Second Horizon Admin</title>
 </head>
 
-<body style="font-family:Arial,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;">
+<body style="font-family:Arial,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;">
   <h1>Second Horizon</h1>
 
   <section>
-    <h2>🤖 AI 초안 생성</h2>
+    <h2>🤖 AI 초안 3개 생성</h2>
 
     <label for="topic">주제</label>
 
@@ -120,7 +120,7 @@ export async function handleAdminPostPage(request, env) {
 
     <br><br>
 
-    <label for="tone">톤</label>
+    <label for="tone">기본 톤</label>
 
     <br><br>
 
@@ -149,13 +149,15 @@ export async function handleAdminPostPage(request, env) {
       type="button"
       style="padding:12px 20px;cursor:pointer;"
     >
-      AI 초안 생성
+      AI 초안 3개 생성
     </button>
 
     <p id="ai-status"></p>
+
+    <div id="draft-options"></div>
   </section>
 
-  <hr>
+  <hr style="margin:32px 0;">
 
   <section>
     <h2>Threads 게시</h2>
@@ -172,7 +174,7 @@ export async function handleAdminPostPage(request, env) {
         maxlength="500"
         required
         style="width:100%;padding:12px;box-sizing:border-box;"
-        placeholder="직접 작성하거나 AI 초안을 생성하세요."
+        placeholder="직접 작성하거나 AI 초안을 선택하세요."
       ></textarea>
 
       <p>
@@ -189,18 +191,104 @@ export async function handleAdminPostPage(request, env) {
   </section>
 
   <script>
-    const topicInput = document.getElementById("topic");
-    const toneSelect = document.getElementById("tone");
-    const textArea = document.getElementById("text");
+    const topicInput =
+      document.getElementById("topic");
+
+    const toneSelect =
+      document.getElementById("tone");
+
+    const textArea =
+      document.getElementById("text");
+
     const generateButton =
       document.getElementById("generate-button");
+
     const statusElement =
       document.getElementById("ai-status");
+
     const characterCount =
       document.getElementById("character-count");
 
+    const draftOptions =
+      document.getElementById("draft-options");
+
     function updateCharacterCount() {
-      characterCount.textContent = textArea.value.length;
+      characterCount.textContent =
+        textArea.value.length;
+    }
+
+    function clearDraftOptions() {
+      draftOptions.innerHTML = "";
+    }
+
+    function createDraftCard(draft, index) {
+      const card = document.createElement("article");
+
+      card.style.border = "1px solid #ddd";
+      card.style.borderRadius = "10px";
+      card.style.padding = "16px";
+      card.style.marginBottom = "16px";
+      card.style.background = "#fafafa";
+
+      const title = document.createElement("h3");
+
+      title.textContent =
+        (index + 1) + ". " + draft.style;
+
+      const content = document.createElement("p");
+
+      content.textContent = draft.text;
+      content.style.whiteSpace = "pre-wrap";
+      content.style.lineHeight = "1.6";
+
+      const count = document.createElement("p");
+
+      count.textContent =
+        draft.text.length + " / 500자";
+
+      count.style.fontSize = "13px";
+      count.style.color = "#666";
+
+      const selectButton =
+        document.createElement("button");
+
+      selectButton.type = "button";
+      selectButton.textContent =
+        "이 초안 선택";
+
+      selectButton.style.padding =
+        "10px 16px";
+
+      selectButton.style.cursor =
+        "pointer";
+
+      selectButton.addEventListener(
+        "click",
+        function () {
+          textArea.value =
+            draft.text.slice(0, 500);
+
+          updateCharacterCount();
+
+          statusElement.textContent =
+            draft.style +
+            " 초안이 게시 입력란에 반영됐습니다.";
+
+          textArea.focus();
+
+          textArea.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }
+      );
+
+      card.appendChild(title);
+      card.appendChild(content);
+      card.appendChild(count);
+      card.appendChild(selectButton);
+
+      return card;
     }
 
     textArea.addEventListener(
@@ -217,17 +305,23 @@ export async function handleAdminPostPage(request, env) {
         if (!topic) {
           statusElement.textContent =
             "글의 주제를 입력하세요.";
+
           topicInput.focus();
           return;
         }
 
+        clearDraftOptions();
+
         generateButton.disabled = true;
-        generateButton.textContent = "생성 중...";
+        generateButton.textContent =
+          "초안 생성 중...";
+
         statusElement.textContent =
-          "AI가 초안을 작성하고 있습니다.";
+          "AI가 서로 다른 초안 3개를 작성하고 있습니다.";
 
         try {
           const formData = new FormData();
+
           formData.set("topic", topic);
           formData.set("tone", tone);
 
@@ -249,20 +343,37 @@ export async function handleAdminPostPage(request, env) {
             );
           }
 
-          textArea.value = data.draft;
-          updateCharacterCount();
+          if (
+            !Array.isArray(data.drafts) ||
+            data.drafts.length !== 3
+          ) {
+            throw new Error(
+              "AI가 올바른 초안 목록을 반환하지 않았습니다."
+            );
+          }
+
+          data.drafts.forEach(
+            function (draft, index) {
+              const card =
+                createDraftCard(
+                  draft,
+                  index
+                );
+
+              draftOptions.appendChild(card);
+            }
+          );
 
           statusElement.textContent =
-            "AI 초안이 게시 입력란에 반영됐습니다.";
-
-          textArea.focus();
+            "초안 3개가 생성됐습니다. 마음에 드는 글을 선택하세요.";
         } catch (error) {
           statusElement.textContent =
             error.message ||
             "AI 초안 생성 중 오류가 발생했습니다.";
         } finally {
           generateButton.disabled = false;
-          generateButton.textContent = "AI 초안 생성";
+          generateButton.textContent =
+            "AI 초안 3개 생성";
         }
       }
     );
@@ -272,6 +383,7 @@ export async function handleAdminPostPage(request, env) {
 </body>
 </html>`);
 }
+
 export async function handleAdminPost(request, env) {
   const adminAuth = await requireAdminApiSession(
     request,
