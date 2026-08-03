@@ -1,3 +1,4 @@
+import { handleGenerateDraft } from "./routes/ai.js";
 import {
   handleConnectPage,
   handleOAuthStart,
@@ -55,6 +56,13 @@ export default {
 
     if (pathname === "/admin/post" && method === "POST") {
       return handleAdminPost(request, env);
+    }
+
+    if (
+      pathname === "/admin/ai/draft" &&
+      method === "POST"
+    ) {
+      return handleGenerateDraft(request, env);
     }
 
     if (pathname === "/admin/logs" && method === "GET") {
