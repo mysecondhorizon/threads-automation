@@ -1,4 +1,4 @@
-import { THREADS_SYSTEM_PROMPT } from "../prompts/threads.js";
+import { THREADS_SYSTEM_PROMPT } from "../prompts/threads/index.js";
 const OPENAI_RESPONSES_URL =
   "https://api.openai.com/v1/responses";
 
