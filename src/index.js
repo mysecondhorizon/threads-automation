@@ -1,6 +1,7 @@
 import { handleGenerateDraft } from "./routes/ai.js";
 import { handlePostInsights } from "./routes/insights.js";
 import { handleRefreshInsights } from "./routes/insights-refresh.js";
+import { handleDashboard } from "./routes/dashboard.js";
 import {
   handleConnectPage,
   handleOAuthStart,
@@ -69,6 +70,13 @@ export default {
 
     if (pathname === "/admin/logs" && method === "GET") {
       return handleLogs(request, env);
+    }
+
+    if (
+      pathname === "/admin/dashboard" &&
+      method === "GET"
+    ) {
+      return handleDashboard(request, env);
     }
 
     if (
