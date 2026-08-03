@@ -1,6 +1,6 @@
 import { requireAdminApiSession } from "../middleware/auth.js";
 import {
-  generateThreadsDraft,
+  generateThreadsDrafts,
   AiServiceError,
 } from "../services/ai.js";
 import { ok, fail } from "../utils/response.js";
@@ -44,13 +44,13 @@ export async function handleGenerateDraft(request, env) {
   }
 
   try {
-    const draft = await generateThreadsDraft(env, {
+    const drafts = await generateThreadsDrafts(env, {
       topic,
       tone,
     });
 
     return ok({
-      draft,
+      drafts,
       topic,
       tone,
     });
