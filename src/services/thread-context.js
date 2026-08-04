@@ -2,6 +2,10 @@ import {
   getPostingHistory,
 } from "./history.js";
 
+import {
+  buildRecentPerformance,
+} from "./analytics.js";
+
 const SEOUL_TIME_ZONE = "Asia/Seoul";
 
 function getSeoulMonth(date) {
@@ -58,7 +62,6 @@ function formatDate(date) {
     {
       timeZone:
         SEOUL_TIME_ZONE,
-
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -72,7 +75,6 @@ function formatTime(date) {
     {
       timeZone:
         SEOUL_TIME_ZONE,
-
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
@@ -86,7 +88,6 @@ function getWeekday(date) {
     {
       timeZone:
         SEOUL_TIME_ZONE,
-
       weekday: "long",
     }
   );
@@ -100,9 +101,16 @@ export async function buildThreadContext(
   const postingHistory =
     await getPostingHistory(env);
 
+  const recentPerformance =
+    await buildRecentPerformance(
+      env,
+      postingHistory
+        .recentSevenDayPosts
+    );
+
   return {
     meta: {
-      version: "1.3.0",
+      version: "1.4.0",
 
       generatedAt:
         now.toISOString(),
@@ -168,7 +176,7 @@ export async function buildThreadContext(
 
       recentProducts: [],
 
-      recentPerformance: [],
+      recentPerformance,
     },
 
     products: {
@@ -184,6 +192,15 @@ export async function buildThreadContext(
     },
 
     analytics: {
+      performancePostCount:
+        recentPerformance.length,
+
+      availableInsightCount:
+        recentPerformance.filter(
+          (item) =>
+            item.available
+        ).length,
+
       topHooks: [],
 
       topTopics: [],
