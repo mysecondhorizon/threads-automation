@@ -201,3 +201,60 @@ export function buildRecommendations(
     reason: null,
   };
 }
+
+export function buildAnalyticsObservations(
+  summary,
+  recommendations
+) {
+  const observations = [];
+
+  if (summary.totalPosts === 0) {
+    return {
+      performanceLevel: "데이터 없음",
+      observations: [
+        "분석 가능한 게시글 성과 데이터가 없습니다.",
+      ],
+    };
+  }
+
+  observations.push(
+    `현재 분석 가능한 게시글은 ${summary.totalPosts}개입니다.`
+  );
+
+  observations.push(
+    `최근 게시글의 평균 조회수는 ${summary.averageViews}회입니다.`
+  );
+
+  if (summary.bestPost) {
+    observations.push(
+      `가장 높은 조회수는 ${summary.bestPost.views}회입니다.`
+    );
+  }
+
+  const hasInteractions =
+    Boolean(summary.bestPost) &&
+    Number(summary.bestPost.interactions) > 0;
+
+  if (!hasInteractions) {
+    observations.push(
+      "좋아요, 답글, 재게시, 공유 반응이 부족해 현재는 조회수 중심으로 판단해야 합니다."
+    );
+  }
+
+  if (recommendations.needsMoreData) {
+    observations.push(
+      `신뢰도 높은 분석을 위해 최소 ${recommendations.minimumRecommendedPosts}개의 게시글 데이터가 필요합니다.`
+    );
+  }
+
+  let performanceLevel = "관찰 가능";
+
+  if (recommendations.needsMoreData) {
+    performanceLevel = "데이터 부족";
+  }
+
+  return {
+    performanceLevel,
+    observations,
+  };
+}

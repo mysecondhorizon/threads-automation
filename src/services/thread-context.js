@@ -6,6 +6,7 @@ import {
   buildRecentPerformance,
   buildAnalyticsSummary,
   buildRecommendations,
+  buildAnalyticsObservations,
 } from "./analytics.js";
 
 const SEOUL_TIME_ZONE = "Asia/Seoul";
@@ -118,6 +119,12 @@ export async function buildThreadContext(
     buildRecommendations(
       analyticsSummary
   );
+  
+  const analyticsObservations =
+  buildAnalyticsObservations(
+    analyticsSummary,
+    recommendations
+  );
 
   return {
     meta: {
@@ -215,6 +222,12 @@ export async function buildThreadContext(
         analyticsSummary,
     
       recommendations,
+      
+      performanceLevel:
+        analyticsObservations.performanceLevel,
+      
+      observations:
+        analyticsObservations.observations,
     
       topHooks: [],
     
