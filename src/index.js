@@ -1,7 +1,9 @@
 import { handleGenerateDraft } from "./routes/ai.js";
+import { handleThreadContext } from "./routes/context.js";
 import { handlePostInsights } from "./routes/insights.js";
 import { handleRefreshInsights } from "./routes/insights-refresh.js";
 import { handleDashboard } from "./routes/dashboard.js";
+
 import {
   handleConnectPage,
   handleOAuthStart,
@@ -30,70 +32,137 @@ export default {
     const method = request.method;
 
     if (pathname === "/") {
-      return new Response("Second Horizon is running! 🚀");
+      return new Response(
+        "Second Horizon is running! 🚀"
+      );
     }
 
-    if (pathname === "/connect" && method === "GET") {
+    if (
+      pathname === "/connect" &&
+      method === "GET"
+    ) {
       return handleConnectPage();
     }
 
-    if (pathname === "/oauth/start" && method === "GET") {
+    if (
+      pathname === "/oauth/start" &&
+      method === "GET"
+    ) {
       return handleOAuthStart(env);
     }
 
-    if (pathname === "/oauth/callback" && method === "GET") {
-      return handleOAuthCallback(url, env);
+    if (
+      pathname === "/oauth/callback" &&
+      method === "GET"
+    ) {
+      return handleOAuthCallback(
+        url,
+        env
+      );
     }
 
-    if (pathname === "/admin/login" && method === "GET") {
+    if (
+      pathname === "/admin/login" &&
+      method === "GET"
+    ) {
       return handleAdminLoginPage();
     }
 
-    if (pathname === "/admin/login" && method === "POST") {
-      return handleAdminLogin(request, env);
+    if (
+      pathname === "/admin/login" &&
+      method === "POST"
+    ) {
+      return handleAdminLogin(
+        request,
+        env
+      );
     }
 
-    if (pathname === "/admin/post" && method === "GET") {
-      return handleAdminPostPage(request, env);
+    if (
+      pathname === "/admin/post" &&
+      method === "GET"
+    ) {
+      return handleAdminPostPage(
+        request,
+        env
+      );
     }
 
-    if (pathname === "/admin/post" && method === "POST") {
-      return handleAdminPost(request, env);
+    if (
+      pathname === "/admin/post" &&
+      method === "POST"
+    ) {
+      return handleAdminPost(
+        request,
+        env
+      );
     }
 
     if (
       pathname === "/admin/ai/draft" &&
       method === "POST"
     ) {
-      return handleGenerateDraft(request, env);
+      return handleGenerateDraft(
+        request,
+        env
+      );
     }
 
-    if (pathname === "/admin/logs" && method === "GET") {
-      return handleLogs(request, env);
+    if (
+      pathname === "/admin/context" &&
+      method === "GET"
+    ) {
+      return handleThreadContext(
+        request,
+        env
+      );
+    }
+
+    if (
+      pathname === "/admin/logs" &&
+      method === "GET"
+    ) {
+      return handleLogs(
+        request,
+        env
+      );
     }
 
     if (
       pathname === "/admin/dashboard" &&
       method === "GET"
     ) {
-      return handleDashboard(request, env);
+      return handleDashboard(
+        request,
+        env
+      );
     }
 
     if (
       pathname === "/admin/insights" &&
       method === "GET"
     ) {
-      return handlePostInsights(request, env, url);
+      return handlePostInsights(
+        request,
+        env,
+        url
+      );
     }
 
     if (
       pathname === "/admin/insights/refresh" &&
       method === "GET"
     ) {
-      return handleRefreshInsights(request, env);
+      return handleRefreshInsights(
+        request,
+        env
+      );
     }
 
-    if (pathname === "/admin/token" && method === "GET") {
+    if (
+      pathname === "/admin/token" &&
+      method === "GET"
+    ) {
       return handleShortToken(env);
     }
 
@@ -104,7 +173,10 @@ export default {
       return handleTokenExchange(env);
     }
 
-    if (pathname === "/admin/me" && method === "GET") {
+    if (
+      pathname === "/admin/me" &&
+      method === "GET"
+    ) {
       return handleProfile(env);
     }
 
@@ -113,7 +185,9 @@ export default {
         ok: false,
         error: "Not found",
       },
-      { status: 404 }
+      {
+        status: 404,
+      }
     );
   },
 };
