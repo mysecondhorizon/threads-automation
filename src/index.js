@@ -1,5 +1,6 @@
 import { handleGenerateDraft } from "./routes/ai.js";
 import { handleThreadContext } from "./routes/context.js";
+import { handleAutoPost } from "./routes/auto-post.js";
 import { handlePostInsights } from "./routes/insights.js";
 import { handleRefreshInsights } from "./routes/insights-refresh.js";
 import { handleDashboard } from "./routes/dashboard.js";
@@ -113,6 +114,16 @@ export default {
       method === "GET"
     ) {
       return handleThreadContext(
+        request,
+        env
+      );
+    }
+    
+    if (
+      pathname === "/admin/auto-post" &&
+      method === "POST"
+    ) {
+      return handleAutoPost(
         request,
         env
       );
