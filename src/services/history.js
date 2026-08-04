@@ -1,54 +1,131 @@
 import { getRecentPostLogs } from "./logger.js";
 
-function isToday(date) {
-  const today = new Date();
+const SEOUL_TIME_ZONE = "Asia/Seoul";
+const RECENT_DAYS = 7;
 
+function getDateKey(date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: SEOUL_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function isValidDate(date) {
   return (
-    date.getFullYear() === today.getFullYear() &&
-    date.getMonth() === today.getMonth() &&
-    date.getDate() === today.getDate()
+    date instanceof Date &&
+    !Number.isNaN(date.getTime())
   );
 }
 
-function isWithinDays(date, days) {
-  const now = new Date();
+function isToday(date, now) {
+  if (!isValidDate(date)) {
+    return false;
+  }
 
-  const diff =
+  return getDateKey(date) === getDateKey(now);
+}
+
+function isWithinRecentDays(
+  date,
+  now,
+  days = RECENT_DAYS
+) {
+  if (!isValidDate(date)) {
+    return false;
+  }
+
+  const diffMilliseconds =
     now.getTime() - date.getTime();
 
-  return diff <= days * 24 * 60 * 60 * 1000;
+  const maximumAge =
+    days * 24 * 60 * 60 * 1000;
+
+  return (
+    diffMilliseconds >= 0 &&
+    diffMilliseconds <= maximumAge
+  );
 }
 
-export async function getPostingHistory(
-  env
-) {
-  const logs =
-    await getRecentPostLogs(env);
+function normalizePublishedPost(log) {
+  return {
+    postId:
+      typeof log.post_id === "string"
+        ? log.post_id
+        : null,
 
-  const publishedLogs = logs.filter(
-    (log) =>
-      log &&
-      log.status === "published"
+    username:
+      typeof log.username === "string"
+        ? log.username
+        : null,
+
+    text:
+      typeof log.text === "string"
+        ? log.text.trim()
+        : "",
+
+    createdAt:
+      typeof log.created_at === "string"
+        ? log.created_at
+        : null,
+  };
+}
+
+function isUsablePublishedLog(log) {
+  return (
+    log &&
+    log.status === "published" &&
+    typeof log.text === "string" &&
+    Boolean(log.text.trim()) &&
+    typeof log.created_at === "string" &&
+    isValidDate(new Date(log.created_at))
+  );
+}
+
+export async function getPostingHistory(env) {
+  const now = new Date();
+
+  const logs = await getRecentPostLogs(
+    env,
+    100
   );
 
-  const todayPosts = publishedLogs
-    .filter((log) =>
-      isToday(new Date(log.created_at))
-    )
-    .map((log) => log.text);
+  const publishedPosts = logs
+    .filter(isUsablePublishedLog)
+    .map(normalizePublishedPost);
 
-  const recentPosts = publishedLogs
-    .filter((log) =>
-      isWithinDays(
-        new Date(log.created_at),
-        7
+  const todayPosts = publishedPosts.filter(
+    (post) =>
+      isToday(
+        new Date(post.createdAt),
+        now
       )
-    )
-    .map((log) => log.text);
+  );
+
+  const recentSevenDayPosts =
+    publishedPosts.filter((post) =>
+      isWithinRecentDays(
+        new Date(post.createdAt),
+        now,
+        RECENT_DAYS
+      )
+    );
 
   return {
     todayPosts,
-    recentPosts,
-    recentCount: recentPosts.length,
+    recentSevenDayPosts,
+
+    todayPostCount:
+      todayPosts.length,
+
+    recentPostCount:
+      recentSevenDayPosts.length,
+
+    periodDays:
+      RECENT_DAYS,
+
+    generatedAt:
+      now.toISOString(),
   };
 }
