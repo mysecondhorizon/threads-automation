@@ -4,6 +4,8 @@ import {
 
 import {
   buildRecentPerformance,
+  buildAnalyticsSummary,
+  buildRecommendations,
 } from "./analytics.js";
 
 const SEOUL_TIME_ZONE = "Asia/Seoul";
@@ -104,9 +106,18 @@ export async function buildThreadContext(
   const recentPerformance =
     await buildRecentPerformance(
       env,
-      postingHistory
-        .recentSevenDayPosts
+      postingHistory.recentSevenDayPosts
     );
+    
+  const analyticsSummary =
+    buildAnalyticsSummary(
+      recentPerformance
+  );
+
+  const recommendations =
+    buildRecommendations(
+      analyticsSummary
+  );
 
   return {
     meta: {
@@ -194,19 +205,23 @@ export async function buildThreadContext(
     analytics: {
       performancePostCount:
         recentPerformance.length,
-
+    
       availableInsightCount:
         recentPerformance.filter(
-          (item) =>
-            item.available
+          (item) => item.available
         ).length,
-
+    
+      summary:
+        analyticsSummary,
+    
+      recommendations,
+    
       topHooks: [],
-
+    
       topTopics: [],
-
+    
       topPostTypes: [],
-
+    
       lowPerformanceTopics: [],
     },
   };

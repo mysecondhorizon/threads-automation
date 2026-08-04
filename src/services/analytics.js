@@ -124,3 +124,80 @@ export async function buildRecentPerformance(
 
   return results.filter(Boolean);
 }
+
+export function buildAnalyticsSummary(
+  recentPerformance
+) {
+  const available = recentPerformance.filter(
+    (item) => item.available
+  );
+
+  if (available.length === 0) {
+    return {
+      totalPosts: 0,
+      averageViews: 0,
+      bestPost: null,
+      worstPost: null,
+      insightCoverage: 0,
+    };
+  }
+
+  const totalViews = available.reduce(
+    (sum, item) => sum + item.views,
+    0
+  );
+
+  const bestPost = available.reduce(
+    (best, current) =>
+      current.views > best.views
+        ? current
+        : best
+  );
+
+  const worstPost = available.reduce(
+    (worst, current) =>
+      current.views < worst.views
+        ? current
+        : worst
+  );
+
+  return {
+    totalPosts: available.length,
+
+    averageViews: Number(
+      (
+        totalViews /
+        available.length
+      ).toFixed(1)
+    ),
+
+    bestPost,
+
+    worstPost,
+
+    insightCoverage: 100,
+  };
+}
+
+export function buildRecommendations(
+  summary
+) {
+  if (summary.totalPosts < 20) {
+    return {
+      needsMoreData: true,
+
+      minimumRecommendedPosts: 20,
+
+      reason:
+        "게시글 수가 적어 통계 신뢰도가 낮습니다.",
+    };
+  }
+
+  return {
+    needsMoreData: false,
+
+    minimumRecommendedPosts: 20,
+
+    reason: null,
+  };
+}
