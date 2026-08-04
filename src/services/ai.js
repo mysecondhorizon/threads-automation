@@ -152,3 +152,38 @@ export async function generateThreadsDrafts(
     text: String(draft.text).trim().slice(0, 500),
   }));
 }
+
+export async function generateThreadPost(
+  env,
+  context
+) {
+  const topic =
+    context?.publishing?.goal ||
+    "Threads 게시글 작성";
+
+  const tone =
+    context?.publishing?.requestedTone ||
+    "친근하고 통찰력 있는";
+
+  const drafts =
+    await generateThreadsDrafts(
+      env,
+      {
+        topic,
+        tone,
+      }
+    );
+
+  const selected =
+    drafts[0];
+
+  return {
+    body: selected.text,
+    postType: selected.style,
+    firstComment: "",
+    metadata: {
+      generatedAt:
+        new Date().toISOString(),
+    },
+  };
+}
