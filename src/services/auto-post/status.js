@@ -6,6 +6,54 @@ import {
   getExecutionLock,
 } from "./lock.js";
 
+function normalizeFirstCommentStatus(
+  firstComment
+) {
+  if (!firstComment) {
+    return {
+      requested:
+        false,
+
+      published:
+        false,
+
+      replyId:
+        null,
+
+      text:
+        "",
+
+      error:
+        null,
+    };
+  }
+
+  return {
+    requested:
+      Boolean(
+        firstComment.requested
+      ),
+
+    published:
+      Boolean(
+        firstComment.published
+      ),
+
+    replyId:
+      firstComment.replyId ||
+      null,
+
+    text:
+      String(
+        firstComment.text || ""
+      ),
+
+    error:
+      firstComment.error ||
+      null,
+  };
+}
+
 export async function getAutoPostStatus(
   env
 ) {
@@ -68,6 +116,11 @@ export async function getAutoPostStatus(
 
             textLength:
               latestExecution.textLength,
+
+            firstComment:
+              normalizeFirstCommentStatus(
+                latestExecution.firstComment
+              ),
 
             error:
               latestExecution.error,
