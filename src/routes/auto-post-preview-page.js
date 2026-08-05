@@ -59,7 +59,7 @@ export async function handleAutoPostPreviewPage(
       <div style="
         color:#666;
       ">
-        실제 Threads 게시 없이 AI 결과를 확인합니다.
+        AI 결과를 검수한 뒤 같은 내용으로 실제 게시합니다.
       </div>
     </div>
 
@@ -190,6 +190,8 @@ export async function handleAutoPostPreviewPage(
       id="status-message"
       style="
         font-weight:700;
+        white-space:pre-wrap;
+        line-height:1.6;
       "
     ></div>
   </section>
@@ -225,17 +227,23 @@ export async function handleAutoPostPreviewPage(
         "
       ></div>
 
-      <div
+      <textarea
         id="post-text"
+        rows="9"
         style="
-          white-space:pre-wrap;
+          width:100%;
+          box-sizing:border-box;
+          padding:14px;
+          border:1px solid #ccc;
+          border-radius:10px;
+          resize:vertical;
+          font:inherit;
           line-height:1.75;
-          word-break:break-word;
         "
-      ></div>
+      ></textarea>
 
       <div style="
-        margin-top:16px;
+        margin-top:12px;
         color:#666;
         font-size:14px;
       ">
@@ -257,17 +265,80 @@ export async function handleAutoPostPreviewPage(
         첫 댓글
       </h2>
 
-      <div id="first-comment-requested"></div>
-
       <div
-        id="first-comment-text"
+        id="first-comment-requested"
         style="
-          margin-top:12px;
-          white-space:pre-wrap;
-          line-height:1.7;
-          word-break:break-word;
+          margin-bottom:12px;
+          color:#555;
         "
       ></div>
+
+      <textarea
+        id="first-comment-text"
+        rows="6"
+        placeholder="첫 댓글이 필요하지 않으면 비워두세요."
+        style="
+          width:100%;
+          box-sizing:border-box;
+          padding:14px;
+          border:1px solid #ccc;
+          border-radius:10px;
+          resize:vertical;
+          font:inherit;
+          line-height:1.7;
+        "
+      ></textarea>
+
+      <div style="
+        margin-top:12px;
+        color:#666;
+        font-size:14px;
+      ">
+        첫 댓글 길이:
+        <span id="first-comment-length">
+          0 / 500자
+        </span>
+      </div>
+    </article>
+
+    <article style="
+      border:1px solid #ddd;
+      border-radius:14px;
+      padding:20px;
+      background:#fff;
+      margin-bottom:16px;
+    ">
+      <h2 style="
+        margin-top:0;
+      ">
+        실제 게시
+      </h2>
+
+      <p style="
+        line-height:1.65;
+        color:#555;
+      ">
+        아래 버튼을 누르면 현재 화면에 표시된 본문과 첫 댓글이 그대로 Threads에 게시됩니다.
+        AI를 다시 호출하지 않습니다.
+      </p>
+
+      <button
+        id="publish-button"
+        type="button"
+        style="
+          width:100%;
+          padding:14px 16px;
+          border:0;
+          border-radius:8px;
+          background:#0b6b3a;
+          color:#fff;
+          font-size:16px;
+          font-weight:700;
+          cursor:pointer;
+        "
+      >
+        이 내용으로 실제 게시
+      </button>
     </article>
 
     <details style="
@@ -303,9 +374,14 @@ export async function handleAutoPostPreviewPage(
         "preview-form"
       );
 
-    const button =
+    const previewButton =
       document.getElementById(
         "preview-button"
+      );
+
+    const publishButton =
+      document.getElementById(
+        "publish-button"
       );
 
     const statusCard =
@@ -348,10 +424,18 @@ export async function handleAutoPostPreviewPage(
         "first-comment-text"
       );
 
+    const firstCommentLength =
+      document.getElementById(
+        "first-comment-length"
+      );
+
     const rawJson =
       document.getElementById(
         "raw-json"
       );
+
+    let latestPreview =
+      null;
 
     function showStatus(
       message,
@@ -363,17 +447,17 @@ export async function handleAutoPostPreviewPage(
       statusCard.style.borderColor =
         isError
           ? "#e0a0a0"
-          : "#ddd";
+          : "#9fcdb5";
 
       statusCard.style.background =
         isError
           ? "#fff5f5"
-          : "#fff";
+          : "#f3fff8";
 
       statusMessage.style.color =
         isError
           ? "#b00020"
-          : "#222";
+          : "#0b5d34";
 
       statusMessage.textContent =
         message;
@@ -384,12 +468,54 @@ export async function handleAutoPostPreviewPage(
         "none";
     }
 
+    function getPayloadData(
+      payload
+    ) {
+      return (
+        payload.data ||
+        payload
+      );
+    }
+
+    function updateLengths() {
+      const textLength =
+        postText.value.length;
+
+      const commentLength =
+        firstCommentText
+          .value
+          .length;
+
+      postLength.textContent =
+        String(
+          textLength
+        ) +
+        " / 500자";
+
+      firstCommentLength.textContent =
+        String(
+          commentLength
+        ) +
+        " / 500자";
+
+      postLength.style.color =
+        textLength > 500
+          ? "#b00020"
+          : "#666";
+
+      firstCommentLength.style.color =
+        commentLength > 500
+          ? "#b00020"
+          : "#666";
+    }
+
     function renderPreview(
       payload
     ) {
       const data =
-        payload.data ||
-        payload;
+        getPayloadData(
+          payload
+        );
 
       const comment =
         data.firstComment || {
@@ -400,36 +526,26 @@ export async function handleAutoPostPreviewPage(
             "",
         };
 
+      latestPreview =
+        data;
+
       postType.textContent =
         data.postType ||
         "유형 없음";
 
-      postText.textContent =
+      postText.value =
         data.text ||
         "";
-
-      postLength.textContent =
-        String(
-          data.validation?.length ||
-          0
-        ) +
-        " / " +
-        String(
-          data.validation
-            ?.maxLength ||
-          500
-        ) +
-        "자";
 
       firstCommentRequested
         .textContent =
         comment.requested
-          ? "첫 댓글이 생성되었습니다."
-          : "첫 댓글이 필요하지 않은 글입니다.";
+          ? "첫 댓글이 생성되었습니다. 필요하면 수정할 수 있습니다."
+          : "첫 댓글이 필요하지 않은 글입니다. 필요하면 직접 입력할 수 있습니다.";
 
-      firstCommentText.textContent =
+      firstCommentText.value =
         comment.text ||
-        "첫 댓글 없음";
+        "";
 
       rawJson.textContent =
         JSON.stringify(
@@ -438,8 +554,310 @@ export async function handleAutoPostPreviewPage(
           2
         );
 
+      updateLengths();
+
       previewResult.style.display =
         "block";
+    }
+
+    async function generatePreview() {
+      previewButton.disabled =
+        true;
+
+      previewButton.textContent =
+        "생성 중...";
+
+      publishButton.disabled =
+        true;
+
+      previewResult.style.display =
+        "none";
+
+      showStatus(
+        "AI가 미리보기를 생성하고 있습니다."
+      );
+
+      try {
+        const response =
+          await fetch(
+            "/admin/auto-post/preview",
+            {
+              method:
+                "POST",
+
+              headers: {
+                "content-type":
+                  "application/json",
+              },
+
+              body:
+                JSON.stringify({
+                  goal:
+                    document
+                      .getElementById(
+                        "goal"
+                      )
+                      .value,
+
+                  tone:
+                    document
+                      .getElementById(
+                        "tone"
+                      )
+                      .value,
+                }),
+            }
+          );
+
+        const payload =
+          await response.json();
+
+        if (
+          !response.ok ||
+          payload.ok === false
+        ) {
+          throw new Error(
+            payload.error ||
+            "미리보기 생성에 실패했습니다."
+          );
+        }
+
+        hideStatus();
+
+        renderPreview(
+          payload
+        );
+      } catch (
+        error
+      ) {
+        latestPreview =
+          null;
+
+        showStatus(
+          error instanceof Error
+            ? error.message
+            : String(error),
+          true
+        );
+      } finally {
+        previewButton.disabled =
+          false;
+
+        previewButton.textContent =
+          "미리보기 생성";
+
+        publishButton.disabled =
+          false;
+      }
+    }
+
+    async function publishReviewedPost() {
+      if (!latestPreview) {
+        showStatus(
+          "먼저 미리보기를 생성해 주세요.",
+          true
+        );
+
+        return;
+      }
+
+      const text =
+        postText.value.trim();
+
+      const firstComment =
+        firstCommentText
+          .value
+          .trim();
+
+      if (!text) {
+        showStatus(
+          "게시할 본문이 비어 있습니다.",
+          true
+        );
+
+        return;
+      }
+
+      if (
+        text.length > 500
+      ) {
+        showStatus(
+          "본문이 500자를 초과했습니다.",
+          true
+        );
+
+        return;
+      }
+
+      if (
+        firstComment.length >
+        500
+      ) {
+        showStatus(
+          "첫 댓글이 500자를 초과했습니다.",
+          true
+        );
+
+        return;
+      }
+
+      const confirmed =
+        window.confirm(
+          "현재 본문을 실제 Threads에 게시하시겠습니까?"
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      publishButton.disabled =
+        true;
+
+      previewButton.disabled =
+        true;
+
+      publishButton.textContent =
+        "게시 중...";
+
+      showStatus(
+        "검수된 내용을 Threads에 게시하고 있습니다."
+      );
+
+      try {
+        const response =
+          await fetch(
+            "/admin/auto-post/publish-reviewed",
+            {
+              method:
+                "POST",
+
+              headers: {
+                "content-type":
+                  "application/json",
+              },
+
+              body:
+                JSON.stringify({
+                  text,
+
+                  postType:
+                    latestPreview
+                      .postType ||
+                    "",
+
+                  firstComment,
+                }),
+            }
+          );
+
+        const payload =
+          await response.json();
+
+        if (
+          !response.ok ||
+          payload.ok === false
+        ) {
+          const details =
+            payload.details
+              ? "\\n" +
+                JSON.stringify(
+                  payload.details,
+                  null,
+                  2
+                )
+              : "";
+
+          throw new Error(
+            (
+              payload.error ||
+              "실제 게시에 실패했습니다."
+            ) +
+            details
+          );
+        }
+
+        const data =
+          getPayloadData(
+            payload
+          );
+
+        const commentResult =
+          data.firstComment || {
+            requested:
+              false,
+
+            published:
+              false,
+
+            replyId:
+              null,
+          };
+
+        let message =
+          "본문 게시가 완료되었습니다.\\n" +
+          "Post ID: " +
+          String(
+            data.post_id ||
+            "-"
+          );
+
+        if (
+          commentResult.requested
+        ) {
+          message +=
+            "\\n첫 댓글 게시: " +
+            (
+              commentResult.published
+                ? "성공"
+                : "실패"
+            );
+
+          if (
+            commentResult.replyId
+          ) {
+            message +=
+              "\\nReply ID: " +
+              String(
+                commentResult.replyId
+              );
+          }
+        } else {
+          message +=
+            "\\n첫 댓글: 없음";
+        }
+
+        showStatus(
+          message
+        );
+
+        publishButton.textContent =
+          "게시 완료";
+
+        rawJson.textContent =
+          JSON.stringify(
+            payload,
+            null,
+            2
+          );
+      } catch (
+        error
+      ) {
+        showStatus(
+          error instanceof Error
+            ? error.message
+            : String(error),
+          true
+        );
+
+        publishButton.disabled =
+          false;
+
+        previewButton.disabled =
+          false;
+
+        publishButton.textContent =
+          "이 내용으로 실제 게시";
+      }
     }
 
     form.addEventListener(
@@ -449,86 +867,23 @@ export async function handleAutoPostPreviewPage(
       ) => {
         event.preventDefault();
 
-        button.disabled =
-          true;
-
-        button.textContent =
-          "생성 중...";
-
-        previewResult.style.display =
-          "none";
-
-        showStatus(
-          "AI가 미리보기를 생성하고 있습니다."
-        );
-
-        try {
-          const response =
-            await fetch(
-              "/admin/auto-post/preview",
-              {
-                method:
-                  "POST",
-
-                headers: {
-                  "content-type":
-                    "application/json",
-                },
-
-                body:
-                  JSON.stringify({
-                    goal:
-                      document
-                        .getElementById(
-                          "goal"
-                        )
-                        .value,
-
-                    tone:
-                      document
-                        .getElementById(
-                          "tone"
-                        )
-                        .value,
-                  }),
-              }
-            );
-
-          const payload =
-            await response.json();
-
-          if (
-            !response.ok ||
-            payload.ok === false
-          ) {
-            throw new Error(
-              payload.error ||
-              "미리보기 생성에 실패했습니다."
-            );
-          }
-
-          hideStatus();
-
-          renderPreview(
-            payload
-          );
-        } catch (
-          error
-        ) {
-          showStatus(
-            error instanceof Error
-              ? error.message
-              : String(error),
-            true
-          );
-        } finally {
-          button.disabled =
-            false;
-
-          button.textContent =
-            "미리보기 생성";
-        }
+        await generatePreview();
       }
+    );
+
+    publishButton.addEventListener(
+      "click",
+      publishReviewedPost
+    );
+
+    postText.addEventListener(
+      "input",
+      updateLengths
+    );
+
+    firstCommentText.addEventListener(
+      "input",
+      updateLengths
     );
   </script>
 </body>
