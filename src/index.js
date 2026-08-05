@@ -4,6 +4,9 @@ import { handleAutoPost } from "./routes/auto-post.js";
 import {
   handleAutoPostStatus,
 } from "./routes/auto-post-status.js";
+import {
+  handleAutoPostPreview,
+} from "./routes/auto-post-preview.js";
 import { handlePostInsights } from "./routes/insights.js";
 import { handleRefreshInsights } from "./routes/insights-refresh.js";
 import { handleDashboard } from "./routes/dashboard.js";
@@ -121,7 +124,7 @@ export default {
         env
       );
     }
-    
+
     if (
       pathname === "/admin/auto-post" &&
       method === "POST"
@@ -131,12 +134,22 @@ export default {
         env
       );
     }
-    
+
     if (
       pathname === "/admin/auto-post/status" &&
       method === "GET"
     ) {
       return handleAutoPostStatus(
+        request,
+        env
+      );
+    }
+
+    if (
+      pathname === "/admin/auto-post/preview" &&
+      method === "POST"
+    ) {
+      return handleAutoPostPreview(
         request,
         env
       );
