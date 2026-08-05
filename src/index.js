@@ -10,6 +10,10 @@ import {
   handleAutoPostPreview,
 } from "./routes/auto-post-preview.js";
 
+import {
+  handleAutoPostPreviewPage,
+} from "./routes/auto-post-preview-page.js";
+
 import { handlePostInsights } from "./routes/insights.js";
 import { handleRefreshInsights } from "./routes/insights-refresh.js";
 import { handleDashboard } from "./routes/dashboard.js";
@@ -37,11 +41,21 @@ import { handleLogs } from "./routes/logs.js";
 
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url);
-    const { pathname } = url;
-    const method = request.method;
+    const url =
+      new URL(
+        request.url
+      );
 
-    if (pathname === "/") {
+    const {
+      pathname,
+    } = url;
+
+    const method =
+      request.method;
+
+    if (
+      pathname === "/"
+    ) {
       return new Response(
         "Second Horizon is running! 🚀"
       );
@@ -58,7 +72,9 @@ export default {
       pathname === "/oauth/start" &&
       method === "GET"
     ) {
-      return handleOAuthStart(env);
+      return handleOAuthStart(
+        env
+      );
     }
 
     if (
@@ -162,6 +178,16 @@ export default {
     }
 
     if (
+      pathname === "/admin/auto-post/preview-page" &&
+      method === "GET"
+    ) {
+      return handleAutoPostPreviewPage(
+        request,
+        env
+      );
+    }
+
+    if (
       pathname === "/admin/logs" &&
       method === "GET"
     ) {
@@ -206,30 +232,40 @@ export default {
       pathname === "/admin/token" &&
       method === "GET"
     ) {
-      return handleShortToken(env);
+      return handleShortToken(
+        env
+      );
     }
 
     if (
       pathname === "/admin/exchange-token" &&
       method === "GET"
     ) {
-      return handleTokenExchange(env);
+      return handleTokenExchange(
+        env
+      );
     }
 
     if (
       pathname === "/admin/me" &&
       method === "GET"
     ) {
-      return handleProfile(env);
+      return handleProfile(
+        env
+      );
     }
 
     return Response.json(
       {
-        ok: false,
-        error: "Not found",
+        ok:
+          false,
+
+        error:
+          "Not found",
       },
       {
-        status: 404,
+        status:
+          404,
       }
     );
   },
