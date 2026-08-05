@@ -71,6 +71,29 @@ function normalizeLineBreaks(
     .trim();
 }
 
+function normalizeFirstComment(
+  value
+) {
+  const comment =
+    normalizeLineBreaks(
+      value
+    );
+
+  if (
+    !comment ||
+    comment === "없음" ||
+    comment === "해당 없음" ||
+    comment.toLowerCase() ===
+      "none" ||
+    comment.toLowerCase() ===
+      "null"
+  ) {
+    return "";
+  }
+
+  return comment;
+}
+
 function hasStructuredSections(
   text
 ) {
@@ -136,27 +159,6 @@ function extractStructuredSections(
   return sections;
 }
 
-function normalizeFirstComment(
-  value
-) {
-  const comment =
-    normalizeLineBreaks(
-      value
-    );
-
-  if (
-    !comment ||
-    comment === "없음" ||
-    comment === "해당 없음" ||
-    comment.toLowerCase() ===
-      "none"
-  ) {
-    return "";
-  }
-
-  return comment;
-}
-
 function parseRecordData(
   value
 ) {
@@ -167,8 +169,11 @@ function parseRecordData(
 
   if (!text) {
     return {
-      raw: "",
-      fields: {},
+      raw:
+        "",
+
+      fields:
+        {},
     };
   }
 
@@ -230,6 +235,11 @@ function parseGeneratedPost(
     );
   }
 
+  const schemaFirstComment =
+    normalizeFirstComment(
+      selected?.firstComment
+    );
+
   if (
     !hasStructuredSections(
       rawText
@@ -240,13 +250,12 @@ function parseGeneratedPost(
         rawText,
 
       postType:
-        String(
-          selected?.style ||
-          ""
-        ).trim(),
+        normalizeLineBreaks(
+          selected?.style
+        ),
 
       firstComment:
-        "",
+        schemaFirstComment,
 
       recordData: {
         raw:
@@ -257,7 +266,7 @@ function parseGeneratedPost(
       },
 
       sourceFormat:
-        "plain_text",
+        "json_schema",
     };
   }
 
@@ -286,20 +295,23 @@ function parseGeneratedPost(
       sections?.["글 유형"]
     );
 
+  const sectionFirstComment =
+    normalizeFirstComment(
+      sections?.["첫 댓글"]
+    );
+
   return {
     body,
 
     postType:
       sectionPostType ||
-      String(
-        selected?.style ||
-        ""
-      ).trim(),
+      normalizeLineBreaks(
+        selected?.style
+      ),
 
     firstComment:
-      normalizeFirstComment(
-        sections?.["첫 댓글"]
-      ),
+      schemaFirstComment ||
+      sectionFirstComment,
 
     recordData:
       parseRecordData(
@@ -308,6 +320,52 @@ function parseGeneratedPost(
 
     sourceFormat:
       "labeled_sections",
+  };
+}
+
+function validateDraft(
+  draft,
+  index
+) {
+  const style =
+    normalizeLineBreaks(
+      draft?.style
+    );
+
+  const text =
+    normalizeLineBreaks(
+      draft?.text
+    );
+
+  const firstComment =
+    normalizeFirstComment(
+      draft?.firstComment
+    );
+
+  if (!style) {
+    throw new AiServiceError(
+      "OpenAI returned a draft without a style",
+      {
+        index,
+        draft,
+      }
+    );
+  }
+
+  if (!text) {
+    throw new AiServiceError(
+      "OpenAI returned a draft without text",
+      {
+        index,
+        draft,
+      }
+    );
+  }
+
+  return {
+    style,
+    text,
+    firstComment,
   };
 }
 
@@ -364,6 +422,9 @@ export async function generateThreadsDrafts(
               `주제: ${topic}`,
               `기본 톤: ${tone}`,
               "세 초안의 문장 구조와 도입부가 서로 겹치지 않게 작성하세요.",
+              "각 초안의 text에는 실제 게시할 본문만 작성하세요.",
+              "제품 링크나 추가 안내가 필요한 경우에만 firstComment를 작성하세요.",
+              "첫 댓글이 필요하지 않으면 firstComment는 빈 문자열로 작성하세요.",
             ].join("\n"),
 
             text: {
@@ -418,11 +479,17 @@ export async function generateThreadsDrafts(
                             type:
                               "string",
                           },
+
+                          firstComment: {
+                            type:
+                              "string",
+                          },
                         },
 
                         required: [
                           "style",
                           "text",
+                          "firstComment",
                         ],
                       },
                     },
@@ -489,17 +556,11 @@ export async function generateThreadsDrafts(
   }
 
   return parsed.drafts.map(
-    (draft) => ({
-      style:
-        String(
-          draft.style || ""
-        ).trim(),
-
-      text:
-        normalizeLineBreaks(
-          draft.text
-        ),
-    })
+    (draft, index) =>
+      validateDraft(
+        draft,
+        index
+      )
   );
 }
 
@@ -545,6 +606,25 @@ export async function generateThreadPost(
 
         body:
           parsedPost.body,
+      }
+    );
+  }
+
+  if (
+    parsedPost.firstComment.length >
+    500
+  ) {
+    throw new AiServiceError(
+      "OpenAI generated a first comment longer than 500 characters",
+      {
+        length:
+          parsedPost
+            .firstComment
+            .length,
+
+        firstComment:
+          parsedPost
+            .firstComment,
       }
     );
   }
