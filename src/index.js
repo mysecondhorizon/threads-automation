@@ -14,6 +14,10 @@ import {
   handleAutoPostPreviewPage,
 } from "./routes/auto-post-preview-page.js";
 
+import {
+  handlePublishReviewedAutoPost,
+} from "./routes/auto-post-publish-reviewed.js";
+
 import { handlePostInsights } from "./routes/insights.js";
 import { handleRefreshInsights } from "./routes/insights-refresh.js";
 import { handleDashboard } from "./routes/dashboard.js";
@@ -182,6 +186,16 @@ export default {
       method === "GET"
     ) {
       return handleAutoPostPreviewPage(
+        request,
+        env
+      );
+    }
+
+    if (
+      pathname === "/admin/auto-post/publish-reviewed" &&
+      method === "POST"
+    ) {
+      return handlePublishReviewedAutoPost(
         request,
         env
       );
