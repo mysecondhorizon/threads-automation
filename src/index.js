@@ -1,12 +1,15 @@
 import { handleGenerateDraft } from "./routes/ai.js";
 import { handleThreadContext } from "./routes/context.js";
 import { handleAutoPost } from "./routes/auto-post.js";
+
 import {
   handleAutoPostStatus,
 } from "./routes/auto-post-status.js";
+
 import {
   handleAutoPostPreview,
 } from "./routes/auto-post-preview.js";
+
 import { handlePostInsights } from "./routes/insights.js";
 import { handleRefreshInsights } from "./routes/insights-refresh.js";
 import { handleDashboard } from "./routes/dashboard.js";
@@ -147,7 +150,10 @@ export default {
 
     if (
       pathname === "/admin/auto-post/preview" &&
-      method === "POST"
+      (
+        method === "GET" ||
+        method === "POST"
+      )
     ) {
       return handleAutoPostPreview(
         request,
