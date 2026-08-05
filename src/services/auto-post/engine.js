@@ -111,6 +111,20 @@ function createExecution(
     textLength:
       null,
 
+    firstComment: {
+      requested:
+        false,
+
+      published:
+        false,
+
+      replyId:
+        null,
+
+      error:
+        null,
+    },
+
     error:
       null,
   };
@@ -129,7 +143,9 @@ async function safeLogFailure(
       text,
       details
     );
-  } catch (logError) {
+  } catch (
+    logError
+  ) {
     console.error(
       "Auto post failure logging failed",
       logError
@@ -273,13 +289,49 @@ function normalizeEngineError(
   );
 }
 
+function normalizeFirstCommentResult(
+  generatedPost,
+  firstCommentResult
+) {
+  const requestedText =
+    String(
+      generatedPost?.firstComment || ""
+    ).trim();
+
+  return {
+    requested:
+      Boolean(
+        requestedText
+      ),
+
+    published:
+      Boolean(
+        firstCommentResult?.published
+      ),
+
+    replyId:
+      firstCommentResult?.replyId ||
+      null,
+
+    text:
+      firstCommentResult?.text ||
+      requestedText ||
+      "",
+
+    error:
+      firstCommentResult?.error ||
+      null,
+  };
+}
+
 function buildSuccessResult(
   executionId,
   profile,
   publishResult,
   generatedPost,
   context,
-  validation
+  validation,
+  firstCommentResult
 ) {
   return {
     executionId,
@@ -297,7 +349,10 @@ function buildSuccessResult(
       generatedPost.postType,
 
     firstComment:
-      generatedPost.firstComment,
+      normalizeFirstCommentResult(
+        generatedPost,
+        firstCommentResult
+      ),
 
     metadata:
       generatedPost.metadata,
@@ -458,12 +513,33 @@ async function runExecution(
 
         textLength:
           validation.length,
+
+        firstComment: {
+          requested:
+            Boolean(
+              String(
+                generatedPost
+                  ?.firstComment ||
+                ""
+              ).trim()
+            ),
+
+          published:
+            false,
+
+          replyId:
+            null,
+
+          error:
+            null,
+        },
       }
     );
 
     const {
       profile,
       publishResult,
+      firstCommentResult,
     } = await publishAutoPost(
       env,
       {
@@ -472,8 +548,19 @@ async function runExecution(
 
         text:
           validation.text,
+
+        firstComment:
+          generatedPost
+            ?.firstComment ||
+          "",
       }
     );
+
+    const normalizedFirstComment =
+      normalizeFirstCommentResult(
+        generatedPost,
+        firstCommentResult
+      );
 
     await updateExecution(
       env,
@@ -497,6 +584,9 @@ async function runExecution(
         textLength:
           validation.length,
 
+        firstComment:
+          normalizedFirstComment,
+
         error:
           null,
       }
@@ -508,9 +598,12 @@ async function runExecution(
       publishResult,
       generatedPost,
       context,
-      validation
+      validation,
+      firstCommentResult
     );
-  } catch (error) {
+  } catch (
+    error
+  ) {
     const engineError =
       normalizeEngineError(
         error,
@@ -582,7 +675,9 @@ async function runExecution(
           env,
           executionId
         );
-      } catch (releaseError) {
+      } catch (
+        releaseError
+      ) {
         console.error(
           "Auto post lock release failed",
           {
