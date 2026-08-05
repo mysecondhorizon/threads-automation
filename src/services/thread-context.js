@@ -9,31 +9,51 @@ import {
   buildAnalyticsObservations,
 } from "./analytics.js";
 
-const SEOUL_TIME_ZONE = "Asia/Seoul";
+import {
+  getActiveProducts,
+  buildProductContext,
+} from "./products.js";
 
-function getSeoulMonth(date) {
+const SEOUL_TIME_ZONE =
+  "Asia/Seoul";
+
+function getSeoulMonth(
+  date
+) {
   const parts =
     new Intl.DateTimeFormat(
       "en-US",
       {
-        timeZone: SEOUL_TIME_ZONE,
-        month: "numeric",
-      }
-    ).formatToParts(date);
+        timeZone:
+          SEOUL_TIME_ZONE,
 
-  const monthPart = parts.find(
-    (part) =>
-      part.type === "month"
-  );
+        month:
+          "numeric",
+      }
+    ).formatToParts(
+      date
+    );
+
+  const monthPart =
+    parts.find(
+      (part) =>
+        part.type ===
+        "month"
+    );
 
   return Number(
-    monthPart?.value || 0
+    monthPart?.value ||
+    0
   );
 }
 
-function getSeason(date) {
+function getSeason(
+  date
+) {
   const month =
-    getSeoulMonth(date);
+    getSeoulMonth(
+      date
+    );
 
   if (
     month >= 3 &&
@@ -59,76 +79,231 @@ function getSeason(date) {
   return "겨울";
 }
 
-function formatDate(date) {
+function formatDate(
+  date
+) {
   return date.toLocaleDateString(
     "ko-KR",
     {
       timeZone:
         SEOUL_TIME_ZONE,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
+
+      year:
+        "numeric",
+
+      month:
+        "2-digit",
+
+      day:
+        "2-digit",
     }
   );
 }
 
-function formatTime(date) {
+function formatTime(
+  date
+) {
   return date.toLocaleTimeString(
     "ko-KR",
     {
       timeZone:
         SEOUL_TIME_ZONE,
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
+
+      hour:
+        "2-digit",
+
+      minute:
+        "2-digit",
+
+      hour12:
+        false,
     }
   );
 }
 
-function getWeekday(date) {
+function getWeekday(
+  date
+) {
   return date.toLocaleDateString(
     "ko-KR",
     {
       timeZone:
         SEOUL_TIME_ZONE,
-      weekday: "long",
+
+      weekday:
+        "long",
     }
   );
+}
+
+function buildRecentProducts(
+  recentPosts,
+  products
+) {
+  const normalizedPosts =
+    Array.isArray(
+      recentPosts
+    )
+      ? recentPosts
+      : [];
+
+  const normalizedProducts =
+    Array.isArray(
+      products
+    )
+      ? products
+      : [];
+
+  const recentProductIds =
+    new Set();
+
+  for (
+    const post of
+    normalizedPosts
+  ) {
+    const text =
+      String(
+        post?.text || ""
+      ).toLowerCase();
+
+    if (!text) {
+      continue;
+    }
+
+    for (
+      const product of
+      normalizedProducts
+    ) {
+      const productName =
+        String(
+          product?.name ||
+          ""
+        ).trim();
+
+      if (
+        productName &&
+        text.includes(
+          productName
+            .toLowerCase()
+        )
+      ) {
+        recentProductIds.add(
+          product.id
+        );
+      }
+    }
+  }
+
+  return normalizedProducts
+    .filter(
+      (product) =>
+        recentProductIds.has(
+          product.id
+        )
+    )
+    .map(
+      (product) => ({
+        id:
+          product.id,
+
+        name:
+          product.name,
+
+        category:
+          product.category,
+
+        updatedAt:
+          product.updatedAt,
+      })
+    );
 }
 
 export async function buildThreadContext(
   env
 ) {
-  const now = new Date();
+  const now =
+    new Date();
 
-  const postingHistory =
-    await getPostingHistory(env);
+  const [
+    postingHistory,
+    activeProducts,
+  ] = await Promise.all([
+    getPostingHistory(
+      env
+    ),
+
+    getActiveProducts(
+      env
+    ),
+  ]);
 
   const recentPerformance =
     await buildRecentPerformance(
       env,
-      postingHistory.recentSevenDayPosts
+      postingHistory
+        .recentSevenDayPosts
     );
-    
+
   const analyticsSummary =
     buildAnalyticsSummary(
       recentPerformance
-  );
+    );
 
   const recommendations =
     buildRecommendations(
       analyticsSummary
-  );
-  
+    );
+
   const analyticsObservations =
-  buildAnalyticsObservations(
-    analyticsSummary,
-    recommendations
-  );
+    buildAnalyticsObservations(
+      analyticsSummary,
+      recommendations
+    );
+
+  const productContext =
+    buildProductContext(
+      activeProducts
+    );
+
+  const recentProducts =
+    buildRecentProducts(
+      postingHistory
+        .recentSevenDayPosts,
+      activeProducts
+    );
+
+  const todayLinkCount =
+    recentProducts.filter(
+      (product) => {
+        const productInfo =
+          productContext
+            .productDetails
+            .find(
+              (item) =>
+                item.productId ===
+                product.id
+            );
+
+        return Boolean(
+          productInfo
+            ?.linkEnabled
+        );
+      }
+    ).length;
+
+  const linkAvailable =
+    todayLinkCount < 1 &&
+    productContext
+      .productDetails
+      .some(
+        (product) =>
+          product.linkEnabled
+      );
 
   return {
     meta: {
-      version: "1.4.0",
+      version:
+        "1.5.0",
 
       generatedAt:
         now.toISOString(),
@@ -139,32 +314,44 @@ export async function buildThreadContext(
 
     environment: {
       currentDate:
-        formatDate(now),
+        formatDate(
+          now
+        ),
 
       currentTime:
-        formatTime(now),
+        formatTime(
+          now
+        ),
 
       weekday:
-        getWeekday(now),
+        getWeekday(
+          now
+        ),
 
-      weather: null,
+      weather:
+        null,
 
       season:
-        getSeason(now),
+        getSeason(
+          now
+        ),
     },
 
     publishing: {
       publishSequence:
         postingHistory
-          .todayPostCount + 1,
+          .todayPostCount +
+        1,
 
-      todayLinkCount: 0,
+      todayLinkCount,
 
-      linkAvailable: true,
+      linkAvailable,
 
-      goal: null,
+      goal:
+        null,
 
-      requestedTone: null,
+      requestedTone:
+        null,
     },
 
     history: {
@@ -192,50 +379,51 @@ export async function buildThreadContext(
         postingHistory
           .generatedAt,
 
-      recentProducts: [],
+      recentProducts,
 
       recentPerformance,
     },
 
-    products: {
-      availableProducts: [],
-
-      productExperience: [],
-
-      productDetails: [],
-
-      productPrices: [],
-
-      productPhotos: [],
-    },
+    products:
+      productContext,
 
     analytics: {
       performancePostCount:
-        recentPerformance.length,
-    
+        recentPerformance
+          .length,
+
       availableInsightCount:
-        recentPerformance.filter(
-          (item) => item.available
-        ).length,
-    
+        recentPerformance
+          .filter(
+            (item) =>
+              item.available
+          )
+          .length,
+
       summary:
         analyticsSummary,
-    
+
       recommendations,
-      
+
       performanceLevel:
-        analyticsObservations.performanceLevel,
-      
+        analyticsObservations
+          .performanceLevel,
+
       observations:
-        analyticsObservations.observations,
-    
-      topHooks: [],
-    
-      topTopics: [],
-    
-      topPostTypes: [],
-    
-      lowPerformanceTopics: [],
+        analyticsObservations
+          .observations,
+
+      topHooks:
+        [],
+
+      topTopics:
+        [],
+
+      topPostTypes:
+        [],
+
+      lowPerformanceTopics:
+        [],
     },
   };
 }
