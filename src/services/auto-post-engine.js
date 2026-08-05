@@ -24,6 +24,11 @@ import {
   logPostFailure,
 } from "./logger.js";
 
+import {
+  validateAutoPostText,
+  AutoPostValidationError,
+} from "./auto-post-validator.js";
+
 const AUTO_POST_LOCK_KEY =
   "auto_post:active_execution";
 
@@ -255,58 +260,6 @@ async function releaseExecutionLock(
   }
 }
 
-function validateGeneratedPost(
-  generatedPost
-) {
-  const text =
-    String(
-      generatedPost?.body || ""
-    ).trim();
-
-  if (!text) {
-    throw new AutoPostEngineError(
-      "AI가 게시글을 생성하지 못했습니다.",
-      {
-        code:
-          "empty_generated_post",
-
-        status:
-          502,
-
-        step:
-          "validation",
-      }
-    );
-  }
-
-  if (
-    text.length > 500
-  ) {
-    throw new AutoPostEngineError(
-      "AI가 생성한 본문이 500자를 초과했습니다.",
-      {
-        code:
-          "generated_post_too_long",
-
-        status:
-          502,
-
-        step:
-          "validation",
-
-        details: {
-          length:
-            text.length,
-        },
-
-        text,
-      }
-    );
-  }
-
-  return text;
-}
-
 async function safeLogFailure(
   env,
   step,
@@ -349,6 +302,34 @@ function normalizeEngineError(
     }
 
     return error;
+  }
+
+  if (
+    error instanceof
+    AutoPostValidationError
+  ) {
+    return new AutoPostEngineError(
+      error.message,
+      {
+        code:
+          error.code,
+
+        status:
+          502,
+
+        step:
+          "validation",
+
+        details:
+          error.details,
+
+        text:
+          failedText,
+
+        cause:
+          error,
+      }
+    );
   }
 
   if (
@@ -444,7 +425,8 @@ function buildSuccessResult(
   publishResult,
   generatedPost,
   context,
-  text
+  text,
+  validation
 ) {
   return {
     executionId,
@@ -465,6 +447,14 @@ function buildSuccessResult(
 
     metadata:
       generatedPost.metadata,
+
+    validation: {
+      length:
+        validation.length,
+
+      maxLength:
+        validation.maxLength,
+    },
 
     context: {
       version:
@@ -520,6 +510,9 @@ async function runExecution(
       null,
 
     username:
+      null,
+
+    textLength:
       null,
 
     error:
@@ -627,10 +620,13 @@ async function runExecution(
       }
     );
 
-    const text =
-      validateGeneratedPost(
-        generatedPost
+    const validation =
+      validateAutoPostText(
+        generatedPost?.body
       );
+
+    const text =
+      validation.text;
 
     await updateExecution(
       env,
@@ -638,6 +634,9 @@ async function runExecution(
       {
         step:
           "loading_profile",
+
+        textLength:
+          validation.length,
       }
     );
 
@@ -703,6 +702,9 @@ async function runExecution(
         username:
           profile.username,
 
+        textLength:
+          validation.length,
+
         error:
           null,
       }
@@ -714,7 +716,8 @@ async function runExecution(
       publishResult,
       generatedPost,
       context,
-      text
+      text,
+      validation
     );
   } catch (
     error
@@ -904,6 +907,9 @@ export async function getAutoPostStatus(
 
             username:
               latestExecution.username,
+
+            textLength:
+              latestExecution.textLength,
 
             error:
               latestExecution.error,
