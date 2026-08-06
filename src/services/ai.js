@@ -8,6 +8,9 @@ const OPENAI_RESPONSES_URL =
 const GENERATED_SECTION_PATTERN =
   /^\s*\[(글 유형|본문|첫 댓글|기록 데이터)\]\s*$/gm;
 
+const MAX_RECENT_POSTS =
+  10;
+
 export class AiServiceError extends Error {
   constructor(
     message,
@@ -79,14 +82,15 @@ function normalizeFirstComment(
       value
     );
 
+  const lowerComment =
+    comment.toLowerCase();
+
   if (
     !comment ||
     comment === "없음" ||
     comment === "해당 없음" ||
-    comment.toLowerCase() ===
-      "none" ||
-    comment.toLowerCase() ===
-      "null"
+    lowerComment === "none" ||
+    lowerComment === "null"
   ) {
     return "";
   }
@@ -369,12 +373,279 @@ function validateDraft(
   };
 }
 
+function normalizePostForContext(
+  post
+) {
+  return {
+    postId:
+      String(
+        post?.postId || ""
+      ),
+
+    text:
+      normalizeLineBreaks(
+        post?.text
+      ),
+
+    createdAt:
+      post?.createdAt ||
+      null,
+  };
+}
+
+function normalizeProductList(
+  value
+) {
+  return Array.isArray(
+    value
+  )
+    ? value
+    : [];
+}
+
+function buildAiContextData(
+  context
+) {
+  if (!context) {
+    return null;
+  }
+
+  const recentPosts =
+    Array.isArray(
+      context?.history
+        ?.recentSevenDayPosts
+    )
+      ? context.history
+          .recentSevenDayPosts
+          .slice(
+            0,
+            MAX_RECENT_POSTS
+          )
+          .map(
+            normalizePostForContext
+          )
+      : [];
+
+  return {
+    meta: {
+      version:
+        context?.meta
+          ?.version ||
+        null,
+
+      generatedAt:
+        context?.meta
+          ?.generatedAt ||
+        null,
+
+      timeZone:
+        context?.meta
+          ?.timeZone ||
+        null,
+    },
+
+    environment: {
+      currentDate:
+        context?.environment
+          ?.currentDate ||
+        null,
+
+      currentTime:
+        context?.environment
+          ?.currentTime ||
+        null,
+
+      weekday:
+        context?.environment
+          ?.weekday ||
+        null,
+
+      weather:
+        context?.environment
+          ?.weather ||
+        null,
+
+      season:
+        context?.environment
+          ?.season ||
+        null,
+    },
+
+    publishing: {
+      publishSequence:
+        context?.publishing
+          ?.publishSequence ??
+        null,
+
+      todayLinkCount:
+        context?.publishing
+          ?.todayLinkCount ??
+        0,
+
+      linkAvailable:
+        Boolean(
+          context?.publishing
+            ?.linkAvailable
+        ),
+
+      goal:
+        context?.publishing
+          ?.goal ||
+        null,
+
+      requestedTone:
+        context?.publishing
+          ?.requestedTone ||
+        null,
+    },
+
+    history: {
+      todayPostCount:
+        context?.history
+          ?.todayPostCount ??
+        0,
+
+      recentPostCount:
+        context?.history
+          ?.recentPostCount ??
+        0,
+
+      recentPosts,
+
+      recentProducts:
+        normalizeProductList(
+          context?.history
+            ?.recentProducts
+        ),
+    },
+
+    products: {
+      availableProducts:
+        normalizeProductList(
+          context?.products
+            ?.availableProducts
+        ),
+
+      productExperience:
+        normalizeProductList(
+          context?.products
+            ?.productExperience
+        ),
+
+      productDetails:
+        normalizeProductList(
+          context?.products
+            ?.productDetails
+        ),
+
+      productPrices:
+        normalizeProductList(
+          context?.products
+            ?.productPrices
+        ),
+
+      productPhotos:
+        normalizeProductList(
+          context?.products
+            ?.productPhotos
+        ),
+    },
+
+    analytics: {
+      performanceLevel:
+        context?.analytics
+          ?.performanceLevel ||
+        null,
+
+      observations:
+        normalizeProductList(
+          context?.analytics
+            ?.observations
+        ),
+
+      recommendations:
+        context?.analytics
+          ?.recommendations ||
+        null,
+
+      summary:
+        context?.analytics
+          ?.summary ||
+        null,
+
+      topHooks:
+        normalizeProductList(
+          context?.analytics
+            ?.topHooks
+        ),
+
+      topTopics:
+        normalizeProductList(
+          context?.analytics
+            ?.topTopics
+        ),
+
+      lowPerformanceTopics:
+        normalizeProductList(
+          context?.analytics
+            ?.lowPerformanceTopics
+        ),
+    },
+  };
+}
+
+function buildGenerationInput(
+  {
+    topic,
+    tone,
+    context,
+  }
+) {
+  const lines = [
+    `작성 목표: ${topic}`,
+    `기본 톤: ${tone}`,
+    "세 초안의 문장 구조와 도입부가 서로 겹치지 않게 작성하세요.",
+    "각 초안의 text에는 실제 게시할 본문만 작성하세요.",
+    "제품 링크나 추가 안내가 필요한 경우에만 firstComment를 작성하세요.",
+    "첫 댓글이 필요하지 않으면 firstComment는 빈 문자열로 작성하세요.",
+  ];
+
+  const contextData =
+    buildAiContextData(
+      context
+    );
+
+  if (contextData) {
+    lines.push(
+      "",
+      "아래는 이번 게시글 작성에 사용해야 하는 실제 컨텍스트입니다.",
+      "입력되지 않은 사실은 만들지 마세요.",
+      "제품 글을 작성할 때는 products의 실제 데이터만 사용하세요.",
+      "제품 경험이 없거나 정보가 부족하면 일반 글을 작성하세요.",
+      "affiliateLink가 비어 있거나 linkEnabled가 false라면 firstComment에 링크를 만들지 마세요.",
+      "",
+      "[THREAD_CONTEXT_JSON]",
+      JSON.stringify(
+        contextData,
+        null,
+        2
+      ),
+      "[/THREAD_CONTEXT_JSON]"
+    );
+  }
+
+  return lines.join(
+    "\n"
+  );
+}
+
 export async function generateThreadsDrafts(
   env,
   {
     topic,
     tone =
       "친근하고 통찰력 있는",
+    context = null,
   }
 ) {
   if (
@@ -384,6 +655,13 @@ export async function generateThreadsDrafts(
       "OPENAI_API_KEY is not configured"
     );
   }
+
+  const input =
+    buildGenerationInput({
+      topic,
+      tone,
+      context,
+    });
 
   const response =
     await fetch(
@@ -414,18 +692,10 @@ export async function generateThreadsDrafts(
                 "low",
             },
 
-            instructions: [
+            instructions:
               THREADS_SYSTEM_PROMPT,
-            ].join("\n"),
 
-            input: [
-              `주제: ${topic}`,
-              `기본 톤: ${tone}`,
-              "세 초안의 문장 구조와 도입부가 서로 겹치지 않게 작성하세요.",
-              "각 초안의 text에는 실제 게시할 본문만 작성하세요.",
-              "제품 링크나 추가 안내가 필요한 경우에만 firstComment를 작성하세요.",
-              "첫 댓글이 필요하지 않으면 firstComment는 빈 문자열로 작성하세요.",
-            ].join("\n"),
+            input,
 
             text: {
               format: {
@@ -556,7 +826,10 @@ export async function generateThreadsDrafts(
   }
 
   return parsed.drafts.map(
-    (draft, index) =>
+    (
+      draft,
+      index
+    ) =>
       validateDraft(
         draft,
         index
@@ -569,7 +842,8 @@ export async function generateThreadPost(
   context
 ) {
   const topic =
-    context?.publishing?.goal ||
+    context?.publishing
+      ?.goal ||
     "Threads 게시글 작성";
 
   const tone =
@@ -583,6 +857,7 @@ export async function generateThreadPost(
       {
         topic,
         tone,
+        context,
       }
     );
 
@@ -611,8 +886,8 @@ export async function generateThreadPost(
   }
 
   if (
-    parsedPost.firstComment.length >
-    500
+    parsedPost.firstComment
+      .length > 500
   ) {
     throw new AiServiceError(
       "OpenAI generated a first comment longer than 500 characters",
@@ -645,6 +920,31 @@ export async function generateThreadPost(
 
       sourceFormat:
         parsedPost.sourceFormat,
+
+      contextVersion:
+        context?.meta
+          ?.version ||
+        null,
+
+      availableProductCount:
+        Array.isArray(
+          context?.products
+            ?.availableProducts
+        )
+          ? context.products
+              .availableProducts
+              .length
+          : 0,
+
+      productExperienceCount:
+        Array.isArray(
+          context?.products
+            ?.productExperience
+        )
+          ? context.products
+              .productExperience
+              .length
+          : 0,
 
       recordData:
         parsedPost.recordData,
