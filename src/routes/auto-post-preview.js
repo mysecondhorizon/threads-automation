@@ -17,6 +17,11 @@ import {
 } from "../services/auto-post-validator.js";
 
 import {
+  validatePostSimilarity,
+  PostSimilarityError,
+} from "../services/post-similarity.js";
+
+import {
   ok,
   fail,
 } from "../utils/response.js";
@@ -26,6 +31,12 @@ const DEFAULT_GOAL =
 
 const DEFAULT_TONE =
   "40대 직장인의 현실적인 말투";
+
+const SIMILARITY_THRESHOLD =
+  0.62;
+
+const MAX_SIMILARITY_POSTS =
+  20;
 
 async function readRequestOptions(
   request
@@ -101,6 +112,55 @@ function normalizeFirstComment(
   };
 }
 
+function buildSimilaritySummary(
+  similarity
+) {
+  return {
+    checkedPostCount:
+      similarity.checkedPostCount,
+
+    threshold:
+      similarity.threshold,
+
+    duplicated:
+      similarity.duplicated,
+
+    highestScore:
+      Number(
+        similarity.highestScore
+          .toFixed(4)
+      ),
+
+    highestMatch:
+      similarity.highestMatch
+        ? {
+            postId:
+              similarity
+                .highestMatch
+                .postId,
+
+            createdAt:
+              similarity
+                .highestMatch
+                .createdAt,
+
+            score:
+              Number(
+                similarity
+                  .highestMatch
+                  .score
+                  .toFixed(4)
+              ),
+
+            text:
+              similarity
+                .highestMatch
+                .text,
+          }
+        : null,
+  };
+}
+
 export async function handleAutoPostPreview(
   request,
   env
@@ -143,6 +203,20 @@ export async function handleAutoPostPreview(
         generatedPost?.body
       );
 
+    const similarity =
+      validatePostSimilarity(
+        validation.text,
+        context.history
+          .recentSevenDayPosts,
+        {
+          threshold:
+            SIMILARITY_THRESHOLD,
+
+          maxRecentPosts:
+            MAX_SIMILARITY_POSTS,
+        }
+      );
+
     const firstComment =
       normalizeFirstComment(
         generatedPost
@@ -172,6 +246,11 @@ export async function handleAutoPostPreview(
         maxLength:
           validation.maxLength,
       },
+
+      similarity:
+        buildSimilaritySummary(
+          similarity
+        ),
 
       metadata:
         generatedPost
@@ -208,6 +287,40 @@ export async function handleAutoPostPreview(
       },
     });
   } catch (error) {
+    if (
+      error instanceof
+      PostSimilarityError
+    ) {
+      console.error(
+        "Auto post preview similarity validation failed",
+        {
+          code:
+            error.code,
+
+          message:
+            error.message,
+
+          details:
+            error.details,
+        }
+      );
+
+      return fail(
+        error.message,
+        409,
+        {
+          code:
+            error.code,
+
+          step:
+            "similarity_validation",
+
+          details:
+            error.details,
+        }
+      );
+    }
+
     if (
       error instanceof
       AutoPostValidationError

@@ -25,6 +25,11 @@ import {
 } from "../auto-post-validator.js";
 
 import {
+  validatePostSimilarity,
+  PostSimilarityError,
+} from "../post-similarity.js";
+
+import {
   AutoPostEngineError,
   serializeAutoPostError,
 } from "./errors.js";
@@ -56,6 +61,12 @@ const AUTO_POST_GOAL =
 
 const AUTO_POST_TONE =
   "40대 직장인의 현실적인 말투";
+
+const SIMILARITY_THRESHOLD =
+  0.62;
+
+const MAX_SIMILARITY_POSTS =
+  20;
 
 let activeExecutionPromise =
   null;
@@ -110,6 +121,20 @@ function createExecution(
 
     textLength:
       null,
+
+    similarity: {
+      checkedPostCount:
+        0,
+
+      threshold:
+        SIMILARITY_THRESHOLD,
+
+      highestScore:
+        0,
+
+      matchedPostId:
+        null,
+    },
 
     firstComment: {
       requested:
@@ -172,6 +197,34 @@ function normalizeEngineError(
     }
 
     return error;
+  }
+
+  if (
+    error instanceof
+    PostSimilarityError
+  ) {
+    return new AutoPostEngineError(
+      error.message,
+      {
+        code:
+          error.code,
+
+        status:
+          409,
+
+        step:
+          "similarity_validation",
+
+        details:
+          error.details,
+
+        text:
+          failedText,
+
+        cause:
+          error,
+      }
+    );
   }
 
   if (
@@ -324,6 +377,29 @@ function normalizeFirstCommentResult(
   };
 }
 
+function buildSimilarityResult(
+  similarity
+) {
+  return {
+    checkedPostCount:
+      similarity.checkedPostCount,
+
+    threshold:
+      similarity.threshold,
+
+    highestScore:
+      Number(
+        similarity.highestScore
+          .toFixed(4)
+      ),
+
+    matchedPostId:
+      similarity.highestMatch
+        ?.postId ||
+      null,
+  };
+}
+
 function buildSuccessResult(
   executionId,
   profile,
@@ -331,6 +407,7 @@ function buildSuccessResult(
   generatedPost,
   context,
   validation,
+  similarity,
   firstCommentResult
 ) {
   return {
@@ -354,9 +431,6 @@ function buildSuccessResult(
         firstCommentResult
       ),
 
-    metadata:
-      generatedPost.metadata,
-
     validation: {
       length:
         validation.length,
@@ -364,6 +438,14 @@ function buildSuccessResult(
       maxLength:
         validation.maxLength,
     },
+
+    similarity:
+      buildSimilarityResult(
+        similarity
+      ),
+
+    metadata:
+      generatedPost.metadata,
 
     context: {
       version:
@@ -509,10 +591,41 @@ async function runExecution(
       execution,
       {
         step:
+          "similarity_validation",
+      }
+    );
+
+    const similarity =
+      validatePostSimilarity(
+        validation.text,
+        context.history
+          .recentSevenDayPosts,
+        {
+          threshold:
+            SIMILARITY_THRESHOLD,
+
+          maxRecentPosts:
+            MAX_SIMILARITY_POSTS,
+        }
+      );
+
+    const similarityResult =
+      buildSimilarityResult(
+        similarity
+      );
+
+    await updateExecution(
+      env,
+      execution,
+      {
+        step:
           "publishing",
 
         textLength:
           validation.length,
+
+        similarity:
+          similarityResult,
 
         firstComment: {
           requested:
@@ -584,6 +697,9 @@ async function runExecution(
         textLength:
           validation.length,
 
+        similarity:
+          similarityResult,
+
         firstComment:
           normalizedFirstComment,
 
@@ -599,6 +715,7 @@ async function runExecution(
       generatedPost,
       context,
       validation,
+      similarity,
       firstCommentResult
     );
   } catch (
