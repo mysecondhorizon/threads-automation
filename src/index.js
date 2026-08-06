@@ -22,6 +22,10 @@ import {
   handleProductsPage,
 } from "./routes/products-page.js";
 
+import {
+  handleProducts,
+} from "./routes/products.js";
+
 import { handlePostInsights } from "./routes/insights.js";
 import { handleRefreshInsights } from "./routes/insights-refresh.js";
 import { handleDashboard } from "./routes/dashboard.js";
@@ -210,6 +214,20 @@ export default {
       method === "GET"
     ) {
       return handleProductsPage(
+        request,
+        env
+      );
+    }
+    
+    if (
+      pathname === "/admin/products" &&
+      (
+        method === "GET" ||
+        method === "POST" ||
+        method === "DELETE"
+      )
+    ) {
+      return handleProducts(
         request,
         env
       );
