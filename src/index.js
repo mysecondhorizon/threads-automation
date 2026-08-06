@@ -18,6 +18,10 @@ import {
   handlePublishReviewedAutoPost,
 } from "./routes/auto-post-publish-reviewed.js";
 
+import {
+  handleProductsPage,
+} from "./routes/products-page.js";
+
 import { handlePostInsights } from "./routes/insights.js";
 import { handleRefreshInsights } from "./routes/insights-refresh.js";
 import { handleDashboard } from "./routes/dashboard.js";
@@ -196,6 +200,16 @@ export default {
       method === "POST"
     ) {
       return handlePublishReviewedAutoPost(
+        request,
+        env
+      );
+    }
+    
+    if (
+      pathname === "/admin/products-page" &&
+      method === "GET"
+    ) {
+      return handleProductsPage(
         request,
         env
       );
