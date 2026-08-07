@@ -36,6 +36,41 @@ function createScheduleRunId() {
   ].join("-");
 }
 
+function normalizeSync(
+  sync
+) {
+  if (!sync) {
+    return null;
+  }
+
+  return {
+    deleted:
+      Number(
+        sync.deleted || 0
+      ),
+
+    updated:
+      Number(
+        sync.updated || 0
+      ),
+
+    unchanged:
+      Number(
+        sync.unchanged || 0
+      ),
+
+    refreshed:
+      Number(
+        sync.refreshed || 0
+      ),
+
+    failed:
+      Number(
+        sync.failed || 0
+      ),
+  };
+}
+
 async function readStore(
   env
 ) {
@@ -69,7 +104,7 @@ async function writeStore(
 ) {
   const value = {
     version:
-      1,
+      2,
 
     updatedAt:
       new Date().toISOString(),
@@ -154,6 +189,11 @@ export async function saveScheduleRun(
     similarity:
       input?.similarity ||
       null,
+
+    sync:
+      normalizeSync(
+        input?.sync
+      ),
 
     error:
       input?.error ||
