@@ -109,6 +109,25 @@ function formatBoolean(
     : "아니요";
 }
 
+function formatSimilarity(
+  value
+) {
+  const score =
+    Number(
+      value || 0
+    );
+
+  return (
+    (
+      score *
+      100
+    ).toFixed(
+      1
+    ) +
+    "%"
+  );
+}
+
 function formatExecutionStatus(
   value
 ) {
