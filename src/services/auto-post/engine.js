@@ -72,8 +72,33 @@ const MAX_SIMILARITY_POSTS =
 const MAX_GENERATION_ATTEMPTS =
   2;
 
+const ALLOWED_EXECUTION_SOURCES =
+  new Set([
+    "manual",
+    "cron",
+  ]);
+
 let activeExecutionPromise =
   null;
+
+function normalizeExecutionSource(
+  source
+) {
+  const normalized =
+    String(
+      source || ""
+    ).trim();
+
+  if (
+    ALLOWED_EXECUTION_SOURCES.has(
+      normalized
+    )
+  ) {
+    return normalized;
+  }
+
+  return "manual";
+}
 
 function createExecutionId() {
   if (
@@ -93,7 +118,8 @@ function createExecutionId() {
 }
 
 function createExecution(
-  executionId
+  executionId,
+  source
 ) {
   const now =
     new Date().toISOString();
@@ -101,6 +127,8 @@ function createExecution(
   return {
     id:
       executionId,
+
+    source,
 
     status:
       "starting",
@@ -426,6 +454,7 @@ function buildGenerationResult(
 
 function buildSuccessResult(
   executionId,
+  source,
   profile,
   publishResult,
   generatedPost,
@@ -437,6 +466,8 @@ function buildSuccessResult(
 ) {
   return {
     executionId,
+
+    source,
 
     username:
       profile.username,
@@ -500,14 +531,16 @@ function buildSuccessResult(
 }
 
 async function runExecution(
-  env
+  env,
+  source
 ) {
   const executionId =
     createExecutionId();
 
   const execution =
     createExecution(
-      executionId
+      executionId,
+      source
     );
 
   let lockAcquired =
@@ -733,6 +766,7 @@ async function runExecution(
 
     return buildSuccessResult(
       executionId,
+      source,
       profile,
       publishResult,
       generatedPost,
@@ -755,6 +789,8 @@ async function runExecution(
       "Auto post execution failed",
       {
         executionId,
+
+        source,
 
         code:
           engineError.code,
@@ -824,6 +860,8 @@ async function runExecution(
           {
             executionId,
 
+            source,
+
             error:
               serializeAutoPostError(
                 releaseError
@@ -836,8 +874,16 @@ async function runExecution(
 }
 
 export async function executeAutoPost(
-  env
+  env,
+  {
+    source = "manual",
+  } = {}
 ) {
+  const executionSource =
+    normalizeExecutionSource(
+      source
+    );
+
   if (
     activeExecutionPromise
   ) {
@@ -852,13 +898,19 @@ export async function executeAutoPost(
 
         step:
           "lock",
+
+        details: {
+          source:
+            executionSource,
+        },
       }
     );
   }
 
   activeExecutionPromise =
     runExecution(
-      env
+      env,
+      executionSource
     );
 
   try {

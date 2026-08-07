@@ -89,6 +89,9 @@ export async function runScheduledAutoPost(
   console.log(
     "Scheduled auto post started",
     {
+      source:
+        "cron",
+
       cron,
 
       scheduledTime,
@@ -100,12 +103,19 @@ export async function runScheduledAutoPost(
   try {
     const result =
       await executeAutoPost(
-        env
+        env,
+        {
+          source:
+            "cron",
+        }
       );
 
     console.log(
       "Scheduled auto post completed",
       {
+        source:
+          result.source,
+
         cron,
 
         scheduledTime,
@@ -121,6 +131,9 @@ export async function runScheduledAutoPost(
 
         similarity:
           result.similarity,
+
+        firstComment:
+          result.firstComment,
       }
     );
 
@@ -153,6 +166,9 @@ export async function runScheduledAutoPost(
     console.error(
       "Scheduled auto post failed",
       {
+        source:
+          "cron",
+
         cron,
 
         scheduledTime,
