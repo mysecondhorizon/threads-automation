@@ -20,18 +20,9 @@ function escapeHtml(
   return String(
     value ?? ""
   )
-    .replaceAll(
-      "&",
-      "&amp;"
-    )
-    .replaceAll(
-      "<",
-      "&lt;"
-    )
-    .replaceAll(
-      ">",
-      "&gt;"
-    )
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
     .replaceAll(
       '"',
       "&quot;"
@@ -107,7 +98,7 @@ function formatBoolean(
 function formatExecutionStatus(
   value
 ) {
-  const statusMap = {
+  const map = {
     starting:
       "시작 중",
 
@@ -122,7 +113,7 @@ function formatExecutionStatus(
   };
 
   return (
-    statusMap[value] ||
+    map[value] ||
     value ||
     "-"
   );
@@ -131,7 +122,7 @@ function formatExecutionStatus(
 function formatExecutionStep(
   value
 ) {
-  const stepMap = {
+  const map = {
     initializing:
       "초기화",
 
@@ -142,10 +133,13 @@ function formatExecutionStep(
       "게시 컨텍스트 생성",
 
     generating_content:
-      "AI 본문 생성",
+      "AI 콘텐츠 생성",
 
     validating_content:
       "본문 검증",
+
+    similarity_validation:
+      "최근 글 유사도 검사",
 
     publishing:
       "Threads 게시",
@@ -182,9 +176,28 @@ function formatExecutionStep(
   };
 
   return (
-    stepMap[value] ||
+    map[value] ||
     value ||
     "-"
+  );
+}
+
+function formatSimilarity(
+  value
+) {
+  const score =
+    Number(
+      value || 0
+    );
+
+  return (
+    (
+      score *
+      100
+    ).toFixed(
+      1
+    ) +
+    "%"
   );
 }
 
@@ -204,7 +217,9 @@ function renderMetricCard(
         font-size:14px;
         color:#666;
       ">
-        ${escapeHtml(label)}
+        ${escapeHtml(
+          label
+        )}
       </div>
 
       <div style="
@@ -212,7 +227,11 @@ function renderMetricCard(
         font-size:28px;
         font-weight:700;
       ">
-        ${escapeHtml(value)}${escapeHtml(suffix)}
+        ${escapeHtml(
+          value
+        )}${escapeHtml(
+          suffix
+        )}
       </div>
     </article>
   `;
@@ -232,7 +251,9 @@ function renderInfoItem(
         font-size:13px;
         margin-bottom:5px;
       ">
-        ${escapeHtml(label)}
+        ${escapeHtml(
+          label
+        )}
       </div>
 
       <div style="
@@ -259,12 +280,16 @@ function renderPostRow(
 
   const preview =
     text.length > 80
-      ? `${text.slice(0, 80)}...`
+      ? `${text.slice(
+          0,
+          80
+        )}...`
       : text;
 
   const engagementRate =
     Number(
-      post.engagementRate || 0
+      post.engagementRate ||
+      0
     );
 
   return `
@@ -345,9 +370,10 @@ function renderPostRow(
         text-align:right;
       ">
         ${escapeHtml(
-          engagementRate.toFixed(
-            2
-          )
+          engagementRate
+            .toFixed(
+              2
+            )
         )}%
       </td>
     </tr>
@@ -373,17 +399,15 @@ function renderAutoPostStatusCard(
           padding:18px;
           background:#fff5f5;
         ">
-          <div style="
-            font-weight:700;
+          <strong style="
             color:#b00020;
           ">
             자동 게시 상태를 불러오지 못했습니다.
-          </div>
+          </strong>
 
           <div style="
             margin-top:8px;
             color:#666;
-            white-space:pre-wrap;
           ">
             ${escapeHtml(
               statusError
@@ -397,11 +421,6 @@ function renderAutoPostStatusCard(
   const latestExecution =
     autoPostStatus
       ?.latestExecution ||
-    null;
-
-  const activeExecution =
-    autoPostStatus
-      ?.activeExecution ||
     null;
 
   if (!latestExecution) {
@@ -419,22 +438,37 @@ function renderAutoPostStatusCard(
           padding:18px;
           background:#fff;
         ">
-          <div style="
-            font-weight:700;
-          ">
-            아직 자동 게시 실행 기록이 없습니다.
-          </div>
-
-          <div style="
-            margin-top:8px;
-            color:#666;
-          ">
-            자동 게시를 실행하면 최근 실행 결과와 첫 댓글 상태가 여기에 표시됩니다.
-          </div>
+          아직 자동 게시 실행 기록이 없습니다.
         </article>
       </section>
     `;
   }
+
+  const generation =
+    latestExecution
+      .generation || {
+      attempts:
+        0,
+
+      regenerated:
+        false,
+    };
+
+  const similarity =
+    latestExecution
+      .similarity || {
+      checkedPostCount:
+        0,
+
+      threshold:
+        0,
+
+      highestScore:
+        0,
+
+      matchedPostId:
+        null,
+    };
 
   const firstComment =
     latestExecution
@@ -486,21 +520,13 @@ function renderAutoPostStatusCard(
         grid-template-columns:
           repeat(
             auto-fit,
-            minmax(220px, 1fr)
+            minmax(180px,1fr)
           );
         gap:14px;
         margin-bottom:14px;
       ">
         ${renderMetricCard(
-          "현재 실행 중",
-          formatBoolean(
-            autoPostStatus
-              ?.isRunning
-          )
-        )}
-
-        ${renderMetricCard(
-          "최근 실행 상태",
+          "실행 상태",
           formatExecutionStatus(
             latestExecution
               .status
@@ -508,11 +534,35 @@ function renderAutoPostStatusCard(
         )}
 
         ${renderMetricCard(
-          "최근 실행 단계",
-          formatExecutionStep(
-            latestExecution
-              .step
+          "생성 시도",
+          formatNumber(
+            generation.attempts
+          ),
+          "회"
+        )}
+
+        ${renderMetricCard(
+          "자동 재생성",
+          formatBoolean(
+            generation.regenerated
           )
+        )}
+
+        ${renderMetricCard(
+          "최고 유사도",
+          formatSimilarity(
+            similarity
+              .highestScore
+          )
+        )}
+
+        ${renderMetricCard(
+          "비교 게시물",
+          formatNumber(
+            similarity
+              .checkedPostCount
+          ),
+          "개"
         )}
 
         ${renderMetricCard(
@@ -537,9 +587,8 @@ function renderAutoPostStatusCard(
       ">
         <h3 style="
           margin-top:0;
-          margin-bottom:6px;
         ">
-          최근 자동 게시 실행
+          최근 실행
         </h3>
 
         ${renderInfoItem(
@@ -548,18 +597,22 @@ function renderAutoPostStatusCard(
         )}
 
         ${renderInfoItem(
-          "실행 시작",
-          formatDate(
-            latestExecution
-              .startedAt
+          "실행 출처",
+          latestExecution.source
+        )}
+
+        ${renderInfoItem(
+          "현재 단계",
+          formatExecutionStep(
+            latestExecution.step
           )
         )}
 
         ${renderInfoItem(
-          "마지막 갱신",
+          "실행 시작",
           formatDate(
             latestExecution
-              .updatedAt
+              .startedAt
           )
         )}
 
@@ -584,17 +637,53 @@ function renderAutoPostStatusCard(
         )}
 
         ${renderInfoItem(
-          "현재 활성 실행 ID",
-          activeExecution
-            ?.executionId
+          "글 유형",
+          latestExecution
+            .postType
         )}
 
         ${renderInfoItem(
-          "현재 활성 실행 시작",
-          formatDate(
-            activeExecution
-              ?.startedAt
+          "생성 시도 횟수",
+          generation.attempts
+            ? `${generation.attempts}회`
+            : "-"
+        )}
+
+        ${renderInfoItem(
+          "재생성 여부",
+          formatBoolean(
+            generation.regenerated
           )
+        )}
+
+        ${renderInfoItem(
+          "유사도 검사 개수",
+          similarity
+            .checkedPostCount
+            ? `${similarity.checkedPostCount}개`
+            : "-"
+        )}
+
+        ${renderInfoItem(
+          "유사도 기준",
+          similarity.threshold
+            ? formatSimilarity(
+                similarity.threshold
+              )
+            : "-"
+        )}
+
+        ${renderInfoItem(
+          "최고 유사도",
+          formatSimilarity(
+            similarity.highestScore
+          )
+        )}
+
+        ${renderInfoItem(
+          "가장 유사한 게시물 ID",
+          similarity
+            .matchedPostId
         )}
 
         ${renderInfoItem(
@@ -611,7 +700,6 @@ function renderAutoPostStatusCard(
       ">
         <h3 style="
           margin-top:0;
-          margin-bottom:6px;
         ">
           첫 댓글
         </h3>
@@ -633,7 +721,7 @@ function renderAutoPostStatusCard(
         )}
 
         ${renderInfoItem(
-          "댓글 Reply ID",
+          "Reply ID",
           firstComment
             .replyId
         )}
@@ -696,42 +784,25 @@ export async function handleDashboard(
   <meta charset="UTF-8">
   <meta
     name="viewport"
-    content="width=device-width, initial-scale=1"
+    content="width=device-width,initial-scale=1"
   >
-  <title>Second Horizon Dashboard</title>
+  <title>
+    Second Horizon Dashboard
+  </title>
 </head>
-
 <body style="
   font-family:Arial,sans-serif;
   max-width:900px;
   margin:40px auto;
   padding:0 20px;
-  background:#f7f7f7;
 ">
   <h1>
     Second Horizon Dashboard
   </h1>
 
-  <article style="
-    border:1px solid #f1b3b3;
-    border-radius:12px;
-    padding:18px;
-    background:#fff5f5;
-  ">
-    <div style="
-      font-weight:700;
-      color:#b00020;
-    ">
-      대시보드 데이터를 불러오지 못했습니다.
-    </div>
-
-    <div style="
-      margin-top:8px;
-      color:#666;
-    ">
-      잠시 후 다시 시도해 주세요.
-    </div>
-  </article>
+  <p>
+    대시보드 데이터를 불러오지 못했습니다.
+  </p>
 </body>
 </html>`,
       500
@@ -750,24 +821,18 @@ export async function handleDashboard(
   const autoPostStatusError =
     autoPostResult.status ===
     "rejected"
-      ? autoPostResult.reason
-          instanceof Error
-        ? autoPostResult.reason
-            .message
-        : String(
-            autoPostResult.reason
-          )
+      ? (
+          autoPostResult.reason
+            instanceof Error
+            ? autoPostResult
+                .reason
+                .message
+            : String(
+                autoPostResult
+                  .reason
+              )
+        )
       : null;
-
-  if (
-    autoPostResult.status ===
-    "rejected"
-  ) {
-    console.error(
-      "Auto post dashboard status lookup failed",
-      autoPostResult.reason
-    );
-  }
 
   const recentRows =
     data.recentPosts.length
@@ -799,7 +864,7 @@ export async function handleDashboard(
               post,
               index
             ) => {
-              const engagementRate =
+              const rate =
                 Number(
                   post
                     .engagementRate ||
@@ -814,15 +879,13 @@ export async function handleDashboard(
                   margin-bottom:12px;
                   background:#fff;
                 ">
-                  <div style="
-                    font-weight:700;
-                  ">
+                  <strong>
                     ${index + 1}위 · 조회수 ${escapeHtml(
                       formatNumber(
                         post.views
                       )
                     )}
-                  </div>
+                  </strong>
 
                   <p style="
                     white-space:pre-wrap;
@@ -835,19 +898,14 @@ export async function handleDashboard(
                   </p>
 
                   <div style="
-                    font-size:14px;
                     color:#666;
+                    font-size:14px;
                   ">
                     참여율 ${escapeHtml(
-                      engagementRate
-                        .toFixed(
-                          2
-                        )
-                    )}% · 반응 ${escapeHtml(
-                      formatNumber(
-                        post.interactions
+                      rate.toFixed(
+                        2
                       )
-                    )}
+                    )}%
                   </div>
                 </article>
               `;
@@ -869,7 +927,7 @@ export async function handleDashboard(
 
   <meta
     name="viewport"
-    content="width=device-width, initial-scale=1"
+    content="width=device-width,initial-scale=1"
   >
 
   <title>
@@ -887,9 +945,10 @@ export async function handleDashboard(
   <header style="
     display:flex;
     justify-content:space-between;
-    gap:16px;
     align-items:center;
+    gap:16px;
     margin-bottom:28px;
+    flex-wrap:wrap;
   ">
     <div>
       <h1 style="
@@ -901,45 +960,36 @@ export async function handleDashboard(
       <div style="
         color:#666;
       ">
-        Threads 게시 성과 및 자동 게시 상태
+        Threads 성과 및 자동 게시 운영 상태
       </div>
     </div>
 
     <nav style="
       display:flex;
-      gap:10px;
+      gap:8px;
       flex-wrap:wrap;
     ">
+      <a href="/admin/auto-post/preview-page">
+        <button type="button">
+          게시 미리보기
+        </button>
+      </a>
+
+      <a href="/admin/products-page">
+        <button type="button">
+          제품 관리
+        </button>
+      </a>
+
       <a href="/admin/post">
-        <button
-          type="button"
-          style="
-            padding:10px 14px;
-          "
-        >
+        <button type="button">
           글 작성
         </button>
       </a>
 
       <a href="/admin/insights/refresh">
-        <button
-          type="button"
-          style="
-            padding:10px 14px;
-          "
-        >
+        <button type="button">
           인사이트 갱신
-        </button>
-      </a>
-
-      <a href="/admin/auto-post/status">
-        <button
-          type="button"
-          style="
-            padding:10px 14px;
-          "
-        >
-          상태 JSON
         </button>
       </a>
     </nav>
@@ -950,7 +1000,7 @@ export async function handleDashboard(
     grid-template-columns:
       repeat(
         auto-fit,
-        minmax(180px, 1fr)
+        minmax(180px,1fr)
       );
     gap:14px;
     margin-bottom:32px;
@@ -964,7 +1014,7 @@ export async function handleDashboard(
     )}
 
     ${renderMetricCard(
-      "인사이트 수집 게시물",
+      "인사이트 수집",
       formatNumber(
         data.summary
           .postsWithInsights
@@ -1017,7 +1067,7 @@ export async function handleDashboard(
     margin-bottom:36px;
   ">
     <h2>
-      🏆 상위 게시물
+      상위 게시물
     </h2>
 
     ${topPosts}
