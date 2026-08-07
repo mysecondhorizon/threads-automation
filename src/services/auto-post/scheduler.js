@@ -9,6 +9,11 @@ import {
 } from "./schedule-guard.js";
 
 import {
+  checkDailyAutoPostLimit,
+  DailyLimitGuardError,
+} from "./daily-limit-guard.js";
+
+import {
   saveScheduleRun,
 } from "./schedule-store.js";
 
@@ -18,6 +23,9 @@ import {
 
 const MINIMUM_INTERVAL_MINUTES =
   90;
+
+const DAILY_AUTO_POST_LIMIT =
+  3;
 
 function serializeSchedulerError(
   error
@@ -63,6 +71,31 @@ function serializeSchedulerError(
 
       step:
         "schedule_guard",
+
+      message:
+        error.message,
+
+      details:
+        error.details,
+    };
+  }
+
+  if (
+    error instanceof
+    DailyLimitGuardError
+  ) {
+    return {
+      name:
+        error.name,
+
+      code:
+        error.code,
+
+      status:
+        409,
+
+      step:
+        "daily_limit_guard",
 
       message:
         error.message,
@@ -195,6 +228,29 @@ export async function runScheduledAutoPost(
           syncResult.insights
             ?.failed ||
           0,
+      }
+    );
+
+    const dailyLimit =
+      await checkDailyAutoPostLimit(
+        env,
+        {
+          dailyLimit:
+            DAILY_AUTO_POST_LIMIT,
+        }
+      );
+
+    console.log(
+      "Daily auto post limit guard passed",
+      {
+        dailyLimit:
+          dailyLimit.dailyLimit,
+
+        todayPostCount:
+          dailyLimit.todayPostCount,
+
+        remaining:
+          dailyLimit.remaining,
       }
     );
 
@@ -346,6 +402,8 @@ export async function runScheduledAutoPost(
       sync:
         syncResult,
 
+      dailyLimit,
+
       guard,
 
       result,
@@ -355,7 +413,9 @@ export async function runScheduledAutoPost(
   ) {
     if (
       error instanceof
-      ScheduleGuardError
+        ScheduleGuardError ||
+      error instanceof
+        DailyLimitGuardError
     ) {
       const serializedError =
         serializeSchedulerError(
