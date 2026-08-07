@@ -27,6 +27,10 @@ import {
 } from "./routes/products.js";
 
 import {
+  handleScheduleStatus,
+} from "./routes/schedule-status.js";
+
+import {
   handlePostInsights,
 } from "./routes/insights.js";
 
@@ -247,6 +251,17 @@ export default {
       return handleProducts(
         request,
         env
+      );
+    }
+
+    if (
+      pathname === "/admin/schedule-status" &&
+      method === "GET"
+    ) {
+      return handleScheduleStatus(
+        request,
+        env,
+        url
       );
     }
 
