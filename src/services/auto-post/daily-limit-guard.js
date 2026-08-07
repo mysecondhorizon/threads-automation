@@ -1,9 +1,15 @@
 import {
-  getPostingHistory,
-} from "../history.js";
+  getScheduleRuns,
+} from "./schedule-store.js";
+
+const SEOUL_TIME_ZONE =
+  "Asia/Seoul";
 
 const DEFAULT_DAILY_AUTO_POST_LIMIT =
   3;
+
+const MAX_HISTORY_LOOKUP =
+  50;
 
 export class DailyLimitGuardError extends Error {
   constructor(
@@ -26,6 +32,75 @@ export class DailyLimitGuardError extends Error {
   }
 }
 
+function getSeoulDateKey(
+  value
+) {
+  const date =
+    value instanceof Date
+      ? value
+      : new Date(
+          value
+        );
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat(
+    "en-CA",
+    {
+      timeZone:
+        SEOUL_TIME_ZONE,
+
+      year:
+        "numeric",
+
+      month:
+        "2-digit",
+
+      day:
+        "2-digit",
+    }
+  ).format(
+    date
+  );
+}
+
+function isCompletedCronPost(
+  run
+) {
+  return (
+    run &&
+    run.source === "cron" &&
+    run.status === "completed" &&
+    run.skipped !== true &&
+    Boolean(
+      run.postId
+    )
+  );
+}
+
+function isRunFromToday(
+  run,
+  todayKey
+) {
+  const runDateKey =
+    getSeoulDateKey(
+      run?.completedAt ||
+      run?.startedAt
+    );
+
+  return (
+    runDateKey &&
+    runDateKey ===
+      todayKey
+  );
+}
+
 export async function checkDailyAutoPostLimit(
   env,
   {
@@ -33,31 +108,62 @@ export async function checkDailyAutoPostLimit(
       DEFAULT_DAILY_AUTO_POST_LIMIT,
   } = {}
 ) {
-  const history =
-    await getPostingHistory(
-      env
+  const now =
+    new Date();
+
+  const todayKey =
+    getSeoulDateKey(
+      now
     );
 
-  const todayPostCount =
-    Number(
-      history.todayPostCount ||
-      0
+  const runs =
+    await getScheduleRuns(
+      env,
+      MAX_HISTORY_LOOKUP
     );
+
+  const todayCompletedRuns =
+    runs.filter(
+      (run) =>
+        isCompletedCronPost(
+          run
+        ) &&
+        isRunFromToday(
+          run,
+          todayKey
+        )
+    );
+
+  const todayAutoPostCount =
+    todayCompletedRuns.length;
 
   if (
-    todayPostCount >=
+    todayAutoPostCount >=
     dailyLimit
   ) {
     throw new DailyLimitGuardError(
-      "오늘 최대 게시 횟수에 도달했습니다.",
+      "오늘 Cron 자동 게시 최대 횟수에 도달했습니다.",
       {
         code:
-          "daily_post_limit_reached",
+          "daily_auto_post_limit_reached",
 
         details: {
           dailyLimit,
 
-          todayPostCount,
+          todayAutoPostCount,
+
+          remaining:
+            0,
+
+          date:
+            todayKey,
+
+          recentPostIds:
+            todayCompletedRuns
+              .map(
+                (run) =>
+                  run.postId
+              ),
         },
       }
     );
@@ -69,13 +175,16 @@ export async function checkDailyAutoPostLimit(
 
     dailyLimit,
 
-    todayPostCount,
+    todayAutoPostCount,
 
     remaining:
       Math.max(
         dailyLimit -
-        todayPostCount,
+        todayAutoPostCount,
         0
       ),
+
+    date:
+      todayKey,
   };
 }
