@@ -3,6 +3,14 @@ import {
   AutoPostEngineError,
 } from "./engine.js";
 
+import {
+  checkScheduleGuard,
+  ScheduleGuardError,
+} from "./schedule-guard.js";
+
+const MINIMUM_INTERVAL_MINUTES =
+  90;
+
 function serializeSchedulerError(
   error
 ) {
@@ -22,6 +30,31 @@ function serializeSchedulerError(
 
       step:
         error.step,
+
+      message:
+        error.message,
+
+      details:
+        error.details,
+    };
+  }
+
+  if (
+    error instanceof
+    ScheduleGuardError
+  ) {
+    return {
+      name:
+        error.name,
+
+      code:
+        error.code,
+
+      status:
+        409,
+
+      step:
+        "schedule_guard",
 
       message:
         error.message,
@@ -101,6 +134,33 @@ export async function runScheduledAutoPost(
   );
 
   try {
+    const guard =
+      await checkScheduleGuard(
+        env,
+        {
+          minimumIntervalMinutes:
+            MINIMUM_INTERVAL_MINUTES,
+        }
+      );
+
+    console.log(
+      "Scheduled auto post guard passed",
+      {
+        cron,
+
+        scheduledTime,
+
+        minimumIntervalMinutes:
+          guard.minimumIntervalMinutes,
+
+        minutesSinceLatestPost:
+          guard.minutesSinceLatestPost,
+
+        latestPostId:
+          guard.latestPostId,
+      }
+    );
+
     const result =
       await executeAutoPost(
         env,
@@ -141,6 +201,9 @@ export async function runScheduledAutoPost(
       ok:
         true,
 
+      skipped:
+        false,
+
       source:
         "cron",
 
@@ -153,11 +216,63 @@ export async function runScheduledAutoPost(
       completedAt:
         new Date().toISOString(),
 
+      guard,
+
       result,
     };
   } catch (
     error
   ) {
+    if (
+      error instanceof
+      ScheduleGuardError
+    ) {
+      const serializedError =
+        serializeSchedulerError(
+          error
+        );
+
+      console.log(
+        "Scheduled auto post skipped",
+        {
+          source:
+            "cron",
+
+          cron,
+
+          scheduledTime,
+
+          startedAt,
+
+          reason:
+            serializedError,
+        }
+      );
+
+      return {
+        ok:
+          true,
+
+        skipped:
+          true,
+
+        source:
+          "cron",
+
+        cron,
+
+        scheduledTime,
+
+        startedAt,
+
+        completedAt:
+          new Date().toISOString(),
+
+        reason:
+          serializedError,
+      };
+    }
+
     const serializedError =
       serializeSchedulerError(
         error

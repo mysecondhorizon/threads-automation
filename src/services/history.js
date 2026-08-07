@@ -1,30 +1,67 @@
-import { getRecentPostLogs } from "./logger.js";
+import {
+  getRecentPostLogs,
+} from "./logger.js";
 
-const SEOUL_TIME_ZONE = "Asia/Seoul";
-const RECENT_DAYS = 7;
+const SEOUL_TIME_ZONE =
+  "Asia/Seoul";
 
-function getDateKey(date) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: SEOUL_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-}
+const RECENT_DAYS =
+  7;
 
-function isValidDate(date) {
-  return (
-    date instanceof Date &&
-    !Number.isNaN(date.getTime())
+function getDateKey(
+  date
+) {
+  return new Intl.DateTimeFormat(
+    "en-CA",
+    {
+      timeZone:
+        SEOUL_TIME_ZONE,
+
+      year:
+        "numeric",
+
+      month:
+        "2-digit",
+
+      day:
+        "2-digit",
+    }
+  ).format(
+    date
   );
 }
 
-function isToday(date, now) {
-  if (!isValidDate(date)) {
+function isValidDate(
+  date
+) {
+  return (
+    date instanceof Date &&
+    !Number.isNaN(
+      date.getTime()
+    )
+  );
+}
+
+function isToday(
+  date,
+  now
+) {
+  if (
+    !isValidDate(
+      date
+    )
+  ) {
     return false;
   }
 
-  return getDateKey(date) === getDateKey(now);
+  return (
+    getDateKey(
+      date
+    ) ===
+    getDateKey(
+      now
+    )
+  );
 }
 
 function isWithinRecentDays(
@@ -32,89 +69,214 @@ function isWithinRecentDays(
   now,
   days = RECENT_DAYS
 ) {
-  if (!isValidDate(date)) {
+  if (
+    !isValidDate(
+      date
+    )
+  ) {
     return false;
   }
 
   const diffMilliseconds =
-    now.getTime() - date.getTime();
+    now.getTime() -
+    date.getTime();
 
   const maximumAge =
-    days * 24 * 60 * 60 * 1000;
+    days *
+    24 *
+    60 *
+    60 *
+    1000;
 
   return (
     diffMilliseconds >= 0 &&
-    diffMilliseconds <= maximumAge
+    diffMilliseconds <=
+      maximumAge
   );
 }
 
-function normalizePublishedPost(log) {
+function normalizePublishedPost(
+  log
+) {
   return {
     postId:
-      typeof log.post_id === "string"
+      typeof log.post_id ===
+      "string"
         ? log.post_id
         : null,
 
     username:
-      typeof log.username === "string"
+      typeof log.username ===
+      "string"
         ? log.username
         : null,
 
     text:
-      typeof log.text === "string"
+      typeof log.text ===
+      "string"
         ? log.text.trim()
         : "",
 
     createdAt:
-      typeof log.created_at === "string"
+      typeof log.created_at ===
+      "string"
         ? log.created_at
         : null,
   };
 }
 
-function isUsablePublishedLog(log) {
+function isUsablePublishedLog(
+  log
+) {
   return (
     log &&
-    log.status === "published" &&
-    typeof log.text === "string" &&
-    Boolean(log.text.trim()) &&
-    typeof log.created_at === "string" &&
-    isValidDate(new Date(log.created_at))
+    log.status ===
+      "published" &&
+    typeof log.text ===
+      "string" &&
+    Boolean(
+      log.text.trim()
+    ) &&
+    typeof log.created_at ===
+      "string" &&
+    isValidDate(
+      new Date(
+        log.created_at
+      )
+    )
   );
 }
 
-export async function getPostingHistory(env) {
-  const now = new Date();
+function sortPostsNewestFirst(
+  posts
+) {
+  return [
+    ...posts,
+  ].sort(
+    (
+      first,
+      second
+    ) => {
+      const firstTime =
+        new Date(
+          first.createdAt
+        ).getTime();
 
-  const logs = await getRecentPostLogs(
-    env,
-    100
+      const secondTime =
+        new Date(
+          second.createdAt
+        ).getTime();
+
+      return (
+        secondTime -
+        firstTime
+      );
+    }
   );
+}
 
-  const publishedPosts = logs
-    .filter(isUsablePublishedLog)
-    .map(normalizePublishedPost);
+function getMinutesSince(
+  date,
+  now
+) {
+  if (
+    !isValidDate(
+      date
+    ) ||
+    !isValidDate(
+      now
+    )
+  ) {
+    return null;
+  }
 
-  const todayPosts = publishedPosts.filter(
-    (post) =>
-      isToday(
-        new Date(post.createdAt),
-        now
-      )
+  const diffMilliseconds =
+    now.getTime() -
+    date.getTime();
+
+  if (
+    diffMilliseconds < 0
+  ) {
+    return null;
+  }
+
+  return Math.floor(
+    diffMilliseconds /
+    (
+      60 *
+      1000
+    )
   );
+}
+
+export async function getPostingHistory(
+  env
+) {
+  const now =
+    new Date();
+
+  const logs =
+    await getRecentPostLogs(
+      env,
+      100
+    );
+
+  const publishedPosts =
+    sortPostsNewestFirst(
+      logs
+        .filter(
+          isUsablePublishedLog
+        )
+        .map(
+          normalizePublishedPost
+        )
+    );
+
+  const todayPosts =
+    publishedPosts.filter(
+      (post) =>
+        isToday(
+          new Date(
+            post.createdAt
+          ),
+          now
+        )
+    );
 
   const recentSevenDayPosts =
-    publishedPosts.filter((post) =>
-      isWithinRecentDays(
-        new Date(post.createdAt),
-        now,
-        RECENT_DAYS
-      )
+    publishedPosts.filter(
+      (post) =>
+        isWithinRecentDays(
+          new Date(
+            post.createdAt
+          ),
+          now,
+          RECENT_DAYS
+        )
     );
+
+  const latestPost =
+    publishedPosts[0] ||
+    null;
+
+  const minutesSinceLatestPost =
+    latestPost
+      ? getMinutesSince(
+          new Date(
+            latestPost.createdAt
+          ),
+          now
+        )
+      : null;
 
   return {
     todayPosts,
+
     recentSevenDayPosts,
+
+    latestPost,
+
+    minutesSinceLatestPost,
 
     todayPostCount:
       todayPosts.length,
