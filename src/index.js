@@ -26,9 +26,17 @@ import {
   handleProducts,
 } from "./routes/products.js";
 
-import { handlePostInsights } from "./routes/insights.js";
-import { handleRefreshInsights } from "./routes/insights-refresh.js";
-import { handleDashboard } from "./routes/dashboard.js";
+import {
+  handlePostInsights,
+} from "./routes/insights.js";
+
+import {
+  handleRefreshInsights,
+} from "./routes/insights-refresh.js";
+
+import {
+  handleDashboard,
+} from "./routes/dashboard.js";
 
 import {
   handleConnectPage,
@@ -49,10 +57,19 @@ import {
   handleProfile,
 } from "./routes/tokens.js";
 
-import { handleLogs } from "./routes/logs.js";
+import {
+  handleLogs,
+} from "./routes/logs.js";
+
+import {
+  runScheduledAutoPost,
+} from "./services/auto-post/scheduler.js";
 
 export default {
-  async fetch(request, env) {
+  async fetch(
+    request,
+    env
+  ) {
     const url =
       new URL(
         request.url
@@ -208,7 +225,7 @@ export default {
         env
       );
     }
-    
+
     if (
       pathname === "/admin/products-page" &&
       method === "GET"
@@ -218,7 +235,7 @@ export default {
         env
       );
     }
-    
+
     if (
       pathname === "/admin/products" &&
       (
@@ -313,6 +330,25 @@ export default {
         status:
           404,
       }
+    );
+  },
+
+  async scheduled(
+    controller,
+    env,
+    ctx
+  ) {
+    ctx.waitUntil(
+      runScheduledAutoPost(
+        env,
+        {
+          cron:
+            controller.cron,
+
+          scheduledTime:
+            controller.scheduledTime,
+        }
+      )
     );
   },
 };
