@@ -54,6 +54,53 @@ function normalizeFirstCommentStatus(
   };
 }
 
+function normalizeGenerationStatus(
+  generation
+) {
+  return {
+    attempts:
+      Number(
+        generation?.attempts ||
+        0
+      ),
+
+    regenerated:
+      Boolean(
+        generation?.regenerated
+      ),
+  };
+}
+
+function normalizeSimilarityStatus(
+  similarity
+) {
+  return {
+    checkedPostCount:
+      Number(
+        similarity
+          ?.checkedPostCount ||
+        0
+      ),
+
+    threshold:
+      Number(
+        similarity?.threshold ||
+        0
+      ),
+
+    highestScore:
+      Number(
+        similarity?.highestScore ||
+        0
+      ),
+
+    matchedPostId:
+      similarity
+        ?.matchedPostId ||
+      null,
+  };
+}
+
 export async function getAutoPostStatus(
   env
 ) {
@@ -93,6 +140,10 @@ export async function getAutoPostStatus(
             id:
               latestExecution.id,
 
+            source:
+              latestExecution.source ||
+              "auto_post",
+
             status:
               latestExecution.status,
 
@@ -114,8 +165,22 @@ export async function getAutoPostStatus(
             username:
               latestExecution.username,
 
+            postType:
+              latestExecution.postType ||
+              null,
+
             textLength:
               latestExecution.textLength,
+
+            generation:
+              normalizeGenerationStatus(
+                latestExecution.generation
+              ),
+
+            similarity:
+              normalizeSimilarityStatus(
+                latestExecution.similarity
+              ),
 
             firstComment:
               normalizeFirstCommentStatus(
