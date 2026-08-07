@@ -398,232 +398,6 @@ function renderAutoPostStatusCard(
       </section>
     `;
   }
-  
-  function renderScheduleStatusCard(
-    scheduleData,
-    scheduleError
-  ) {
-    if (
-      scheduleError
-    ) {
-      return `
-        <section style="
-          margin-bottom:36px;
-        ">
-          <h2>
-            예약 게시 상태
-          </h2>
-  
-          <article style="
-            border:1px solid #f1b3b3;
-            border-radius:12px;
-            padding:18px;
-            background:#fff5f5;
-          ">
-            예약 게시 이력을 불러오지 못했습니다.
-  
-            <div style="
-              margin-top:8px;
-              color:#666;
-            ">
-              ${escapeHtml(
-                scheduleError
-              )}
-            </div>
-          </article>
-        </section>
-      `;
-    }
-
-    const latestRun =
-      scheduleData
-        ?.latestRun ||
-      null;
-  
-    if (
-      !latestRun
-    ) {
-      return `
-        <section style="
-          margin-bottom:36px;
-        ">
-          <h2>
-            예약 게시 상태
-          </h2>
-  
-          <article style="
-            border:1px solid #ddd;
-            border-radius:12px;
-            padding:18px;
-            background:#fff;
-          ">
-            아직 Cron 실행 기록이 없습니다.
-          </article>
-        </section>
-      `;
-    }
-  
-    const generation =
-      latestRun
-        .generation || {
-        attempts:
-          0,
-  
-        regenerated:
-          false,
-      };
-  
-    const similarity =
-      latestRun
-        .similarity || {
-        checkedPostCount:
-          0,
-  
-        threshold:
-          0,
-  
-        highestScore:
-          0,
-  
-        matchedPostId:
-          null,
-      };
-  
-    const skipReason =
-      latestRun.skipReason
-        ? JSON.stringify(
-            latestRun
-              .skipReason,
-            null,
-            2
-          )
-        : "-";
-  
-    const error =
-      latestRun.error
-        ? JSON.stringify(
-            latestRun.error,
-            null,
-            2
-          )
-        : "-";
-  
-    return `
-      <section style="
-        margin-bottom:36px;
-      ">
-        <h2>
-          예약 게시 상태
-        </h2>
-  
-        <div style="
-          display:grid;
-          grid-template-columns:
-            repeat(
-              auto-fit,
-              minmax(180px,1fr)
-            );
-          gap:14px;
-          margin-bottom:14px;
-        ">
-          ${renderMetricCard(
-            "Cron 상태",
-            latestRun.status
-          )}
-  
-          ${renderMetricCard(
-            "건너뜀",
-            formatBoolean(
-              latestRun.skipped
-            )
-          )}
-  
-          ${renderMetricCard(
-            "생성 시도",
-            formatNumber(
-              generation.attempts
-            ),
-            "회"
-          )}
-  
-          ${renderMetricCard(
-            "재생성",
-            formatBoolean(
-              generation.regenerated
-            )
-          )}
-  
-          ${renderMetricCard(
-            "최고 유사도",
-            formatSimilarity(
-              similarity
-                .highestScore
-            )
-          )}
-        </div>
-  
-        <article style="
-          border:1px solid #ddd;
-          border-radius:12px;
-          padding:18px;
-          background:#fff;
-        ">
-          ${renderInfoItem(
-            "Cron",
-            latestRun.cron
-          )}
-  
-          ${renderInfoItem(
-            "실행 시작",
-            formatDate(
-              latestRun.startedAt
-            )
-          )}
-  
-          ${renderInfoItem(
-            "실행 완료",
-            formatDate(
-              latestRun.completedAt
-            )
-          )}
-  
-          ${renderInfoItem(
-            "Execution ID",
-            latestRun.executionId
-          )}
-  
-          ${renderInfoItem(
-            "Post ID",
-            latestRun.postId
-          )}
-  
-          ${renderInfoItem(
-            "비교 게시물 수",
-            similarity
-              .checkedPostCount
-              ? `${similarity.checkedPostCount}개`
-              : "-"
-          )}
-  
-          ${renderInfoItem(
-            "가장 유사한 게시물 ID",
-            similarity
-              .matchedPostId
-          )}
-  
-          ${renderInfoItem(
-            "스킵 사유",
-            skipReason
-          )}
-  
-          ${renderInfoItem(
-            "오류",
-            error
-          )}
-        </article>
-      </section>
-    `;
-  }
 
   const latestExecution =
     autoPostStatus
@@ -878,6 +652,232 @@ function renderAutoPostStatusCard(
         ${renderInfoItem(
           "댓글 오류",
           firstCommentError
+        )}
+      </article>
+    </section>
+  `;
+}
+
+function renderScheduleStatusCard(
+  scheduleData,
+  scheduleError
+) {
+  if (
+    scheduleError
+  ) {
+    return `
+      <section style="
+        margin-bottom:36px;
+      ">
+        <h2>
+          예약 게시 상태
+        </h2>
+
+        <article style="
+          border:1px solid #f1b3b3;
+          border-radius:12px;
+          padding:18px;
+          background:#fff5f5;
+        ">
+          예약 게시 이력을 불러오지 못했습니다.
+
+          <div style="
+            margin-top:8px;
+            color:#666;
+          ">
+            ${escapeHtml(
+              scheduleError
+            )}
+          </div>
+        </article>
+      </section>
+    `;
+  }
+
+  const latestRun =
+    scheduleData
+      ?.latestRun ||
+    null;
+
+  if (
+    !latestRun
+  ) {
+    return `
+      <section style="
+        margin-bottom:36px;
+      ">
+        <h2>
+          예약 게시 상태
+        </h2>
+
+        <article style="
+          border:1px solid #ddd;
+          border-radius:12px;
+          padding:18px;
+          background:#fff;
+        ">
+          아직 Cron 실행 기록이 없습니다.
+        </article>
+      </section>
+    `;
+  }
+
+  const generation =
+    latestRun
+      .generation || {
+      attempts:
+        0,
+
+      regenerated:
+        false,
+    };
+
+  const similarity =
+    latestRun
+      .similarity || {
+      checkedPostCount:
+        0,
+
+      threshold:
+        0,
+
+      highestScore:
+        0,
+
+      matchedPostId:
+        null,
+    };
+
+  const skipReason =
+    latestRun.skipReason
+      ? JSON.stringify(
+          latestRun
+            .skipReason,
+          null,
+          2
+        )
+      : "-";
+
+  const error =
+    latestRun.error
+      ? JSON.stringify(
+          latestRun.error,
+          null,
+          2
+        )
+      : "-";
+
+  return `
+    <section style="
+      margin-bottom:36px;
+    ">
+      <h2>
+        예약 게시 상태
+      </h2>
+
+      <div style="
+        display:grid;
+        grid-template-columns:
+          repeat(
+            auto-fit,
+            minmax(180px,1fr)
+          );
+        gap:14px;
+        margin-bottom:14px;
+      ">
+        ${renderMetricCard(
+          "Cron 상태",
+          latestRun.status
+        )}
+
+        ${renderMetricCard(
+          "건너뜀",
+          formatBoolean(
+            latestRun.skipped
+          )
+        )}
+
+        ${renderMetricCard(
+          "생성 시도",
+          formatNumber(
+            generation.attempts
+          ),
+          "회"
+        )}
+
+        ${renderMetricCard(
+          "재생성",
+          formatBoolean(
+            generation.regenerated
+          )
+        )}
+
+        ${renderMetricCard(
+          "최고 유사도",
+          formatSimilarity(
+            similarity
+              .highestScore
+          )
+        )}
+      </div>
+
+      <article style="
+        border:1px solid #ddd;
+        border-radius:12px;
+        padding:18px;
+        background:#fff;
+      ">
+        ${renderInfoItem(
+          "Cron",
+          latestRun.cron
+        )}
+
+        ${renderInfoItem(
+          "실행 시작",
+          formatDate(
+            latestRun.startedAt
+          )
+        )}
+
+        ${renderInfoItem(
+          "실행 완료",
+          formatDate(
+            latestRun.completedAt
+          )
+        )}
+
+        ${renderInfoItem(
+          "Execution ID",
+          latestRun.executionId
+        )}
+
+        ${renderInfoItem(
+          "Post ID",
+          latestRun.postId
+        )}
+
+        ${renderInfoItem(
+          "비교 게시물 수",
+          similarity
+            .checkedPostCount
+            ? `${similarity.checkedPostCount}개`
+            : "-"
+        )}
+
+        ${renderInfoItem(
+          "가장 유사한 게시물 ID",
+          similarity
+            .matchedPostId
+        )}
+
+        ${renderInfoItem(
+          "스킵 사유",
+          skipReason
+        )}
+
+        ${renderInfoItem(
+          "오류",
+          error
         )}
       </article>
     </section>
