@@ -8,6 +8,10 @@ import {
   ScheduleGuardError,
 } from "./schedule-guard.js";
 
+import {
+  saveScheduleRun,
+} from "./schedule-store.js";
+
 const MINIMUM_INTERVAL_MINUTES =
   90;
 
@@ -109,6 +113,27 @@ function serializeSchedulerError(
   };
 }
 
+async function safeSaveScheduleRun(
+  env,
+  input
+) {
+  try {
+    return await saveScheduleRun(
+      env,
+      input
+    );
+  } catch (
+    error
+  ) {
+    console.error(
+      "Failed to save schedule run",
+      error
+    );
+
+    return null;
+  }
+}
+
 export async function runScheduledAutoPost(
   env,
   {
@@ -170,6 +195,43 @@ export async function runScheduledAutoPost(
         }
       );
 
+    const completedAt =
+      new Date().toISOString();
+
+    await safeSaveScheduleRun(
+      env,
+      {
+        cron,
+
+        scheduledTime,
+
+        startedAt,
+
+        completedAt,
+
+        status:
+          "completed",
+
+        skipped:
+          false,
+
+        executionId:
+          result.executionId,
+
+        postId:
+          result.post_id,
+
+        generation:
+          result.generation,
+
+        similarity:
+          result.similarity,
+
+        error:
+          null,
+      }
+    );
+
     console.log(
       "Scheduled auto post completed",
       {
@@ -213,8 +275,7 @@ export async function runScheduledAutoPost(
 
       startedAt,
 
-      completedAt:
-        new Date().toISOString(),
+      completedAt,
 
       guard,
 
@@ -231,6 +292,46 @@ export async function runScheduledAutoPost(
         serializeSchedulerError(
           error
         );
+
+      const completedAt =
+        new Date().toISOString();
+
+      await safeSaveScheduleRun(
+        env,
+        {
+          cron,
+
+          scheduledTime,
+
+          startedAt,
+
+          completedAt,
+
+          status:
+            "skipped",
+
+          skipped:
+            true,
+
+          skipReason:
+            serializedError,
+
+          executionId:
+            null,
+
+          postId:
+            null,
+
+          generation:
+            null,
+
+          similarity:
+            null,
+
+          error:
+            null,
+        }
+      );
 
       console.log(
         "Scheduled auto post skipped",
@@ -265,8 +366,7 @@ export async function runScheduledAutoPost(
 
         startedAt,
 
-        completedAt:
-          new Date().toISOString(),
+        completedAt,
 
         reason:
           serializedError,
@@ -277,6 +377,43 @@ export async function runScheduledAutoPost(
       serializeSchedulerError(
         error
       );
+
+    const completedAt =
+      new Date().toISOString();
+
+    await safeSaveScheduleRun(
+      env,
+      {
+        cron,
+
+        scheduledTime,
+
+        startedAt,
+
+        completedAt,
+
+        status:
+          "failed",
+
+        skipped:
+          false,
+
+        executionId:
+          null,
+
+        postId:
+          null,
+
+        generation:
+          null,
+
+        similarity:
+          null,
+
+        error:
+          serializedError,
+      }
+    );
 
     console.error(
       "Scheduled auto post failed",
