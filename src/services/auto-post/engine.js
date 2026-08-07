@@ -3,7 +3,6 @@ import {
 } from "../thread-context.js";
 
 import {
-  generateThreadPost,
   AiServiceError,
 } from "../ai.js";
 
@@ -20,14 +19,16 @@ import {
 } from "../logger.js";
 
 import {
-  validateAutoPostText,
   AutoPostValidationError,
 } from "../auto-post-validator.js";
 
 import {
-  validatePostSimilarity,
   PostSimilarityError,
 } from "../post-similarity.js";
+
+import {
+  generateDistinctThreadPost,
+} from "../post-regenerator.js";
 
 import {
   AutoPostEngineError,
@@ -67,6 +68,9 @@ const SIMILARITY_THRESHOLD =
 
 const MAX_SIMILARITY_POSTS =
   20;
+
+const MAX_GENERATION_ATTEMPTS =
+  2;
 
 let activeExecutionPromise =
   null;
@@ -121,6 +125,14 @@ function createExecution(
 
     textLength:
       null,
+
+    generation: {
+      attempts:
+        0,
+
+      regenerated:
+        false,
+    },
 
     similarity: {
       checkedPostCount:
@@ -400,6 +412,18 @@ function buildSimilarityResult(
   };
 }
 
+function buildGenerationResult(
+  generation
+) {
+  return {
+    attempts:
+      generation.attempts,
+
+    regenerated:
+      generation.regenerated,
+  };
+}
+
 function buildSuccessResult(
   executionId,
   profile,
@@ -408,6 +432,7 @@ function buildSuccessResult(
   context,
   validation,
   similarity,
+  generation,
   firstCommentResult
 ) {
   return {
@@ -438,6 +463,11 @@ function buildSuccessResult(
       maxLength:
         validation.maxLength,
     },
+
+    generation:
+      buildGenerationResult(
+        generation
+      ),
 
     similarity:
       buildSimilarityResult(
@@ -566,47 +596,34 @@ async function runExecution(
       }
     );
 
-    generatedPost =
-      await generateThreadPost(
+    const generation =
+      await generateDistinctThreadPost(
         env,
-        context
-      );
-
-    await updateExecution(
-      env,
-      execution,
-      {
-        step:
-          "validating_content",
-      }
-    );
-
-    const validation =
-      validateAutoPostText(
-        generatedPost?.body
-      );
-
-    await updateExecution(
-      env,
-      execution,
-      {
-        step:
-          "similarity_validation",
-      }
-    );
-
-    const similarity =
-      validatePostSimilarity(
-        validation.text,
-        context.history
-          .recentSevenDayPosts,
+        context,
         {
           threshold:
             SIMILARITY_THRESHOLD,
 
           maxRecentPosts:
             MAX_SIMILARITY_POSTS,
+
+          maxAttempts:
+            MAX_GENERATION_ATTEMPTS,
         }
+      );
+
+    generatedPost =
+      generation.generatedPost;
+
+    const validation =
+      generation.validation;
+
+    const similarity =
+      generation.similarity;
+
+    const generationResult =
+      buildGenerationResult(
+        generation
       );
 
     const similarityResult =
@@ -623,6 +640,9 @@ async function runExecution(
 
         textLength:
           validation.length,
+
+        generation:
+          generationResult,
 
         similarity:
           similarityResult,
@@ -697,6 +717,9 @@ async function runExecution(
         textLength:
           validation.length,
 
+        generation:
+          generationResult,
+
         similarity:
           similarityResult,
 
@@ -716,6 +739,7 @@ async function runExecution(
       context,
       validation,
       similarity,
+      generation,
       firstCommentResult
     );
   } catch (
