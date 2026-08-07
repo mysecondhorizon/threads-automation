@@ -185,6 +185,39 @@ function normalizeThreadsText(
   ).trim();
 }
 
+function normalizeThreadItem(
+  item
+) {
+  return {
+    id:
+      String(
+        item?.id || ""
+      ),
+
+    text:
+      normalizeThreadsText(
+        item?.text
+      ),
+
+    username:
+      String(
+        item?.username || ""
+      ),
+
+    timestamp:
+      item?.timestamp ||
+      null,
+
+    permalink:
+      item?.permalink ||
+      null,
+
+    mediaType:
+      item?.media_type ||
+      null,
+  };
+}
+
 export async function getThreadsProfile(
   accessToken
 ) {
@@ -222,6 +255,151 @@ export async function getThreadsProfile(
   }
 
   return data;
+}
+
+export async function getThreadPost(
+  accessToken,
+  postId
+) {
+  const normalizedPostId =
+    String(
+      postId || ""
+    ).trim();
+
+  if (!normalizedPostId) {
+    throw new ThreadsApiError(
+      "validate_thread_post_id",
+      {
+        message:
+          "Threads post ID is empty",
+      }
+    );
+  }
+
+  const url =
+    new URL(
+      `${config.threads.graphBase}/${normalizedPostId}`
+    );
+
+  url.searchParams.set(
+    "fields",
+    [
+      "id",
+      "text",
+      "username",
+      "timestamp",
+      "permalink",
+      "media_type",
+    ].join(",")
+  );
+
+  url.searchParams.set(
+    "access_token",
+    accessToken
+  );
+
+  const response =
+    await fetch(
+      url
+    );
+
+  const data =
+    await readThreadsResponse(
+      response,
+      "get_thread_post"
+    );
+
+  if (!data.id) {
+    throw new ThreadsApiError(
+      "get_thread_post",
+      data
+    );
+  }
+
+  return normalizeThreadItem(
+    data
+  );
+}
+
+export async function getUserThreads(
+  accessToken,
+  {
+    limit = 50,
+  } = {}
+) {
+  const safeLimit =
+    Math.max(
+      1,
+      Math.min(
+        Number(
+          limit || 50
+        ),
+        100
+      )
+    );
+
+  const url =
+    new URL(
+      `${config.threads.graphBase}/me/threads`
+    );
+
+  url.searchParams.set(
+    "fields",
+    [
+      "id",
+      "text",
+      "username",
+      "timestamp",
+      "permalink",
+      "media_type",
+    ].join(",")
+  );
+
+  url.searchParams.set(
+    "limit",
+    String(
+      safeLimit
+    )
+  );
+
+  url.searchParams.set(
+    "access_token",
+    accessToken
+  );
+
+  const response =
+    await fetch(
+      url
+    );
+
+  const data =
+    await readThreadsResponse(
+      response,
+      "get_user_threads"
+    );
+
+  const items =
+    Array.isArray(
+      data?.data
+    )
+      ? data.data
+      : [];
+
+  return {
+    data:
+      items
+        .map(
+          normalizeThreadItem
+        )
+        .filter(
+          (item) =>
+            item.id
+        ),
+
+    paging:
+      data?.paging ||
+      null,
+  };
 }
 
 export async function publishTextPost(
