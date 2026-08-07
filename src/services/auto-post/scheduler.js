@@ -12,6 +12,10 @@ import {
   saveScheduleRun,
 } from "./schedule-store.js";
 
+import {
+  syncThreadsData,
+} from "../threads-sync.js";
+
 const MINIMUM_INTERVAL_MINUTES =
   90;
 
@@ -159,6 +163,41 @@ export async function runScheduledAutoPost(
   );
 
   try {
+    const syncResult =
+      await syncThreadsData(
+        env
+      );
+
+    console.log(
+      "Scheduled Threads sync completed",
+      {
+        deleted:
+          syncResult.sync
+            ?.deleted ||
+          0,
+
+        updated:
+          syncResult.sync
+            ?.updated ||
+          0,
+
+        unchanged:
+          syncResult.sync
+            ?.unchanged ||
+          0,
+
+        refreshed:
+          syncResult.insights
+            ?.refreshed ||
+          0,
+
+        failed:
+          syncResult.insights
+            ?.failed ||
+          0,
+      }
+    );
+
     const guard =
       await checkScheduleGuard(
         env,
@@ -227,6 +266,33 @@ export async function runScheduledAutoPost(
         similarity:
           result.similarity,
 
+        sync: {
+          deleted:
+            syncResult.sync
+              ?.deleted ||
+            0,
+
+          updated:
+            syncResult.sync
+              ?.updated ||
+            0,
+
+          unchanged:
+            syncResult.sync
+              ?.unchanged ||
+            0,
+
+          refreshed:
+            syncResult.insights
+              ?.refreshed ||
+            0,
+
+          failed:
+            syncResult.insights
+              ?.failed ||
+            0,
+        },
+
         error:
           null,
       }
@@ -276,6 +342,9 @@ export async function runScheduledAutoPost(
       startedAt,
 
       completedAt,
+
+      sync:
+        syncResult,
 
       guard,
 
