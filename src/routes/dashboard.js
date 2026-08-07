@@ -767,11 +767,29 @@ function renderScheduleStatusCard(
         null,
     };
 
+  const sync =
+    latestRun
+      .sync || {
+      deleted:
+        0,
+
+      updated:
+        0,
+
+      unchanged:
+        0,
+
+      refreshed:
+        0,
+
+      failed:
+        0,
+    };
+
   const skipReason =
     latestRun.skipReason
       ? JSON.stringify(
-          latestRun
-            .skipReason,
+          latestRun.skipReason,
           null,
           2
         )
@@ -845,7 +863,14 @@ function renderScheduleStatusCard(
         border-radius:12px;
         padding:18px;
         background:#fff;
+        margin-bottom:14px;
       ">
+        <h3 style="
+          margin-top:0;
+        ">
+          Cron 실행
+        </h3>
+
         ${renderInfoItem(
           "Cron",
           latestRun.cron
@@ -897,6 +922,77 @@ function renderScheduleStatusCard(
         ${renderInfoItem(
           "오류",
           error
+        )}
+      </article>
+
+      <article style="
+        border:1px solid #ddd;
+        border-radius:12px;
+        padding:18px;
+        background:#fff;
+      ">
+        <h3 style="
+          margin-top:0;
+        ">
+          Threads 자동 동기화
+        </h3>
+
+        <div style="
+          display:grid;
+          grid-template-columns:
+            repeat(
+              auto-fit,
+              minmax(150px,1fr)
+            );
+          gap:12px;
+          margin-bottom:14px;
+        ">
+          ${renderMetricCard(
+            "삭제 감지",
+            formatNumber(
+              sync.deleted
+            ),
+            "개"
+          )}
+
+          ${renderMetricCard(
+            "수정 감지",
+            formatNumber(
+              sync.updated
+            ),
+            "개"
+          )}
+
+          ${renderMetricCard(
+            "변경 없음",
+            formatNumber(
+              sync.unchanged
+            ),
+            "개"
+          )}
+
+          ${renderMetricCard(
+            "인사이트 갱신",
+            formatNumber(
+              sync.refreshed
+            ),
+            "개"
+          )}
+
+          ${renderMetricCard(
+            "갱신 실패",
+            formatNumber(
+              sync.failed
+            ),
+            "개"
+          )}
+        </div>
+
+        ${renderInfoItem(
+          "동기화 상태",
+          latestRun.sync
+            ? "Cron 실행 전에 Threads 원본 동기화 완료"
+            : "이 실행은 동기화 기록 기능 추가 이전 실행입니다."
         )}
       </article>
     </section>
