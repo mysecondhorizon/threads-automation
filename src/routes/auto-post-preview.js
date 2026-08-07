@@ -7,19 +7,20 @@ import {
 } from "../services/thread-context.js";
 
 import {
-  generateThreadPost,
   AiServiceError,
 } from "../services/ai.js";
 
 import {
-  validateAutoPostText,
   AutoPostValidationError,
 } from "../services/auto-post-validator.js";
 
 import {
-  validatePostSimilarity,
   PostSimilarityError,
 } from "../services/post-similarity.js";
+
+import {
+  generateDistinctThreadPost,
+} from "../services/post-regenerator.js";
 
 import {
   ok,
@@ -37,6 +38,9 @@ const SIMILARITY_THRESHOLD =
 
 const MAX_SIMILARITY_POSTS =
   20;
+
+const MAX_GENERATION_ATTEMPTS =
+  2;
 
 async function readRequestOptions(
   request
@@ -192,30 +196,29 @@ export async function handleAutoPostPreview(
     context.publishing.requestedTone =
       options.tone;
 
-    const generatedPost =
-      await generateThreadPost(
+    const generation =
+      await generateDistinctThreadPost(
         env,
-        context
-      );
-
-    const validation =
-      validateAutoPostText(
-        generatedPost?.body
-      );
-
-    const similarity =
-      validatePostSimilarity(
-        validation.text,
-        context.history
-          .recentSevenDayPosts,
+        context,
         {
           threshold:
             SIMILARITY_THRESHOLD,
 
           maxRecentPosts:
             MAX_SIMILARITY_POSTS,
+
+          maxAttempts:
+            MAX_GENERATION_ATTEMPTS,
         }
       );
+
+    const {
+      generatedPost,
+      validation,
+      similarity,
+      attempts,
+      regenerated,
+    } = generation;
 
     const firstComment =
       normalizeFirstComment(
@@ -251,6 +254,12 @@ export async function handleAutoPostPreview(
         buildSimilaritySummary(
           similarity
         ),
+
+      generation: {
+        attempts,
+
+        regenerated,
+      },
 
       metadata:
         generatedPost
