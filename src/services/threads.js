@@ -3,7 +3,7 @@ import { config } from "../config.js";
 export class ThreadsApiError extends Error {
   constructor(
     step,
-    details
+    detailspublishTextPost
   ) {
     super(
       `Threads API failed at ${step}`
@@ -422,29 +422,59 @@ export async function publishTextPost(
     );
   }
 
-  const {
-    containerId,
-  } = await createTextContainer(
-    accessToken,
-    userId,
-    normalizedText
-  );
+  const body =
+    new URLSearchParams({
+      media_type:
+        "TEXT",
 
-  const {
-    postId,
-  } = await publishContainer(
-    accessToken,
-    userId,
-    containerId,
-    {
-      step:
-        "publish",
-    }
-  );
+      text:
+        normalizedText,
+
+      auto_publish_text:
+        "true",
+
+      access_token:
+        accessToken,
+    });
+
+  const response =
+    await fetch(
+      `${config.threads.graphBase}/${userId}/threads`,
+      {
+        method:
+          "POST",
+
+        headers: {
+          "content-type":
+            "application/x-www-form-urlencoded",
+        },
+
+        body,
+      }
+    );
+
+  const data =
+    await readThreadsResponse(
+      response,
+      "auto_publish_text"
+    );
+
+  if (!data.id) {
+    throw new ThreadsApiError(
+      "auto_publish_text",
+      data
+    );
+  }
 
   return {
-    containerId,
-    postId,
+    containerId:
+      null,
+
+    postId:
+      data.id,
+
+    autoPublished:
+      true,
   };
 }
 
