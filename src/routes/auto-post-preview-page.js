@@ -227,6 +227,21 @@ export async function handleAutoPostPreviewPage(
         "
       ></div>
 
+      <div
+        id="post-metadata"
+        style="
+          display:grid;
+          grid-template-columns:
+            repeat(
+              auto-fit,
+              minmax(160px,1fr)
+            );
+          gap:8px;
+          margin-bottom:16px;
+          font-size:13px;
+        "
+      ></div>
+
       <textarea
         id="post-text"
         rows="9"
@@ -404,6 +419,11 @@ export async function handleAutoPostPreviewPage(
         "post-type"
       );
 
+    const postMetadata =
+    document.getElementById(
+      "post-metadata"
+    );
+
     const postText =
       document.getElementById(
         "post-text"
@@ -530,8 +550,98 @@ export async function handleAutoPostPreviewPage(
         data;
 
       postType.textContent =
-        data.postType ||
-        "유형 없음";
+        [
+          data.postType ||
+            "스타일 없음",
+
+          data.contentType ||
+            "콘텐츠 유형 없음",
+        ].join(
+          " · "
+        );
+
+      const metadataItems = [
+        [
+          "소재",
+          data.topic,
+        ],
+
+        [
+          "감정",
+          data.emotion,
+        ],
+
+        [
+          "후킹",
+          data.hookStyle,
+        ],
+
+        [
+          "마무리",
+          data.endingStyle,
+        ],
+
+        [
+          "질문형",
+          data.questionUsed
+            ? "예"
+            : "아니요",
+        ],
+
+        [
+          "제품 ID",
+          data.productId ||
+            "-",
+        ],
+
+        [
+          "제품 연결",
+          data.productConnected
+            ? "예"
+            : "아니요",
+        ],
+
+        [
+          "제휴 링크",
+          data.affiliateLinkUsed
+            ? "예"
+            : "아니요",
+        ],
+
+        [
+          "광고 고지 필요",
+          data.affiliateDisclosureRequired
+            ? "예"
+            : "아니요",
+        ],
+      ];
+
+      postMetadata.innerHTML =
+        metadataItems
+          .map(
+            (
+              [
+                label,
+                value,
+              ]
+            ) =>
+              '<div style="' +
+              'border:1px solid #eee;' +
+              'border-radius:8px;' +
+              'padding:8px 10px;' +
+              'background:#fafafa;' +
+              '">' +
+              '<strong>' +
+              String(
+                label
+              ) +
+              '</strong><br>' +
+              String(
+                value ?? "-"
+              ) +
+              '</div>'
+          )
+          .join("");
 
       postText.value =
         data.text ||
@@ -744,6 +854,59 @@ export async function handleAutoPostPreviewPage(
                     latestPreview
                       .postType ||
                     "",
+
+                  contentType:
+                    latestPreview
+                      .contentType ||
+                    "",
+
+                  topic:
+                    latestPreview
+                      .topic ||
+                    "",
+                  emotion:
+                    latestPreview
+                      .emotion ||
+                    "",
+
+                  hookStyle:
+                    latestPreview
+                      .hookStyle ||
+                    "",
+
+                  endingStyle:
+                    latestPreview
+                      .endingStyle ||
+                    "",
+
+                  questionUsed:
+                    Boolean(
+                      latestPreview
+                        .questionUsed
+                    ),
+
+                  productId:
+                    latestPreview
+                      .productId ||
+                    null,
+
+                  productConnected:
+                    Boolean(
+                      latestPreview
+                        .productConnected
+                    ),
+
+                  affiliateLinkUsed:
+                    Boolean(
+                      latestPreview
+                        .affiliateLinkUsed
+                    ),
+
+                  affiliateDisclosureRequired:
+                    Boolean(
+                      latestPreview
+                        .affiliateDisclosureRequired
+                    ),
 
                   firstComment,
                 }),

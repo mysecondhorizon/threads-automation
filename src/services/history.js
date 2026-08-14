@@ -98,6 +98,9 @@ function isWithinRecentDays(
 function normalizePublishedPost(
   log
 ) {
+  const metadata =
+    log?.metadata || {};
+
   return {
     postId:
       typeof log.post_id ===
@@ -122,6 +125,57 @@ function normalizePublishedPost(
       "string"
         ? log.created_at
         : null,
+
+    style:
+      metadata.style ||
+      null,
+
+    contentType:
+      metadata.contentType ||
+      null,
+
+    topic:
+      metadata.topic ||
+      null,
+
+    emotion:
+      metadata.emotion ||
+      null,
+
+    hookStyle:
+      metadata.hookStyle ||
+      null,
+
+    endingStyle:
+      metadata.endingStyle ||
+      null,
+
+    questionUsed:
+      Boolean(
+        metadata.questionUsed
+      ),
+
+    productId:
+      metadata.productId ||
+      null,
+
+    productConnected:
+      Boolean(
+        metadata
+          .productConnected
+      ),
+
+    affiliateLinkUsed:
+      Boolean(
+        metadata
+          .affiliateLinkUsed
+      ),
+
+    affiliateDisclosureRequired:
+      Boolean(
+        metadata
+          .affiliateDisclosureRequired
+      ),
   };
 }
 

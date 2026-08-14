@@ -102,6 +102,7 @@ export async function publishAutoPost(
     accessToken,
     text,
     firstComment = "",
+    metadata = null,
   }
 ) {
   const profile =
@@ -120,7 +121,8 @@ export async function publishAutoPost(
     env,
     profile.username,
     publishResult.postId,
-    text
+    text,
+    metadata
   );
 
   const firstCommentResult =

@@ -96,9 +96,85 @@ function normalizeRequestBody(
     );
   }
 
+  const contentType =
+    String(
+      body?.contentType || ""
+    ).trim();
+
+  const topic =
+    String(
+      body?.topic || ""
+    ).trim();
+
+  const emotion =
+    String(
+      body?.emotion || ""
+    ).trim();
+
+  const hookStyle =
+    String(
+      body?.hookStyle || ""
+    ).trim();
+
+  const endingStyle =
+    String(
+      body?.endingStyle || ""
+    ).trim();
+
+  const productId =
+    body?.productId === null
+      ? null
+      : String(
+          body?.productId || ""
+        ).trim() ||
+        null;
+
+  const questionUsed =
+    Boolean(
+      body?.questionUsed
+    );
+
+  const productConnected =
+    Boolean(
+      body?.productConnected
+    );
+
+  const affiliateLinkUsed =
+    Boolean(
+      body?.affiliateLinkUsed
+    );
+
+  const affiliateDisclosureRequired =
+    Boolean(
+      body
+        ?.affiliateDisclosureRequired
+    );
+
   return {
     text,
+
     postType,
+
+    contentType,
+
+    topic,
+
+    emotion,
+
+    hookStyle,
+
+    endingStyle,
+
+    questionUsed,
+
+    productId,
+
+    productConnected,
+
+    affiliateLinkUsed,
+
+    affiliateDisclosureRequired,
+
     firstComment,
   };
 }

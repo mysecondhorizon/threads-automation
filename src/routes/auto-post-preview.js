@@ -11,6 +11,8 @@ import {
 } from "../services/ai.js";
 
 import {
+  validateAutoPostText,
+  validateAutoPostPolicy,
   AutoPostValidationError,
 } from "../services/auto-post-validator.js";
 
@@ -220,6 +222,12 @@ export async function handleAutoPostPreview(
       regenerated,
     } = generation;
 
+    const policyValidation =
+      validateAutoPostPolicy(
+        generatedPost,
+        context
+      );
+
     const firstComment =
       normalizeFirstComment(
         generatedPost
@@ -240,6 +248,46 @@ export async function handleAutoPostPreview(
         generatedPost
           .postType,
 
+      contentType:
+        generatedPost
+          .contentType,
+
+      topic:
+        generatedPost
+          .topic,
+
+      emotion:
+        generatedPost
+          .emotion,
+
+      hookStyle:
+        generatedPost
+          .hookStyle,
+
+      endingStyle:
+        generatedPost
+          .endingStyle,
+
+      questionUsed:
+        generatedPost
+          .questionUsed,
+
+      productId:
+        generatedPost
+          .productId,
+
+      productConnected:
+        generatedPost
+          .productConnected,
+
+      affiliateLinkUsed:
+        generatedPost
+          .affiliateLinkUsed,
+
+      affiliateDisclosureRequired:
+        generatedPost
+          .affiliateDisclosureRequired,
+
       firstComment,
 
       validation: {
@@ -249,6 +297,8 @@ export async function handleAutoPostPreview(
         maxLength:
           validation.maxLength,
       },
+
+      policyValidation,
 
       similarity:
         buildSimilaritySummary(

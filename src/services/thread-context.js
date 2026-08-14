@@ -218,6 +218,135 @@ function buildRecentProducts(
     );
 }
 
+function uniqueValues(
+  posts,
+  field,
+  limit = 10
+) {
+  const values =
+    [];
+
+  const seen =
+    new Set();
+
+  for (
+    const post of
+    Array.isArray(posts)
+      ? posts
+      : []
+  ) {
+    const value =
+      String(
+        post?.[field] || ""
+      ).trim();
+
+    if (
+      !value ||
+      seen.has(value)
+    ) {
+      continue;
+    }
+
+    seen.add(
+      value
+    );
+
+    values.push(
+      value
+    );
+
+    if (
+      values.length >=
+      limit
+    ) {
+      break;
+    }
+  }
+
+  return values;
+}
+
+function buildHistorySignals(
+  postingHistory
+) {
+  const todayPosts =
+    Array.isArray(
+      postingHistory
+        ?.todayPosts
+    )
+      ? postingHistory
+          .todayPosts
+      : [];
+
+  const recentPosts =
+    Array.isArray(
+      postingHistory
+        ?.recentSevenDayPosts
+    )
+      ? postingHistory
+          .recentSevenDayPosts
+      : [];
+
+  return {
+    todayQuestionCount:
+      todayPosts.filter(
+        (post) =>
+          post.questionUsed ===
+          true
+      ).length,
+
+    todayProductConnectedCount:
+      todayPosts.filter(
+        (post) =>
+          post.productConnected ===
+          true
+      ).length,
+
+    todayAffiliateLinkCount:
+      todayPosts.filter(
+        (post) =>
+          post.affiliateLinkUsed ===
+          true
+      ).length,
+
+    recentContentTypes:
+      uniqueValues(
+        recentPosts,
+        "contentType"
+      ),
+
+    recentTopics:
+      uniqueValues(
+        recentPosts,
+        "topic"
+      ),
+
+    recentEmotions:
+      uniqueValues(
+        recentPosts,
+        "emotion"
+      ),
+
+    recentHookStyles:
+      uniqueValues(
+        recentPosts,
+        "hookStyle"
+      ),
+
+    recentEndingStyles:
+      uniqueValues(
+        recentPosts,
+        "endingStyle"
+      ),
+
+    recentProductIds:
+      uniqueValues(
+        recentPosts,
+        "productId"
+      ),
+  };
+}
+
 export async function buildThreadContext(
   env
 ) {
@@ -272,24 +401,14 @@ export async function buildThreadContext(
       activeProducts
     );
 
-  const todayLinkCount =
-    recentProducts.filter(
-      (product) => {
-        const productInfo =
-          productContext
-            .productDetails
-            .find(
-              (item) =>
-                item.productId ===
-                product.id
-            );
+  const historySignals =
+    buildHistorySignals(
+      postingHistory
+    );
 
-        return Boolean(
-          productInfo
-            ?.linkEnabled
-        );
-      }
-    ).length;
+  const todayLinkCount =
+    historySignals
+      .todayAffiliateLinkCount;
 
   const linkAvailable =
     todayLinkCount < 1 &&
@@ -303,7 +422,7 @@ export async function buildThreadContext(
   return {
     meta: {
       version:
-        "1.5.0",
+        "1.6.0",
 
       generatedAt:
         now.toISOString(),
@@ -352,6 +471,18 @@ export async function buildThreadContext(
 
       requestedTone:
         null,
+
+      questionAvailable:
+        historySignals
+          .todayQuestionCount < 1,
+
+      productConnectedAvailable:
+        historySignals
+          .todayProductConnectedCount < 1,
+
+      affiliateLinkAvailable:
+        historySignals
+          .todayAffiliateLinkCount < 1,
     },
 
     history: {
@@ -382,6 +513,42 @@ export async function buildThreadContext(
       recentProducts,
 
       recentPerformance,
+
+      todayQuestionCount:
+        historySignals
+          .todayQuestionCount,
+
+      todayProductConnectedCount:
+        historySignals
+          .todayProductConnectedCount,
+
+      todayAffiliateLinkCount:
+        historySignals
+          .todayAffiliateLinkCount,
+
+      recentContentTypes:
+        historySignals
+          .recentContentTypes,
+
+      recentTopics:
+        historySignals
+          .recentTopics,
+
+      recentEmotions:
+        historySignals
+          .recentEmotions,
+
+      recentHookStyles:
+        historySignals
+          .recentHookStyles,
+
+      recentEndingStyles:
+        historySignals
+          .recentEndingStyles,
+
+      recentProductIds:
+        historySignals
+          .recentProductIds,
     },
 
     products:
@@ -414,16 +581,66 @@ export async function buildThreadContext(
           .observations,
 
       topHooks:
-        [],
+        Array.isArray(
+          analyticsSummary
+            ?.byHookStyle
+        )
+          ? analyticsSummary
+              .byHookStyle
+              .slice(
+                0,
+                5
+              )
+          : [],
 
       topTopics:
-        [],
+        Array.isArray(
+          analyticsSummary
+            ?.byTopic
+        )
+          ? analyticsSummary
+              .byTopic
+              .slice(
+                0,
+                5
+              )
+          : [],
 
       topPostTypes:
-        [],
+        Array.isArray(
+          analyticsSummary
+            ?.byContentType
+        )
+          ? analyticsSummary
+              .byContentType
+              .slice(
+                0,
+                5
+              )
+          : [],
 
       lowPerformanceTopics:
-        [],
+        Array.isArray(
+          analyticsSummary
+            ?.byTopic
+        )
+          ? [
+              ...analyticsSummary
+                .byTopic,
+            ]
+              .sort(
+                (
+                  first,
+                  second
+                ) =>
+                  first.averageViews -
+                  second.averageViews
+              )
+              .slice(
+                0,
+                5
+              )
+          : [],
     },
   };
 }

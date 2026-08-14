@@ -253,3 +253,153 @@ export function validateAutoPostText(
       MAX_POST_LENGTH,
   };
 }
+
+export function validateAutoPostPolicy(
+  generatedPost,
+  context
+) {
+  const publishing =
+    context?.publishing || {};
+
+  const questionUsed =
+    Boolean(
+      generatedPost
+        ?.questionUsed
+    );
+
+  const productConnected =
+    Boolean(
+      generatedPost
+        ?.productConnected
+    );
+
+  const affiliateLinkUsed =
+    Boolean(
+      generatedPost
+        ?.affiliateLinkUsed
+    );
+
+  const affiliateDisclosureRequired =
+    Boolean(
+      generatedPost
+        ?.affiliateDisclosureRequired
+    );
+
+  if (
+    publishing
+      .questionAvailable ===
+      false &&
+    questionUsed
+  ) {
+    throw new AutoPostValidationError(
+      "오늘 질문형 콘텐츠 사용 한도를 초과했습니다.",
+      {
+        code:
+          "question_limit_reached",
+
+        details: {
+          todayQuestionCount:
+            context?.history
+              ?.todayQuestionCount ??
+            0,
+        },
+      }
+    );
+  }
+
+  if (
+    publishing
+      .productConnectedAvailable ===
+      false &&
+    productConnected
+  ) {
+    throw new AutoPostValidationError(
+      "오늘 제품 연결 콘텐츠 사용 한도를 초과했습니다.",
+      {
+        code:
+          "product_content_limit_reached",
+
+        details: {
+          todayProductConnectedCount:
+            context?.history
+              ?.todayProductConnectedCount ??
+            0,
+        },
+      }
+    );
+  }
+
+  if (
+    publishing
+      .affiliateLinkAvailable ===
+      false &&
+    affiliateLinkUsed
+  ) {
+    throw new AutoPostValidationError(
+      "오늘 제휴 링크 사용 한도를 초과했습니다.",
+      {
+        code:
+          "affiliate_link_limit_reached",
+
+        details: {
+          todayAffiliateLinkCount:
+            context?.history
+              ?.todayAffiliateLinkCount ??
+            0,
+        },
+      }
+    );
+  }
+
+  if (
+    affiliateLinkUsed &&
+    !productConnected
+  ) {
+    throw new AutoPostValidationError(
+      "제품 연결 없이 제휴 링크를 사용할 수 없습니다.",
+      {
+        code:
+          "affiliate_link_without_product",
+      }
+    );
+  }
+
+  if (
+    affiliateLinkUsed &&
+    !affiliateDisclosureRequired
+  ) {
+    throw new AutoPostValidationError(
+      "제휴 링크 사용 글에 광고 고지 정보가 설정되지 않았습니다.",
+      {
+        code:
+          "affiliate_disclosure_missing",
+      }
+    );
+  }
+
+  if (
+    affiliateDisclosureRequired &&
+    !affiliateLinkUsed
+  ) {
+    throw new AutoPostValidationError(
+      "제휴 링크가 없는 글에 광고 고지 필요 상태가 설정되어 있습니다.",
+      {
+        code:
+          "unnecessary_affiliate_disclosure",
+      }
+    );
+  }
+
+  return {
+    valid:
+      true,
+
+    questionUsed,
+
+    productConnected,
+
+    affiliateLinkUsed,
+
+    affiliateDisclosureRequired,
+  };
+}

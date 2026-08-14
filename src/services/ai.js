@@ -366,9 +366,97 @@ function validateDraft(
     );
   }
 
+  const contentType =
+  normalizeLineBreaks(
+    draft?.contentType
+  );
+
+  const topic =
+    normalizeLineBreaks(
+      draft?.topic
+    );
+
+  const emotion =
+    normalizeLineBreaks(
+      draft?.emotion
+    );
+
+  const hookStyle =
+    normalizeLineBreaks(
+      draft?.hookStyle
+    );
+
+  const endingStyle =
+    normalizeLineBreaks(
+      draft?.endingStyle
+    );
+
+  const productId =
+    draft?.productId === null
+      ? null
+      : normalizeLineBreaks(
+          draft?.productId
+        ) ||
+        null;
+
+  if (!contentType) {
+    throw new AiServiceError(
+      "OpenAI returned a draft without contentType",
+      {
+        index,
+        draft,
+      }
+    );
+  }
+
+  if (!topic) {
+    throw new AiServiceError(
+      "OpenAI returned a draft without topic",
+      {
+        index,
+        draft,
+      }
+    );
+  }
+
   return {
     style,
+
+    contentType,
+
+    topic,
+
+    emotion,
+
+    hookStyle,
+
+    endingStyle,
+
+    questionUsed:
+      Boolean(
+        draft?.questionUsed
+      ),
+
+    productId,
+
+    productConnected:
+      Boolean(
+        draft?.productConnected
+      ),
+
+    affiliateLinkUsed:
+      Boolean(
+        draft?.affiliateLinkUsed
+      ),
+
+    affiliateDisclosureRequired:
+      Boolean(
+        draft
+          ?.affiliateDisclosureRequired
+      ),
+
     text,
+
     firstComment,
   };
 }
@@ -497,6 +585,24 @@ function buildAiContextData(
         context?.publishing
           ?.requestedTone ||
         null,
+
+      questionAvailable:
+        Boolean(
+          context?.publishing
+            ?.questionAvailable
+        ),
+
+      productConnectedAvailable:
+        Boolean(
+          context?.publishing
+            ?.productConnectedAvailable
+        ),
+
+      affiliateLinkAvailable:
+        Boolean(
+          context?.publishing
+            ?.affiliateLinkAvailable
+        ),
     },
 
     history: {
@@ -516,6 +622,57 @@ function buildAiContextData(
         normalizeProductList(
           context?.history
             ?.recentProducts
+        ),
+
+      todayQuestionCount:
+        context?.history
+          ?.todayQuestionCount ??
+        0,
+
+      todayProductConnectedCount:
+        context?.history
+          ?.todayProductConnectedCount ??
+        0,
+
+      todayAffiliateLinkCount:
+        context?.history
+          ?.todayAffiliateLinkCount ??
+        0,
+
+      recentContentTypes:
+        normalizeProductList(
+          context?.history
+            ?.recentContentTypes
+        ),
+
+      recentTopics:
+        normalizeProductList(
+          context?.history
+            ?.recentTopics
+        ),
+
+      recentEmotions:
+        normalizeProductList(
+          context?.history
+            ?.recentEmotions
+        ),
+
+      recentHookStyles:
+        normalizeProductList(
+          context?.history
+            ?.recentHookStyles
+        ),
+
+      recentEndingStyles:
+        normalizeProductList(
+          context?.history
+            ?.recentEndingStyles
+        ),
+
+      recentProductIds:
+        normalizeProductList(
+          context?.history
+            ?.recentProductIds
         ),
     },
 
@@ -620,9 +777,16 @@ function buildGenerationInput(
       "",
       "아래는 이번 게시글 작성에 사용해야 하는 실제 컨텍스트입니다.",
       "입력되지 않은 사실은 만들지 마세요.",
+      "history의 구조화된 메타데이터를 사용해 최근 contentType, topic, emotion, hookStyle, endingStyle의 반복을 피하세요.",
+      "todayQuestionCount를 참고해 질문형 마무리가 과도하게 반복되지 않게 하세요.",
+      "todayProductConnectedCount와 todayAffiliateLinkCount를 참고해 제품 콘텐츠와 링크 사용을 조절하세요.",
+      "recentProductIds를 참고해 최근 사용 제품의 반복을 피하세요.",
       "제품 글을 작성할 때는 products의 실제 데이터만 사용하세요.",
       "제품 경험이 없거나 정보가 부족하면 일반 글을 작성하세요.",
       "affiliateLink가 비어 있거나 linkEnabled가 false라면 firstComment에 링크를 만들지 마세요.",
+      "publishing.questionAvailable이 false면 질문형 마무리를 사용하지 마세요.",
+      "publishing.productConnectedAvailable이 false면 제품이 핵심인 글을 작성하지 마세요.",
+      "publishing.affiliateLinkAvailable이 false면 제휴 링크와 광고 고지가 필요한 글을 작성하지 마세요.",
       "",
       "[THREAD_CONTEXT_JSON]",
       JSON.stringify(
@@ -745,6 +909,76 @@ export async function generateThreadsDrafts(
                             ],
                           },
 
+                          contentType: {
+                            type:
+                              "string",
+
+                            enum: [
+                              "순간 공감형",
+                              "현실 고민형",
+                              "작은 발견형",
+                              "실패·실수형",
+                              "의견·선택형",
+                              "생활 정보형",
+                              "제품 발견형",
+                              "제품 경험형",
+                              "제품 연결형",
+                            ],
+                          },
+
+                          topic: {
+                            type:
+                              "string",
+                          },
+
+                          emotion: {
+                            type:
+                              "string",
+                          },
+
+                          hookStyle: {
+                            type:
+                              "string",
+                          },
+
+                          endingStyle: {
+                            type:
+                              "string",
+                          },
+
+                          questionUsed: {
+                            type:
+                              "boolean",
+                          },
+
+                          productId: {
+                            anyOf: [
+                              {
+                                type:
+                                  "string",
+                              },
+                              {
+                                type:
+                                  "null",
+                              },
+                            ],
+                          },
+
+                          productConnected: {
+                            type:
+                              "boolean",
+                          },
+
+                          affiliateLinkUsed: {
+                            type:
+                              "boolean",
+                          },
+
+                          affiliateDisclosureRequired: {
+                            type:
+                              "boolean",
+                          },
+
                           text: {
                             type:
                               "string",
@@ -758,6 +992,16 @@ export async function generateThreadsDrafts(
 
                         required: [
                           "style",
+                          "contentType",
+                          "topic",
+                          "emotion",
+                          "hookStyle",
+                          "endingStyle",
+                          "questionUsed",
+                          "productId",
+                          "productConnected",
+                          "affiliateLinkUsed",
+                          "affiliateDisclosureRequired",
                           "text",
                           "firstComment",
                         ],
@@ -913,6 +1157,37 @@ export async function generateThreadPost(
 
     firstComment:
       parsedPost.firstComment,
+
+    contentType:
+      selected.contentType,
+
+    topic:
+      selected.topic,
+
+    emotion:
+      selected.emotion,
+
+    hookStyle:
+      selected.hookStyle,
+
+    endingStyle:
+      selected.endingStyle,
+
+    questionUsed:
+      selected.questionUsed,
+
+    productId:
+      selected.productId,
+
+    productConnected:
+      selected.productConnected,
+
+    affiliateLinkUsed:
+      selected.affiliateLinkUsed,
+
+    affiliateDisclosureRequired:
+      selected
+        .affiliateDisclosureRequired,
 
     metadata: {
       generatedAt:

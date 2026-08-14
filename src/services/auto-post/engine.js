@@ -481,6 +481,46 @@ function buildSuccessResult(
     postType:
       generatedPost.postType,
 
+    contentType:
+      generatedPost
+        .contentType,
+
+    topic:
+      generatedPost
+        .topic,
+
+    emotion:
+      generatedPost
+        .emotion,
+
+    hookStyle:
+      generatedPost
+        .hookStyle,
+
+    endingStyle:
+      generatedPost
+        .endingStyle,
+
+    questionUsed:
+      generatedPost
+        .questionUsed,
+
+    productId:
+      generatedPost
+        .productId,
+
+    productConnected:
+      generatedPost
+        .productConnected,
+
+    affiliateLinkUsed:
+      generatedPost
+        .affiliateLinkUsed,
+
+    affiliateDisclosureRequired:
+      generatedPost
+        .affiliateDisclosureRequired,
+
     firstComment:
       normalizeFirstCommentResult(
         generatedPost,
@@ -719,6 +759,67 @@ async function runExecution(
           generatedPost
             ?.firstComment ||
           "",
+
+        metadata: {
+          style:
+            generatedPost
+              ?.postType ||
+            null,
+
+          contentType:
+            generatedPost
+              ?.contentType ||
+            null,
+
+          topic:
+            generatedPost
+              ?.topic ||
+            null,
+
+          emotion:
+            generatedPost
+              ?.emotion ||
+            null,
+
+          hookStyle:
+            generatedPost
+              ?.hookStyle ||
+            null,
+
+          endingStyle:
+            generatedPost
+              ?.endingStyle ||
+            null,
+
+          questionUsed:
+            Boolean(
+              generatedPost
+                ?.questionUsed
+            ),
+
+          productId:
+            generatedPost
+              ?.productId ||
+            null,
+
+          productConnected:
+            Boolean(
+              generatedPost
+                ?.productConnected
+            ),
+
+          affiliateLinkUsed:
+            Boolean(
+              generatedPost
+                ?.affiliateLinkUsed
+            ),
+
+          affiliateDisclosureRequired:
+            Boolean(
+              generatedPost
+                ?.affiliateDisclosureRequired
+            ),
+        },
       }
     );
 

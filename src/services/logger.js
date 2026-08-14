@@ -4,11 +4,67 @@ import {
   getJson,
 } from "./kv.js";
 
+function normalizePostMetadata(
+  metadata
+) {
+  return {
+    style:
+      metadata?.style ||
+      null,
+
+    contentType:
+      metadata?.contentType ||
+      null,
+
+    topic:
+      metadata?.topic ||
+      null,
+
+    emotion:
+      metadata?.emotion ||
+      null,
+
+    hookStyle:
+      metadata?.hookStyle ||
+      null,
+
+    endingStyle:
+      metadata?.endingStyle ||
+      null,
+
+    questionUsed:
+      Boolean(
+        metadata?.questionUsed
+      ),
+
+    productId:
+      metadata?.productId ||
+      null,
+
+    productConnected:
+      Boolean(
+        metadata?.productConnected
+      ),
+
+    affiliateLinkUsed:
+      Boolean(
+        metadata?.affiliateLinkUsed
+      ),
+
+    affiliateDisclosureRequired:
+      Boolean(
+        metadata
+          ?.affiliateDisclosureRequired
+      ),
+  };
+}
+
 export async function logPostSuccess(
   env,
   username,
   postId,
-  text
+  text,
+  metadata = null
 ) {
   const key =
     `post_log:${Date.now()}:${crypto.randomUUID()}`;
@@ -35,6 +91,11 @@ export async function logPostSuccess(
 
       deleted_at:
         null,
+
+      metadata:
+        normalizePostMetadata(
+          metadata
+        ),
     }
   );
 }

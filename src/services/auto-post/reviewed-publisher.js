@@ -269,6 +269,16 @@ export async function publishReviewedAutoPost(
   {
     text,
     postType = "",
+    contentType = "",
+    topic = "",
+    emotion = "",
+    hookStyle = "",
+    endingStyle = "",
+    questionUsed = false,
+    productId = null,
+    productConnected = false,
+    affiliateLinkUsed = false,
+    affiliateDisclosureRequired = false,
     firstComment = "",
   }
 ) {
@@ -279,6 +289,72 @@ export async function publishReviewedAutoPost(
     normalizePostType(
       postType
     );
+
+  const metadata = {
+    style:
+      normalizePostType(
+        postType
+      ) ||
+      null,
+
+    contentType:
+      String(
+        contentType || ""
+      ).trim() ||
+      null,
+
+    topic:
+      String(
+        topic || ""
+      ).trim() ||
+      null,
+
+    emotion:
+      String(
+        emotion || ""
+      ).trim() ||
+      null,
+
+    hookStyle:
+      String(
+        hookStyle || ""
+      ).trim() ||
+      null,
+
+    endingStyle:
+      String(
+        endingStyle || ""
+      ).trim() ||
+      null,
+
+    questionUsed:
+      Boolean(
+        questionUsed
+      ),
+
+    productId:
+      productId
+        ? String(
+            productId
+          ).trim() ||
+          null
+        : null,
+
+    productConnected:
+      Boolean(
+        productConnected
+      ),
+
+    affiliateLinkUsed:
+      Boolean(
+        affiliateLinkUsed
+      ),
+
+    affiliateDisclosureRequired:
+      Boolean(
+        affiliateDisclosureRequired
+      ),
+  };
 
   let normalizedText =
     String(
@@ -426,6 +502,8 @@ export async function publishReviewedAutoPost(
 
         firstComment:
           normalizedFirstComment,
+
+        metadata,
       }
     );
 
@@ -486,6 +564,37 @@ export async function publishReviewedAutoPost(
 
       postType:
         normalizedPostType,
+
+      contentType:
+        metadata.contentType,
+
+      topic:
+        metadata.topic,
+
+      emotion:
+        metadata.emotion,
+
+      hookStyle:
+        metadata.hookStyle,
+
+      endingStyle:
+        metadata.endingStyle,
+
+      questionUsed:
+        metadata.questionUsed,
+
+      productId:
+        metadata.productId,
+
+      productConnected:
+        metadata.productConnected,
+
+      affiliateLinkUsed:
+        metadata.affiliateLinkUsed,
+
+      affiliateDisclosureRequired:
+        metadata
+          .affiliateDisclosureRequired,
 
       firstComment:
         finalFirstComment,
