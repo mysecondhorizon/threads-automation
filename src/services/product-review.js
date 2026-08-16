@@ -182,6 +182,8 @@ export async function generateProductReviewCandidate(
       attempts: generation.attempts,
       regenerated: generation.regenerated,
       highestSimilarity: generation.similarity?.highestScore ?? null,
+      formatSignature: generation.format?.signature || null,
+      targetFormatId: generation.targetFormat?.id || null,
     },
     createdAt: now,
     updatedAt: now,

@@ -11,6 +11,12 @@ import {
   PostSimilarityError,
 } from "./post-similarity.js";
 
+import {
+  selectTargetPostFormat,
+  validatePostFormat,
+  getContextFormatDisclosures,
+} from "./post-format.js";
+
 const DEFAULT_SIMILARITY_THRESHOLD =
   0.62;
 
@@ -22,12 +28,28 @@ const DEFAULT_MAX_ATTEMPTS =
 
 function buildRetryGoal(
   originalGoal,
-  similarityError
+  generationError
 ) {
   const details =
-    similarityError
+    generationError
       ?.details ||
     {};
+
+  if (
+    generationError?.code ===
+      "post_format_validation_failed"
+  ) {
+    return [
+      originalGoal,
+      "",
+      "중요 추가 지시:",
+      "방금 생성한 초안은 최근 글과 문장·문단 구조가 겹치거나 목표 포맷에서 벗어났다.",
+      `실패한 포맷: ${details.signature || "확인 불가"}`,
+      `반드시 적용할 포맷: ${details.targetPrompt || "publishing.targetFormat을 따른다."}`,
+      "첫 문장 단독 문단과 마지막 한 줄 결론을 습관적으로 만들지 않는다.",
+      "본문에 포맷 설명이나 signature를 출력하지 않는다.",
+    ].join("\n");
+  }
 
   const matchedText =
     String(
@@ -90,8 +112,51 @@ export async function generateDistinctThreadPost(
 
     maxAttempts =
       DEFAULT_MAX_ATTEMPTS,
+
+    generatePost =
+      generateThreadPost,
   } = {}
 ) {
+  const recentFormats =
+    Array.isArray(
+      context?.history
+        ?.recentFormats
+    ) &&
+    context.history
+      .recentFormats
+      .length
+      ? context.history
+          .recentFormats
+      : context?.history
+          ?.recentFormatSignatures ||
+        [];
+
+  if (
+    !context.publishing
+      .targetFormat
+  ) {
+    context.publishing
+      .targetFormat =
+      selectTargetPostFormat(
+        recentFormats,
+        {
+          sequence:
+            context.publishing
+              .publishSequence ||
+            1,
+        }
+      );
+  }
+
+  const targetFormat =
+    context.publishing
+      .targetFormat;
+
+  const disclosures =
+    getContextFormatDisclosures(
+      context
+    );
+
   const originalGoal =
     String(
       context?.publishing
@@ -129,7 +194,7 @@ export async function generateDistinctThreadPost(
     }
 
     const generatedPost =
-      await generateThreadPost(
+      await generatePost(
         env,
         attemptContext
       );
@@ -143,6 +208,16 @@ export async function generateDistinctThreadPost(
       );
 
     try {
+      const format =
+        validatePostFormat(
+          validation.text,
+          {
+            targetFormat,
+            recentFormats,
+            disclosures,
+          }
+        );
+
       const similarity =
         validatePostSimilarity(
           validation.text,
@@ -161,6 +236,10 @@ export async function generateDistinctThreadPost(
         validation,
 
         similarity,
+
+        format,
+
+        targetFormat,
 
         attempts:
           attempt,

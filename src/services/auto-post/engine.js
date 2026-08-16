@@ -501,6 +501,16 @@ function buildGenerationResult(
 
     regenerated:
       generation.regenerated,
+
+    formatSignature:
+      generation.format
+        ?.signature ||
+      null,
+
+    targetFormatId:
+      generation.targetFormat
+        ?.id ||
+      null,
   };
 }
 

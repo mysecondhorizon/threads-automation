@@ -287,6 +287,15 @@ function buildHistorySignals(
           .recentSevenDayPosts
       : [];
 
+  const recentFormats =
+    recentPosts
+      .map(
+        (post) =>
+          post?.format ||
+          null
+      )
+      .filter(Boolean);
+
   return {
     todayQuestionCount:
       todayPosts.filter(
@@ -343,6 +352,14 @@ function buildHistorySignals(
       uniqueValues(
         recentPosts,
         "productId"
+      ),
+
+    recentFormats,
+
+    recentFormatSignatures:
+      recentFormats.map(
+        (format) =>
+          format.signature
       ),
   };
 }
@@ -422,7 +439,7 @@ export async function buildThreadContext(
   return {
     meta: {
       version:
-        "1.6.0",
+        "1.7.0",
 
       generatedAt:
         now.toISOString(),
@@ -549,6 +566,14 @@ export async function buildThreadContext(
       recentProductIds:
         historySignals
           .recentProductIds,
+
+      recentFormats:
+        historySignals
+          .recentFormats,
+
+      recentFormatSignatures:
+        historySignals
+          .recentFormatSignatures,
     },
 
     products:

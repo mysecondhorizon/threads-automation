@@ -2,6 +2,10 @@ import {
   getRecentPostLogs,
 } from "./logger.js";
 
+import {
+  analyzePostFormat,
+} from "./post-format.js";
+
 const SEOUL_TIME_ZONE =
   "Asia/Seoul";
 
@@ -101,6 +105,17 @@ function normalizePublishedPost(
   const metadata =
     log?.metadata || {};
 
+  const normalizedText =
+    typeof log.text ===
+      "string"
+      ? log.text.trim()
+      : "";
+
+  const format =
+    analyzePostFormat(
+      normalizedText
+    );
+
   return {
     postId:
       typeof log.post_id ===
@@ -115,10 +130,12 @@ function normalizePublishedPost(
         : null,
 
     text:
-      typeof log.text ===
-      "string"
-        ? log.text.trim()
-        : "",
+      normalizedText,
+
+    format,
+
+    formatSignature:
+      format.signature,
 
     createdAt:
       typeof log.created_at ===

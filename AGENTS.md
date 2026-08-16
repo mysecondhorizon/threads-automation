@@ -79,6 +79,7 @@ HTTP 수동 실행과 검수 게시도 같은 핵심 게시 계층을 사용한�
 - `src/services/ai.js`: OpenAI 요청, structured output schema, AI 응답 정규화 및 Threads 글 생성을 담당한다.
 - `src/services/post-regenerator.js`: 최근 글과의 유사도를 검사하며 구별되는 글을 재생성한다.
 - `src/services/post-similarity.js`: 게시물 간 유사성 신호를 계산한다.
+- `src/services/post-format.js`: 게시 text의 문단·문장 signature 계산, 최근 포맷을 피한 목표 포맷 선택 및 생성 후 포맷 검증을 담당한다. 광고 고지는 일반 본문 구조에서 분리한다.
 - `src/services/auto-post-validator.js`: 텍스트 품질과 운영 정책을 최종 검증한다.
 - `src/services/threads.js`: 공식 Threads API 요청을 담당한다. 게시 API 변경 시 가장 신중하게 다룬다.
 - `src/services/threads-sync.js`: Threads 게시물과 insight 데이터를 KV 운영 데이터로 동기화한다.
@@ -116,6 +117,9 @@ HTTP 수동 실행과 검수 게시도 같은 핵심 게시 계층을 사용한�
 - `첫 문장 -> 설명 -> 결론`의 고정 패턴을 반복하지 않는다.
 - 문단 수, 문장 길이, 줄바꿈과 마무리 리듬을 다양하게 한다.
 - 최근 글과 소재뿐 아니라 문단 패턴과 표현 리듬도 지나치게 비슷하면 피한다.
+- 일반 AUTO와 PRODUCT REVIEW는 `post-regenerator.js`에서 같은 코드 기반 format strategy를 사용한다. AI가 포맷을 자유 선택하게 두지 않는다.
+- 최근 text에서 계산한 `recentFormatSignatures`를 사용하며 과거 metadata에 포맷 필드가 없어도 동작해야 한다.
+- 광고 고지 문구는 법적·운영 요소로 유지하되 일반 본문의 format signature 문장·문단 수에서는 제외한다.
 - 성과 표본이 적을 때 특정 유형이 우수하거나 열등하다고 성급하게 결론 내리지 않는다.
 
 현재 `contentType`은 정확히 다음 9개 값 중 하나다.
@@ -175,6 +179,8 @@ AI 생성
 - `recentHookStyles`
 - `recentEndingStyles`
 - `recentProductIds`
+- `recentFormatSignatures`
+- `recentFormats`
 
 publishing context는 다음 허용 상태를 제공한다.
 

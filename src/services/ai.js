@@ -491,6 +491,59 @@ function normalizeProductList(
     : [];
 }
 
+function normalizeFormatForContext(
+  format
+) {
+  if (!format) {
+    return null;
+  }
+
+  return {
+    signature:
+      format.signature ||
+      null,
+
+    paragraphCount:
+      format.paragraphCount ??
+      null,
+
+    sentencePattern:
+      Array.isArray(
+        format.sentencePattern
+      )
+        ? format.sentencePattern
+        : [],
+
+    blankLineCount:
+      format.blankLineCount ??
+      null,
+
+    firstParagraphSingleSentence:
+      Boolean(
+        format.firstParagraphSingleSentence
+      ),
+
+    lastParagraphSingleSentence:
+      Boolean(
+        format.lastParagraphSingleSentence
+      ),
+
+    questionEnding:
+      Boolean(
+        format.questionEnding
+      ),
+
+    totalSentenceCount:
+      format.totalSentenceCount ??
+      null,
+
+    oneXOnePattern:
+      Boolean(
+        format.oneXOnePattern
+      ),
+  };
+}
+
 function buildAiContextData(
   context
 ) {
@@ -603,6 +656,11 @@ function buildAiContextData(
           context?.publishing
             ?.affiliateLinkAvailable
         ),
+
+      targetFormat:
+        context?.publishing
+          ?.targetFormat ||
+        null,
     },
 
     history: {
@@ -674,6 +732,22 @@ function buildAiContextData(
           context?.history
             ?.recentProductIds
         ),
+
+      recentFormatSignatures:
+        normalizeProductList(
+          context?.history
+            ?.recentFormatSignatures
+        ),
+
+      recentFormats:
+        normalizeProductList(
+          context?.history
+            ?.recentFormats
+        )
+          .map(
+            normalizeFormatForContext
+          )
+          .filter(Boolean),
     },
 
     products: {
@@ -761,7 +835,7 @@ function buildGenerationInput(
   const lines = [
     `작성 목표: ${topic}`,
     `기본 톤: ${tone}`,
-    "세 초안의 문장 구조와 도입부가 서로 겹치지 않게 작성하세요.",
+    "세 초안 모두 publishing.targetFormat 범위 안에서 작성하되 세부 표현과 도입부는 서로 겹치지 않게 작성하세요.",
     "각 초안의 text에는 실제 게시할 본문만 작성하세요.",
     "제품 링크나 추가 안내가 필요한 경우에만 firstComment를 작성하세요.",
     "첫 댓글이 필요하지 않으면 firstComment는 빈 문자열로 작성하세요.",
@@ -781,6 +855,8 @@ function buildGenerationInput(
       "todayQuestionCount를 참고해 질문형 마무리가 과도하게 반복되지 않게 하세요.",
       "todayProductConnectedCount와 todayAffiliateLinkCount를 참고해 제품 콘텐츠와 링크 사용을 조절하세요.",
       "recentProductIds를 참고해 최근 사용 제품의 반복을 피하세요.",
+      "publishing.targetFormat은 코드가 최근 포맷을 분석해 선택한 이번 글의 필수 문장·문단 구조입니다.",
+      "targetFormat.prompt와 patterns를 따르고 recentFormatSignatures 및 recentFormats와 같은 문단 패턴을 반복하지 마세요.",
       "제품 글을 작성할 때는 products의 실제 데이터만 사용하세요.",
       "제품 경험이 없거나 정보가 부족하면 일반 글을 작성하세요.",
       "affiliateLink가 비어 있거나 linkEnabled가 false라면 firstComment에 링크를 만들지 마세요.",
