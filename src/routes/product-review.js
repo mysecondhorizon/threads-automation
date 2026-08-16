@@ -30,10 +30,11 @@ export async function handleProductReviews(request, env) {
         listProductReviewCandidates(env),
       ]);
       return ok({
-        products: products.filter(isProductReviewEligible).map((product) => ({
+        products: products.map((product) => ({
           id: product.id,
           name: product.name,
           category: product.category || null,
+          eligible: isProductReviewEligible(product),
         })),
         candidates,
       });
@@ -41,8 +42,20 @@ export async function handleProductReviews(request, env) {
 
     if (request.method === "POST") {
       const body = await readJsonBody(request);
+      const requestedProductId = String(body?.productId || "").trim() || null;
+      const selectionMode =
+        body?.selectionMode === "direct" ||
+        (body?.selectionMode === undefined && requestedProductId)
+          ? "direct"
+          : "auto";
+      if (selectionMode === "direct" && !requestedProductId) {
+        throw new ProductReviewError(
+          "Direct selection requires a product.",
+          "product_review_product_required"
+        );
+      }
       const candidate = await generateProductReviewCandidate(env, {
-        productId: String(body?.productId || "").trim() || null,
+        productId: selectionMode === "direct" ? requestedProductId : null,
         source: "manual_product_test",
       });
       return ok({ candidate });

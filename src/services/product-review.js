@@ -58,7 +58,7 @@ export function isProductReviewEligible(product) {
   );
 }
 
-function selectProduct(products, candidates, requestedProductId) {
+export function selectProductForReview(products, candidates, requestedProductId) {
   const eligible = products.filter(isProductReviewEligible);
   if (requestedProductId) {
     const selected = eligible.find((product) => product.id === requestedProductId);
@@ -140,7 +140,7 @@ export async function generateProductReviewCandidate(
     readStore(env),
     buildThreadContext(env),
   ]);
-  const product = selectProduct(products, store.candidates, text(productId) || null);
+  const product = selectProductForReview(products, store.candidates, text(productId) || null);
   context.products = buildProductContext([product]);
   context.publishing.productConnectedAvailable = true;
   context.publishing.affiliateLinkAvailable = true;
