@@ -76,6 +76,7 @@ HTTP 수동 실행과 검수 게시도 같은 핵심 게시 계층을 사용한�
 - `src/services/thread-context.js`: 게시 이력, 제품, 성과 및 현재 사용 가능 정책을 다음 AI 요청의 context로 집계한다.
 - `src/services/analytics.js`: 게시 성과와 메타데이터별 그룹 성과를 계산한다.
 - `src/services/products.js`: 제품 데이터 저장과 조회를 담당한다. 미디어 저장소 역할을 맡기지 않는다.
+- `src/services/media.js`: 일반 및 제품 이미지가 공유하는 KV 기반 Media Library의 메타데이터 CRUD를 담당한다. R2 객체 CRUD는 수행하지 않는다.
 - `src/services/kv.js`: `THREADS_KV` 접근을 공통화한다.
 
 ## 프롬프트 책임과 콘텐츠 원칙
@@ -233,14 +234,14 @@ publishing context는 다음 허용 상태를 제공한다.
 - 이미지 사용 이력을 기록하여 최근 이미지 중복을 방지한다.
 - 업로드 시 MIME type, 파일 크기, 확장자, object key 및 관리자 인증을 검증한다.
 
-현재 저장소에는 `THREADS_MEDIA` R2 binding과 `src/services/media-storage.js` 공통 R2 객체 저장 계층이 있다. Media Library, 관리자 이미지 UI, `mediaId`/`imageAltText` AI 필드 및 IMAGE 게시 함수는 아직 없다. 이미지 작업을 시작할 때 이 상태를 다시 확인한다.
+현재 저장소에는 `THREADS_MEDIA` R2 binding, `src/services/media-storage.js` 공통 R2 객체 저장 계층과 `src/services/media.js` KV 기반 Media Library가 있다. 관리자 이미지 UI, `mediaId`/`imageAltText` AI 필드 및 IMAGE 게시 함수는 아직 없다. 이미지 작업을 시작할 때 이 상태를 다시 확인한다.
 
 ## 이미지 게시 로드맵
 
 기존 TEXT 기능을 보호하기 위해 다음 순서를 기본으로 한다. 각 단계는 가능한 한 독립적으로 검증하고 보고한 뒤 다음 단계로 넘어간다.
 
 1. [완료] `wrangler.jsonc` R2 binding 및 공통 media storage
-2. KV 기반 Media Library
+2. [완료] KV 기반 Media Library
 3. 관리자 이미지 업로드/조회/수정/비활성화 UI
 4. preview 페이지 이미지 표시 및 선택
 5. `threads.js` IMAGE 게시 지원
