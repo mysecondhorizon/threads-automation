@@ -143,7 +143,7 @@ export async function handleAutoPostPreviewPage(
         id="tone"
         name="tone"
         type="text"
-        value="40대 직장인의 현실적인 말투"
+        value="30대 중후반 직장인의 담백하고 현실적인 말투"
         style="
           width:100%;
           box-sizing:border-box;

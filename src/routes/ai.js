@@ -29,7 +29,7 @@ export async function handleGenerateDraft(request, env) {
 
   const tone = String(
     formData.get("tone") ||
-      "친근하고 통찰력 있는"
+      "30대 중후반 직장인의 담백하고 현실적인 말투"
   ).trim();
 
   if (!topic) {

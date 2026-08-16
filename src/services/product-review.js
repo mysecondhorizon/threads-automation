@@ -218,7 +218,7 @@ export async function generateProductReviewCandidate(
     "Keep the product experience body within 500 characters.",
   ].join(" ");
   context.publishing.requestedTone =
-    "A realistic Korean office worker in their 40s describing a natural moment of need.";
+    "A realistic Korean office worker in their mid-to-late 30s describing a natural moment of need without sounding like a reviewer or trend-chaser.";
 
   const generationOptions = {
     threshold: 0.62,

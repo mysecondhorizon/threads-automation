@@ -33,7 +33,7 @@ const DEFAULT_GOAL =
   "현재 시간과 최근 게시 성과를 반영한 Threads 게시글 1개를 작성한다.";
 
 const DEFAULT_TONE =
-  "40대 직장인의 현실적인 말투";
+  "30대 중후반 직장인의 담백하고 현실적인 말투";
 
 const SIMILARITY_THRESHOLD =
   0.62;

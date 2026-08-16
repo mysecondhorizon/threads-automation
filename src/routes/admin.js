@@ -166,8 +166,8 @@ export async function handleAdminPostPage(
       id="tone"
       style="width:100%;padding:12px;box-sizing:border-box;"
     >
-      <option value="친근하고 통찰력 있는">
-        친근하고 통찰력 있는
+      <option value="30대 중후반 직장인의 담백하고 현실적인 말투">
+        30대 중후반 직장인의 담백하고 현실적인 말투
       </option>
 
       <option value="전문적이고 신뢰감 있는">
