@@ -5,6 +5,8 @@ import {
   generateProductReviewCandidate,
   isProductReviewEligible,
   listProductReviewCandidates,
+  removePendingProductReviewCandidates,
+  removeProductReviewCandidate,
 } from "../services/product-review.js";
 import { ok, fail } from "../utils/response.js";
 
@@ -42,6 +44,18 @@ export async function handleProductReviews(request, env) {
 
     if (request.method === "POST") {
       const body = await readJsonBody(request);
+      if (body?.action === "remove_candidate") {
+        const candidate = await removeProductReviewCandidate(
+          env,
+          body.candidateId
+        );
+        return ok({ candidate });
+      }
+      if (body?.action === "remove_pending") {
+        return ok(
+          await removePendingProductReviewCandidates(env)
+        );
+      }
       const requestedProductId = String(body?.productId || "").trim() || null;
       const selectionMode =
         body?.selectionMode === "direct" ||

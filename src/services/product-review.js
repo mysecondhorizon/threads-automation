@@ -275,6 +275,57 @@ export async function getProductReviewCandidate(env, candidateId) {
   return candidate ? normalizeStoredProductReviewCandidate(candidate) : null;
 }
 
+export async function removeProductReviewCandidate(env, candidateId) {
+  const id = text(candidateId);
+  if (!id) {
+    throw new ProductReviewError(
+      "A product review candidate ID is required.",
+      "product_review_candidate_id_required"
+    );
+  }
+
+  const store = await readStore(env);
+  const candidate = store.candidates.find((item) => item.id === id) || null;
+  if (!candidate) {
+    throw new ProductReviewError(
+      "The product review candidate was not found.",
+      "product_review_candidate_not_found",
+      { candidateId: id }
+    );
+  }
+  if (candidate.status !== "pending_review") {
+    throw new ProductReviewError(
+      "Published product review candidates cannot be removed.",
+      "product_review_candidate_remove_forbidden",
+      { candidateId: id, status: candidate.status }
+    );
+  }
+
+  await writeStore(
+    env,
+    store.candidates.filter((item) => item.id !== id)
+  );
+  return normalizeStoredProductReviewCandidate(candidate);
+}
+
+export async function removePendingProductReviewCandidates(env) {
+  const store = await readStore(env);
+  const removed = store.candidates.filter(
+    (candidate) => candidate.status === "pending_review"
+  );
+  if (!removed.length) {
+    return { removedCount: 0 };
+  }
+
+  await writeStore(
+    env,
+    store.candidates.filter(
+      (candidate) => candidate.status !== "pending_review"
+    )
+  );
+  return { removedCount: removed.length };
+}
+
 function buildCandidateSnapshotProduct(candidate) {
   const snapshot = candidate?.productSnapshot || {};
   return {
