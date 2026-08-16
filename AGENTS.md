@@ -44,7 +44,7 @@ HTTP 수동 실행과 검수 게시도 같은 핵심 게시 계층을 사용한�
 
 - 일반 AUTO는 제품 데이터를 생성 context에서 제외하고 제품 관련 contentType, `productId`, `productConnected`, `affiliateLinkUsed`, `affiliateDisclosureRequired`가 생성되면 게시 전에 차단한다. 일일 자동 게시 한도는 4개다.
 - PRODUCT REVIEW cron은 사용 가능한 활성 제품으로 검수 후보를 KV에 저장할 뿐 Threads 게시 함수를 호출하지 않는다.
-- 제품 후보는 제품 정보, 광고 고지와 활성화된 제휴 링크가 실제 제품 데이터에 있을 때만 생성한다. 고지는 본문에, 실제 링크는 첫 댓글에만 둔다.
+- 제품 후보는 제품 정보, 광고 고지와 활성화된 제휴 링크가 실제 제품 데이터에 있을 때만 생성한다. 본문에는 순수 제품 경험만 두고, 저장된 고지와 실제 링크는 서버가 첫 댓글로 조립한다. PRODUCT REVIEW 첫 댓글에는 가능하면 Threads Topic `광고`를 적용한다.
 - 제품 후보의 실제 게시는 관리자 검수 버튼이 기존 reviewed publish 경로를 호출할 때만 수행한다. 이 경로는 `productId`를 유지하고 게시 로그의 `metadata.source`를 `manual_product_test`로 기록한다.
 - 수동 제품 테스트 게시는 KST 하루 1개로 제한해 AUTO 4개와 합쳐 하루 목표 최대 5개를 유지한다.
 
@@ -196,7 +196,8 @@ publishing context는 다음 허용 상태를 제공한다.
 
 - 제품 링크는 본문 `text`에 넣지 않는다.
 - 필요한 제품 링크는 `firstComment`에 넣는다.
-- 쿠팡파트너스 경제적 이해관계 고지가 필요하면 본문 `text`에 작성한다.
+- PRODUCT REVIEW의 쿠팡파트너스 경제적 이해관계 고지와 실제 링크는 AI 출력이 아니라 저장된 제품 snapshot에서 서버가 `${affiliateDisclosure}\n\n${affiliateLink}`로 조립해 `firstComment`에 넣는다.
+- PRODUCT REVIEW 첫 댓글은 `topic_tag=광고`를 요청한다. 명확한 Topic 컨테이너 오류에만 Topic 없이 같은 댓글을 재시도하고, reply publish 단계 실패 후에는 중복 방지를 위해 자동 재생성하지 않는다.
 - 확인된 경험 정보가 없는 제품을 실제 사용 후기처럼 작성하지 않는다.
 - 제품 정보가 부족하거나 사실성을 보장할 수 없으면 일반 생활 콘텐츠로 전환한다.
 - 제품 콘텐츠와 일반 콘텐츠 모두 향후 같은 Media Library를 사용한다.

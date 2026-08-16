@@ -27,6 +27,7 @@ export async function publishFirstComment(
     userId,
     postId,
     firstComment,
+    topicTag = null,
   }
 ) {
   const text =
@@ -44,6 +45,15 @@ export async function publishFirstComment(
 
       text:
         "",
+
+      topicTag:
+        null,
+
+      topicApplied:
+        null,
+
+      topicError:
+        null,
     };
   }
 
@@ -52,7 +62,10 @@ export async function publishFirstComment(
       accessToken,
       userId,
       postId,
-      text
+      text,
+      {
+        topicTag,
+      }
     );
 
   return {
@@ -63,5 +76,14 @@ export async function publishFirstComment(
       result.replyId,
 
     text,
+
+    topicTag:
+      result.topicTag,
+
+    topicApplied:
+      result.topicApplied,
+
+    topicError:
+      result.topicError,
   };
 }

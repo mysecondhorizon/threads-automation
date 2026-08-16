@@ -4,6 +4,32 @@ import {
   getJson,
 } from "./kv.js";
 
+function normalizeFirstCommentMetadata(
+  metadata
+) {
+  const firstComment =
+    metadata?.firstComment ||
+    {};
+
+  const topicTag =
+    firstComment.topicTag ||
+    metadata?.firstCommentTopicTag ||
+    null;
+
+  return {
+    topicTag,
+
+    topicApplied:
+      typeof firstComment.topicApplied === "boolean"
+        ? firstComment.topicApplied
+        : null,
+
+    topicError:
+      firstComment.topicError ||
+      null,
+  };
+}
+
 function normalizePostMetadata(
   metadata
 ) {
@@ -64,6 +90,11 @@ function normalizePostMetadata(
         metadata
           ?.affiliateDisclosureRequired
       ),
+
+    firstComment:
+      normalizeFirstCommentMetadata(
+        metadata
+      ),
   };
 }
 
@@ -106,6 +137,60 @@ export async function logPostSuccess(
         ),
     }
   );
+
+  return key;
+}
+
+export async function updatePostLogFirstComment(
+  env,
+  key,
+  result
+) {
+  const log =
+    await getJson(
+      env,
+      key
+    );
+
+  if (!log) {
+    return false;
+  }
+
+  await putJson(
+    env,
+    key,
+    {
+      ...log,
+
+      updated_at:
+        new Date().toISOString(),
+
+      metadata:
+        normalizePostMetadata({
+          ...log.metadata,
+
+          firstComment: {
+            topicTag:
+              result?.topicTag ||
+              log.metadata
+                ?.firstComment
+                ?.topicTag ||
+              null,
+
+            topicApplied:
+              typeof result?.topicApplied === "boolean"
+                ? result.topicApplied
+                : null,
+
+            topicError:
+              result?.topicError ||
+              null,
+          },
+        }),
+    }
+  );
+
+  return true;
 }
 
 export async function logPostFailure(

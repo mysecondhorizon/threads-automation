@@ -657,6 +657,17 @@ function buildAiContextData(
             ?.affiliateLinkAvailable
         ),
 
+      serverManagedAffiliateComment:
+        Boolean(
+          context?.publishing
+            ?.serverManagedAffiliateComment
+        ),
+
+      firstCommentTopicTag:
+        context?.publishing
+          ?.firstCommentTopicTag ||
+        null,
+
       targetFormat:
         context?.publishing
           ?.targetFormat ||

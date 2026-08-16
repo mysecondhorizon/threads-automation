@@ -237,7 +237,8 @@ function normalizeReviewedError(
 
 function normalizeFirstCommentResult(
   firstComment,
-  result
+  result,
+  topicTag = null
 ) {
   return {
     requested:
@@ -262,6 +263,20 @@ function normalizeFirstCommentResult(
     error:
       result?.error ||
       null,
+
+    topicTag:
+      result?.topicTag ||
+      topicTag ||
+      null,
+
+    topicApplied:
+      typeof result?.topicApplied === "boolean"
+        ? result.topicApplied
+        : null,
+
+    topicError:
+      result?.topicError ||
+      null,
   };
 }
 
@@ -281,6 +296,7 @@ export async function publishReviewedAutoPost(
     affiliateLinkUsed = false,
     affiliateDisclosureRequired = false,
     firstComment = "",
+    firstCommentTopicTag = null,
     source = "reviewed_preview",
     candidateId = null,
   }
@@ -370,6 +386,11 @@ export async function publishReviewedAutoPost(
       Boolean(
         affiliateDisclosureRequired
       ),
+
+    firstCommentTopicTag:
+      firstCommentTopicTag
+        ? String(firstCommentTopicTag).trim() || null
+        : null,
   };
 
   let normalizedText =
@@ -502,6 +523,15 @@ export async function publishReviewedAutoPost(
 
           error:
             null,
+
+          topicTag:
+            metadata.firstCommentTopicTag,
+
+          topicApplied:
+            null,
+
+          topicError:
+            null,
         },
       }
     );
@@ -522,6 +552,9 @@ export async function publishReviewedAutoPost(
         firstComment:
           normalizedFirstComment,
 
+        firstCommentTopicTag:
+          metadata.firstCommentTopicTag,
+
         metadata,
       }
     );
@@ -529,7 +562,8 @@ export async function publishReviewedAutoPost(
     const finalFirstComment =
       normalizeFirstCommentResult(
         normalizedFirstComment,
-        firstCommentResult
+        firstCommentResult,
+        metadata.firstCommentTopicTag
       );
 
     await updateExecution(

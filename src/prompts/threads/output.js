@@ -111,6 +111,10 @@ text에 다음 내용을 포함하지 않는다.
 경제적 이해관계 고지 문구는
 제품 연결 규칙에 따라 필요한 경우 text 안에 작성할 수 있다.
 
+publishing.serverManagedAffiliateComment가 true이면
+text와 firstComment에 광고 고지, 제휴 링크, URL을 작성하지 않고
+firstComment를 빈 문자열로 반환한다.
+
 본문은 500자를 초과하지 않는다.
 
 입력되지 않은 사실은 추측하지 않는다.

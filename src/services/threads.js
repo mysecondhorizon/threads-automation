@@ -3,7 +3,7 @@ import { config } from "../config.js";
 export class ThreadsApiError extends Error {
   constructor(
     step,
-    detailspublishTextPost
+    details
   ) {
     super(
       `Threads API failed at ${step}`
@@ -66,6 +66,7 @@ async function createTextContainer(
   text,
   {
     replyToId = null,
+    topicTag = null,
   } = {}
 ) {
   const body =
@@ -83,6 +84,13 @@ async function createTextContainer(
     body.set(
       "reply_to_id",
       replyToId
+    );
+  }
+
+  if (topicTag) {
+    body.set(
+      "topic_tag",
+      topicTag
     );
   }
 
@@ -123,6 +131,55 @@ async function createTextContainer(
     containerId:
       data.id,
   };
+}
+
+function serializeTopicError(
+  error
+) {
+  return {
+    name:
+      error?.name ||
+      "ThreadsApiError",
+
+    message:
+      error?.message ||
+      String(error),
+
+    step:
+      error?.step ||
+      null,
+
+    details:
+      error?.details ||
+      null,
+  };
+}
+
+function isExplicitTopicContainerError(
+  error
+) {
+  if (
+    !(error instanceof ThreadsApiError) ||
+    error.step !== "create_reply_container"
+  ) {
+    return false;
+  }
+
+  let details = "";
+
+  try {
+    details = JSON.stringify(
+      error.details || {}
+    );
+  } catch {
+    details = String(
+      error.details || ""
+    );
+  }
+
+  return /topic[_\s-]*tag|topic\s+tag/iu.test(
+    details
+  );
 }
 
 async function publishContainer(
@@ -482,7 +539,10 @@ export async function publishTextReply(
   accessToken,
   userId,
   replyToId,
-  text
+  text,
+  {
+    topicTag = null,
+  } = {}
 ) {
   const normalizedReplyToId =
     String(
@@ -492,6 +552,11 @@ export async function publishTextReply(
   const normalizedText =
     normalizeThreadsText(
       text
+    );
+
+  const normalizedTopicTag =
+    normalizeThreadsText(
+      topicTag
     );
 
   if (!normalizedReplyToId) {
@@ -514,33 +579,107 @@ export async function publishTextReply(
     );
   }
 
-  const {
-    containerId,
-  } = await createTextContainer(
-    accessToken,
-    userId,
-    normalizedText,
-    {
-      replyToId:
-        normalizedReplyToId,
-    }
-  );
+  let containerId;
 
-  const {
-    postId,
-  } = await publishContainer(
-    accessToken,
-    userId,
-    containerId,
-    {
-      step:
-        "publish_reply",
+  let topicApplied =
+    normalizedTopicTag
+      ? true
+      : null;
+
+  let topicError =
+    null;
+
+  try {
+    ({
+      containerId,
+    } = await createTextContainer(
+      accessToken,
+      userId,
+      normalizedText,
+      {
+        replyToId:
+          normalizedReplyToId,
+
+        topicTag:
+          normalizedTopicTag ||
+          null,
+      }
+    ));
+  } catch (error) {
+    if (
+      !normalizedTopicTag ||
+      !isExplicitTopicContainerError(
+        error
+      )
+    ) {
+      throw error;
     }
-  );
+
+    topicApplied =
+      false;
+
+    topicError =
+      serializeTopicError(
+        error
+      );
+
+    ({
+      containerId,
+    } = await createTextContainer(
+      accessToken,
+      userId,
+      normalizedText,
+      {
+        replyToId:
+          normalizedReplyToId,
+      }
+    ));
+  }
+
+  let postId;
+
+  try {
+    ({
+      postId,
+    } = await publishContainer(
+      accessToken,
+      userId,
+      containerId,
+      {
+        step:
+          "publish_reply",
+      }
+    ));
+  } catch (error) {
+    if (
+      normalizedTopicTag &&
+      error &&
+      typeof error === "object"
+    ) {
+      error.topicTag =
+        normalizedTopicTag;
+
+      error.topicApplied =
+        false;
+
+      error.topicError =
+        topicError;
+    }
+
+    throw error;
+  }
 
   return {
     containerId,
     replyId:
       postId,
+
+    topicTag:
+      normalizedTopicTag ||
+      null,
+
+    topicApplied,
+
+    topicError,
   };
 }

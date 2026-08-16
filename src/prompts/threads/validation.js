@@ -13,6 +13,7 @@ export const THREADS_VALIDATION_PROMPT = `
 6. 제품이 등장한다면 제품 규칙을 지켰는가.
 7. 제품 경험 상태보다 강한 표현을 만들지 않았는가.
 8. 링크와 광고 고지 위치가 제품 규칙과 일치하는가.
+   publishing.serverManagedAffiliateComment가 true이면 text와 AI firstComment에 둘 다 없는가.
 9. 질문형 마무리가 과도하게 반복되지 않았는가.
 10. 문장이 지나치게 길거나 설명조가 되지 않았는가.
 11. publishing.targetFormat의 문단 수와 문장 패턴을 지켰는가.

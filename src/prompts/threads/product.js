@@ -144,7 +144,12 @@ export const THREADS_PRODUCT_PROMPT = `
 쿠팡파트너스 링크를 사용하는 글에는
 경제적 이해관계를 알리는 고지 문구가 반드시 필요하다.
 
-광고 고지는 본문 text 안에 작성한다.
+기본적으로 광고 고지는 본문 text 안에 작성한다.
+
+단, publishing.serverManagedAffiliateComment가 true이면
+서버가 저장된 제품 데이터로 고지와 링크를 첫 댓글에 직접 조립한다.
+이 경우 AI는 text와 firstComment 어디에도 광고 고지, 링크, URL을 작성하지 않고
+firstComment를 빈 문자열로 반환한다.
 
 본문의 흐름을 심하게 깨지 않으면서도
 독자가 쉽게 확인할 수 있는 자연스럽고 명확한 위치에 둔다.
@@ -173,7 +178,7 @@ export const THREADS_PRODUCT_PROMPT = `
 2. 선택 기준 또는 실제 사용 이유 1~2개
 3. 쿠팡파트너스 링크
 
-경제적 이해관계 고지 문구는
+publishing.serverManagedAffiliateComment가 false일 때 경제적 이해관계 고지 문구는
 본문에 작성하므로 firstComment에서 반복하지 않는다.
 
 firstComment에서 직접적인 구매 명령을 하지 않는다.

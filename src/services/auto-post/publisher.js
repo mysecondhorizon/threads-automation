@@ -5,6 +5,7 @@ import {
 
 import {
   logPostSuccess,
+  updatePostLogFirstComment,
 } from "../logger.js";
 
 import {
@@ -53,6 +54,7 @@ async function safelyPublishFirstComment(
     userId,
     postId,
     firstComment,
+    topicTag,
   }
 ) {
   try {
@@ -61,6 +63,7 @@ async function safelyPublishFirstComment(
       userId,
       postId,
       firstComment,
+      topicTag,
     });
   } catch (error) {
     const serializedError =
@@ -92,6 +95,21 @@ async function safelyPublishFirstComment(
 
       error:
         serializedError,
+
+      topicTag:
+        topicTag ||
+        null,
+
+      topicApplied:
+        typeof error?.topicApplied === "boolean"
+          ? error.topicApplied
+          : topicTag
+            ? false
+            : null,
+
+      topicError:
+        error?.topicError ||
+        null,
     };
   }
 }
@@ -102,6 +120,7 @@ export async function publishAutoPost(
     accessToken,
     text,
     firstComment = "",
+    firstCommentTopicTag = null,
     metadata = null,
   }
 ) {
@@ -117,13 +136,20 @@ export async function publishAutoPost(
       text
     );
 
-  await logPostSuccess(
+  const logKey =
+    await logPostSuccess(
     env,
     profile.username,
     publishResult.postId,
     text,
-    metadata
-  );
+    {
+      ...metadata,
+
+      firstCommentTopicTag:
+        firstCommentTopicTag ||
+        null,
+    }
+    );
 
   const firstCommentResult =
     await safelyPublishFirstComment({
@@ -136,7 +162,31 @@ export async function publishAutoPost(
         publishResult.postId,
 
       firstComment,
+
+      topicTag:
+        firstCommentTopicTag,
     });
+
+  try {
+    await updatePostLogFirstComment(
+      env,
+      logKey,
+      firstCommentResult
+    );
+  } catch (error) {
+    console.error(
+      "Post log first comment metadata update failed",
+      {
+        postId:
+          publishResult.postId,
+
+        error:
+          serializeCommentError(
+            error
+          ),
+      }
+    );
+  }
 
   return {
     profile,

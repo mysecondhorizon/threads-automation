@@ -4,12 +4,14 @@ import { buildThreadContext } from "./thread-context.js";
 import { generateDistinctThreadPost } from "./post-regenerator.js";
 import { validateAutoPostText, validateAutoPostPolicy } from "./auto-post-validator.js";
 import { getRecentPostLogs } from "./logger.js";
+import { analyzePostFormat, stripAffiliateDisclosure } from "./post-format.js";
 
 const STORE_KEY = "product_review_candidates";
 const MAX_CANDIDATES = 50;
 const SEOUL_TIME_ZONE = "Asia/Seoul";
 
 export const MANUAL_PRODUCT_TEST_SOURCE = "manual_product_test";
+export const PRODUCT_REVIEW_TOPIC_TAG = "광고";
 
 export class ProductReviewError extends Error {
   constructor(message, code = "product_review_failed", details = null) {
@@ -91,11 +93,65 @@ export function selectProductForReview(products, candidates, requestedProductId)
 }
 
 function removeExactValue(value, target) {
-  return text(value).split(target).join("").trim();
+  const normalizedTarget = text(target);
+  return normalizedTarget
+    ? text(value).split(normalizedTarget).join("").trim()
+    : text(value);
 }
 
 function removeUrls(value) {
-  return text(value).replace(/https?:\/\/\S+/gi, "").replace(/[ \t]+\n/g, "\n").trim();
+  return text(value)
+    .replace(
+      /https?:\/\/\S+|www\.\S+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?/giu,
+      ""
+    )
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, "\n\n")
+    .trim();
+}
+
+function removeUnexpectedAffiliateDisclosure(value) {
+  return text(value)
+    .replace(
+      /(?:이|본)\s*포스팅은[^\n]*쿠팡\s*파트너스[^\n]*(?:수수료|제공받)[^\n]*/gu,
+      ""
+    )
+    .replace(
+      /쿠팡\s*파트너스[^\n]*(?:수수료|경제적\s*이해관계|제공받)[^\n]*/gu,
+      ""
+    );
+}
+
+function buildProductReviewAiContext(product) {
+  const context = buildProductContext([product]);
+  return {
+    ...context,
+    availableProducts: context.availableProducts.map((item) => ({
+      ...item,
+      linkEnabled: false,
+    })),
+    productDetails: context.productDetails.map((item) => ({
+      ...item,
+      affiliateLink: "",
+      affiliateDisclosure: "",
+      linkEnabled: false,
+    })),
+  };
+}
+
+function sanitizeProductReviewBody(value, product) {
+  return removeUrls(
+    removeUnexpectedAffiliateDisclosure(
+      removeExactValue(
+        stripAffiliateDisclosure(value, [product.affiliateDisclosure]),
+        product.affiliateLink
+      )
+    )
+  );
+}
+
+function buildServerManagedFirstComment(product) {
+  return `${text(product.affiliateDisclosure)}\n\n${text(product.affiliateLink)}`;
 }
 
 export function buildProductReviewPayload(generatedPost, product) {
@@ -105,14 +161,13 @@ export function buildProductReviewPayload(generatedPost, product) {
       "product_review_product_unavailable"
     );
   }
-  const disclosure = text(product.affiliateDisclosure);
-  let body = removeUrls(
-    removeExactValue(generatedPost?.body ?? generatedPost?.text, product.affiliateLink)
+  const body = sanitizeProductReviewBody(
+    generatedPost?.body ?? generatedPost?.text,
+    product
   );
   if (!body) {
     throw new ProductReviewError("Generated product text is empty.", "product_review_text_empty");
   }
-  if (!body.includes(disclosure)) body = `${body}\n\n${disclosure}`.trim();
   const validation = validateAutoPostText(body);
   return {
     text: validation.text,
@@ -127,13 +182,20 @@ export function buildProductReviewPayload(generatedPost, product) {
     productConnected: true,
     affiliateLinkUsed: true,
     affiliateDisclosureRequired: true,
-    firstComment: `${text(product.name)}\n${text(product.affiliateLink)}`,
+    firstComment: buildServerManagedFirstComment(product),
+    firstCommentTopicTag: PRODUCT_REVIEW_TOPIC_TAG,
   };
 }
 
 export async function generateProductReviewCandidate(
   env,
-  { productId = null, source = "cron_product_review", cron = null, scheduledTime = null } = {}
+  {
+    productId = null,
+    source = "cron_product_review",
+    cron = null,
+    scheduledTime = null,
+    generatePost = null,
+  } = {}
 ) {
   const [products, store, context] = await Promise.all([
     getActiveProducts(env),
@@ -141,25 +203,30 @@ export async function generateProductReviewCandidate(
     buildThreadContext(env),
   ]);
   const product = selectProductForReview(products, store.candidates, text(productId) || null);
-  context.products = buildProductContext([product]);
+  context.products = buildProductReviewAiContext(product);
   context.publishing.productConnectedAvailable = true;
   context.publishing.affiliateLinkAvailable = true;
   context.publishing.linkAvailable = true;
+  context.publishing.serverManagedAffiliateComment = true;
+  context.publishing.firstCommentTopicTag = PRODUCT_REVIEW_TOPIC_TAG;
   context.publishing.goal = [
     `Create one product-connected review candidate for product ID ${product.id}.`,
     "Use only facts and experience supplied in products data.",
     "Set productConnected, affiliateLinkUsed, and affiliateDisclosureRequired to true.",
-    "Put the affiliate disclosure in the body and the affiliate link only in firstComment.",
-    "Keep the complete body including disclosure within 500 characters.",
+    "Write only the product experience in text. Do not write an affiliate disclosure, URL, or affiliate link.",
+    "Return firstComment as an empty string because the server will build it from stored product data.",
+    "Keep the product experience body within 500 characters.",
   ].join(" ");
   context.publishing.requestedTone =
     "A realistic Korean office worker in their 40s describing a natural moment of need.";
 
-  const generation = await generateDistinctThreadPost(env, context, {
+  const generationOptions = {
     threshold: 0.62,
     maxRecentPosts: 20,
     maxAttempts: 2,
-  });
+  };
+  if (typeof generatePost === "function") generationOptions.generatePost = generatePost;
+  const generation = await generateDistinctThreadPost(env, context, generationOptions);
   const payload = buildProductReviewPayload(generation.generatedPost, product);
   validateAutoPostPolicy(payload, context);
   const now = new Date().toISOString();
@@ -182,7 +249,7 @@ export async function generateProductReviewCandidate(
       attempts: generation.attempts,
       regenerated: generation.regenerated,
       highestSimilarity: generation.similarity?.highestScore ?? null,
-      formatSignature: generation.format?.signature || null,
+      formatSignature: analyzePostFormat(payload.text).signature,
       targetFormatId: generation.targetFormat?.id || null,
     },
     createdAt: now,
@@ -196,13 +263,46 @@ export async function generateProductReviewCandidate(
 
 export async function listProductReviewCandidates(env, limit = 30) {
   const store = await readStore(env);
-  return store.candidates.slice(0, Math.max(1, Math.min(Number(limit || 30), MAX_CANDIDATES)));
+  return store.candidates
+    .slice(0, Math.max(1, Math.min(Number(limit || 30), MAX_CANDIDATES)))
+    .map(normalizeStoredProductReviewCandidate);
 }
 
 export async function getProductReviewCandidate(env, candidateId) {
   const id = text(candidateId);
   if (!id) return null;
-  return (await readStore(env)).candidates.find((candidate) => candidate.id === id) || null;
+  const candidate = (await readStore(env)).candidates.find((item) => item.id === id) || null;
+  return candidate ? normalizeStoredProductReviewCandidate(candidate) : null;
+}
+
+function buildCandidateSnapshotProduct(candidate) {
+  const snapshot = candidate?.productSnapshot || {};
+  return {
+    active: true,
+    linkEnabled: true,
+    id: candidate?.productId,
+    name: snapshot.name,
+    description: candidate?.topic || "product review",
+    affiliateLink: snapshot.affiliateLink,
+    affiliateDisclosure: snapshot.affiliateDisclosure,
+  };
+}
+
+function normalizeStoredProductReviewCandidate(candidate) {
+  try {
+    return {
+      ...candidate,
+      ...buildProductReviewPayload(
+        {
+          ...candidate,
+          body: candidate.text,
+        },
+        buildCandidateSnapshotProduct(candidate)
+      ),
+    };
+  } catch {
+    return candidate;
+  }
 }
 
 export function prepareProductReviewPublishInput(candidate, input = {}) {
@@ -212,16 +312,7 @@ export function prepareProductReviewPublishInput(candidate, input = {}) {
       "product_review_candidate_unavailable"
     );
   }
-  const snapshot = candidate.productSnapshot || {};
-  const product = {
-    active: true,
-    linkEnabled: true,
-    id: candidate.productId,
-    name: snapshot.name,
-    description: candidate.topic || "product review",
-    affiliateLink: snapshot.affiliateLink,
-    affiliateDisclosure: snapshot.affiliateDisclosure,
-  };
+  const product = buildCandidateSnapshotProduct(candidate);
   const payload = buildProductReviewPayload({
     ...candidate,
     body: input.text === undefined ? candidate.text : input.text,
@@ -239,7 +330,12 @@ export function prepareProductReviewPublishInput(candidate, input = {}) {
   };
 }
 
-export async function markProductReviewPublished(env, candidateId, postId) {
+export async function markProductReviewPublished(
+  env,
+  candidateId,
+  postId,
+  firstCommentResult = null
+) {
   const store = await readStore(env);
   const index = store.candidates.findIndex((candidate) => candidate.id === candidateId);
   if (index < 0) return null;
@@ -248,6 +344,19 @@ export async function markProductReviewPublished(env, candidateId, postId) {
     ...store.candidates[index],
     status: "published",
     postId,
+    firstCommentResult: firstCommentResult
+      ? {
+          published: Boolean(firstCommentResult.published),
+          replyId: firstCommentResult.replyId || null,
+          topicTag: firstCommentResult.topicTag || null,
+          topicApplied:
+            typeof firstCommentResult.topicApplied === "boolean"
+              ? firstCommentResult.topicApplied
+              : null,
+          topicError: firstCommentResult.topicError || null,
+          error: firstCommentResult.error || null,
+        }
+      : null,
     publishedAt: now,
     updatedAt: now,
   };

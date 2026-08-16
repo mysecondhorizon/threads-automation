@@ -250,7 +250,8 @@ export async function handlePublishReviewedAutoPost(
       await markProductReviewPublished(
         env,
         productReviewCandidate.id,
-        result.post_id
+        result.post_id,
+        result.firstComment
       );
     }
 
