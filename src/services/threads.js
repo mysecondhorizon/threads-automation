@@ -24,11 +24,29 @@ async function readThreadsResponse(
   response,
   step
 ) {
-  let data;
+  const contentType =
+    response.headers.get(
+      "content-type"
+    ) || null;
+
+  const traceHeaders = {};
+
+  for (const [name, value] of
+    response.headers.entries()) {
+    if (
+      /^(x-fb-|x-request-id$|traceparent$|tracestate$)/iu.test(
+        name
+      )
+    ) {
+      traceHeaders[name] = value;
+    }
+  }
+
+  let rawBody;
 
   try {
-    data =
-      await response.json();
+    rawBody =
+      await response.text();
   } catch (error) {
     throw new ThreadsApiError(
       step,
@@ -38,6 +56,53 @@ async function readThreadsResponse(
 
         statusText:
           response.statusText,
+
+        contentType,
+
+        traceHeaders,
+
+        rawBody:
+          null,
+
+        message:
+          "Threads API response body could not be read",
+
+        cause:
+          error instanceof Error
+            ? error.message
+            : String(error),
+      }
+    );
+  }
+
+  const responseBodyKind =
+    rawBody.trim()
+      ? "invalid_json"
+      : "empty";
+
+  let data;
+
+  try {
+    data = JSON.parse(
+      rawBody
+    );
+  } catch (error) {
+    throw new ThreadsApiError(
+      step,
+      {
+        status:
+          response.status,
+
+        statusText:
+          response.statusText,
+
+        contentType,
+
+        traceHeaders,
+
+        rawBody,
+
+        responseBodyKind,
 
         message:
           "Threads API returned an invalid JSON response",
@@ -179,6 +244,23 @@ function isExplicitTopicContainerError(
 
   return /topic[_\s-]*tag|topic\s+tag/iu.test(
     details
+  );
+}
+
+function isTopicFallbackResponseError(
+  error
+) {
+  if (
+    !(error instanceof ThreadsApiError) ||
+    error.step !== "create_reply_container" ||
+    Number(error.details?.status) !== 500
+  ) {
+    return false;
+  }
+
+  return (
+    error.details?.responseBodyKind === "empty" ||
+    error.details?.responseBodyKind === "invalid_json"
   );
 }
 
@@ -608,8 +690,13 @@ export async function publishTextReply(
   } catch (error) {
     if (
       !normalizedTopicTag ||
-      !isExplicitTopicContainerError(
-        error
+      !(
+        isExplicitTopicContainerError(
+          error
+        ) ||
+        isTopicFallbackResponseError(
+          error
+        )
       )
     ) {
       throw error;
