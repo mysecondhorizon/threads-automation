@@ -12,6 +12,12 @@
       "id": "50e4051bef5048189637a5428fe16a80"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "THREADS_MEDIA",
+      "bucket_name": "threads-media"
+    }
+  ],
   "triggers": {
     "crons": [
       "10 23 * * *",

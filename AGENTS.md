@@ -233,13 +233,13 @@ publishing context는 다음 허용 상태를 제공한다.
 - 이미지 사용 이력을 기록하여 최근 이미지 중복을 방지한다.
 - 업로드 시 MIME type, 파일 크기, 확장자, object key 및 관리자 인증을 검증한다.
 
-현재 저장소에는 `THREADS_MEDIA` R2 binding, Media Library, 관리자 이미지 UI, `mediaId`/`imageAltText` AI 필드 및 IMAGE 게시 함수가 없다. 이미지 작업을 시작할 때 이 상태를 다시 확인한다.
+현재 저장소에는 `THREADS_MEDIA` R2 binding과 `src/services/media-storage.js` 공통 R2 객체 저장 계층이 있다. Media Library, 관리자 이미지 UI, `mediaId`/`imageAltText` AI 필드 및 IMAGE 게시 함수는 아직 없다. 이미지 작업을 시작할 때 이 상태를 다시 확인한다.
 
 ## 이미지 게시 로드맵
 
 기존 TEXT 기능을 보호하기 위해 다음 순서를 기본으로 한다. 각 단계는 가능한 한 독립적으로 검증하고 보고한 뒤 다음 단계로 넘어간다.
 
-1. `wrangler.jsonc` R2 binding 및 공통 media storage
+1. [완료] `wrangler.jsonc` R2 binding 및 공통 media storage
 2. KV 기반 Media Library
 3. 관리자 이미지 업로드/조회/수정/비활성화 UI
 4. preview 페이지 이미지 표시 및 선택
