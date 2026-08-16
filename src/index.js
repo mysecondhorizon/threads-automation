@@ -27,6 +27,17 @@ import {
 } from "./routes/products.js";
 
 import {
+  handleMediaManagementPage,
+} from "./routes/media-management-page.js";
+
+import {
+  handleMediaLibrary,
+  handleMediaBatchUpload,
+  handleContentPool,
+  handleWeeklyInventory,
+} from "./routes/media-management.js";
+
+import {
   handleScheduleStatus,
 } from "./routes/schedule-status.js";
 
@@ -251,6 +262,68 @@ export default {
       return handleProducts(
         request,
         env
+      );
+    }
+
+    if (
+      pathname === "/admin/media-page" &&
+      method === "GET"
+    ) {
+      return handleMediaManagementPage(
+        request,
+        env
+      );
+    }
+
+    if (
+      pathname === "/admin/media" &&
+      (
+        method === "GET" ||
+        method === "PATCH" ||
+        method === "DELETE"
+      )
+    ) {
+      return handleMediaLibrary(
+        request,
+        env,
+        url
+      );
+    }
+
+    if (
+      pathname === "/admin/media/batch" &&
+      method === "POST"
+    ) {
+      return handleMediaBatchUpload(
+        request,
+        env
+      );
+    }
+
+    if (
+      pathname === "/admin/content-pool" &&
+      (
+        method === "GET" ||
+        method === "POST" ||
+        method === "PATCH" ||
+        method === "DELETE"
+      )
+    ) {
+      return handleContentPool(
+        request,
+        env,
+        url
+      );
+    }
+
+    if (
+      pathname === "/admin/media-inventory" &&
+      method === "GET"
+    ) {
+      return handleWeeklyInventory(
+        request,
+        env,
+        url
       );
     }
 

@@ -77,6 +77,9 @@ HTTP 수동 실행과 검수 게시도 같은 핵심 게시 계층을 사용한�
 - `src/services/analytics.js`: 게시 성과와 메타데이터별 그룹 성과를 계산한다.
 - `src/services/products.js`: 제품 데이터 저장과 조회를 담당한다. 미디어 저장소 역할을 맡기지 않는다.
 - `src/services/media.js`: 일반 및 제품 이미지가 공유하는 KV 기반 Media Library의 메타데이터 CRUD를 담당한다. R2 객체 CRUD는 수행하지 않는다.
+- `src/services/media-batch.js`: 여러 이미지의 R2 업로드, Media Library 일괄 등록, Content Pool 초기 등록과 실패 시 R2 정리를 조정한다.
+- `src/services/content-pool.js`: Cron이 향후 소비할 일반/제품 콘텐츠 재고의 CRUD, 가용성 판정, 후보 조회와 사용 횟수 기록을 담당한다.
+- `src/services/weekly-inventory.js`: 사용 가능한 미디어·제품·Content Pool과 예상 게시 횟수를 비교해 주간 커버리지를 계산한다.
 - `src/services/kv.js`: `THREADS_KV` 접근을 공통화한다.
 
 ## 프롬프트 책임과 콘텐츠 원칙
@@ -231,27 +234,38 @@ publishing context는 다음 허용 상태를 제공한다.
 - 향후 AI 결과의 후보 필드는 `mediaType: TEXT | IMAGE`, `mediaId`, `imageAltText`다.
 - IMAGE 선택이나 조회가 실패했을 때 기존 TEXT 게시를 위험하게 자동 변환하지 않는다. fallback 정책은 구현 단계에서 명시적으로 정하고 로그에 남긴다.
 - 외부에서 Threads가 접근할 이미지 URL의 공개 방식, 수명 및 보안을 구현 전에 확인한다.
+- R2 bucket은 private으로 유지하고 외부 이미지 호스팅을 사용하지 않는다.
+- 공개 이미지는 현재 Worker의 `/media/{mediaId}` endpoint가 Media Library의 `objectKey`를 조회한 뒤 `THREADS_MEDIA` 객체를 전달하는 방식으로 제공한다.
+- 공개 URL에 R2 `objectKey`를 직접 넣지 않고 `mediaId`만 사용한다. `objectKey`와 public image URL은 저장 및 책임을 계속 분리한다.
+- public base URL은 현재 workers.dev origin을 사용할 수 있어야 하며, 향후 custom domain으로 바꿀 때 미디어 레코드나 objectKey를 마이그레이션하지 않도록 요청 origin 또는 환경 설정으로 조합한다.
+- 특정 workers.dev 주소를 Media Library 레코드에 고정 저장하지 않는다. `imageUrl`은 nullable을 유지하고 필요 시 현재 public base URL과 `mediaId`로 해석한다.
 - 이미지 사용 이력을 기록하여 최근 이미지 중복을 방지한다.
 - 업로드 시 MIME type, 파일 크기, 확장자, object key 및 관리자 인증을 검증한다.
 
-현재 저장소에는 `THREADS_MEDIA` R2 binding, `src/services/media-storage.js` 공통 R2 객체 저장 계층과 `src/services/media.js` KV 기반 Media Library가 있다. 관리자 이미지 UI, `mediaId`/`imageAltText` AI 필드 및 IMAGE 게시 함수는 아직 없다. 이미지 작업을 시작할 때 이 상태를 다시 확인한다.
+현재 저장소에는 `THREADS_MEDIA` R2 binding, 공통 R2 저장 계층, KV Media Library, batch upload, Content Pool, 주간 재고 계산과 기능 중심 관리자 UI가 있다. `mediaId`/`imageAltText` AI 필드, Cron 후보 선택 연결 및 IMAGE 게시 함수는 아직 없다. 이미지 작업을 시작할 때 이 상태를 다시 확인한다.
 
-## 이미지 게시 로드맵
+## 대량 운영 이미지 게시 로드맵
 
-기존 TEXT 기능을 보호하기 위해 다음 순서를 기본으로 한다. 각 단계는 가능한 한 독립적으로 검증하고 보고한 뒤 다음 단계로 넘어간다.
+목표는 일반 사진, 제품 사진과 제품 자원을 미리 대량 적재하고 Cron이 며칠에서 일주일 동안 안전하게 소비하는 것이다. 기존 TEXT 기능을 보호하며 각 단계를 독립적으로 검증한다.
 
-1. [완료] `wrangler.jsonc` R2 binding 및 공통 media storage
-2. [완료] KV 기반 Media Library
-3. 관리자 이미지 업로드/조회/수정/비활성화 UI
-4. preview 페이지 이미지 표시 및 선택
-5. `threads.js` IMAGE 게시 지원
-6. `publisher.js`에서 TEXT/IMAGE 명시적 분기
-7. AI context에 선택 가능한 media 제공
+1. [완료] R2 binding 및 제품과 독립된 공통 object storage
+2. [완료] 일반/제품 공용 KV Media Library
+3. [완료] 대량 운영 재고 기반
+   - 3A: 여러 파일과 선택적 CSV manifest를 받는 관리자 batch upload, 파일별 성공/실패, R2 rollback
+   - 3B: 기간·사용 횟수·cooldown·우선순위를 가진 독립 Content Pool과 Cron 후보 조회 함수
+   - 3C: 사용 가능한 미디어, 제품, 제휴 링크 제품, pool 후보와 예상 Cron 횟수의 주간 커버리지
+4. private R2 객체를 `/media/{mediaId}`로 전달하는 Worker endpoint, 캐시/콘텐츠 헤더, workers.dev에서 custom domain으로 교체 가능한 public URL resolver 및 preview 표시
+5. `threads.js`에 기존 TEXT 함수와 분리된 IMAGE 게시 함수 추가
+6. 검수 게시와 `publisher.js`에서 TEXT/IMAGE 명시적 분기
+7. AI context에 코드가 검증한 Media Library 및 Content Pool 후보만 제공
 8. AI structured output에 `mediaType`/`mediaId` 선택 추가
-9. 이미지 사용 이력 기록 및 중복 방지
-10. 제품 데이터와 `mediaId` 연결
+9. 실제 게시 성공 후 Media Library와 Content Pool의 사용 횟수·최근 사용 시각 기록 및 중복 방지
+10. Cron scheduler에 후보 선택과 재고 부족 시 명시적 안전 정책 연결
+11. 제품 데이터와 Media Library/Content Pool의 `productId` 관계 검증 강화
 
-제품 전용 이미지 로직부터 만들거나 여러 단계를 한 번에 결합하지 않는다. 단계별 변경 범위가 TEXT 게시에 미치는 영향을 매번 확인한다.
+Batch upload는 R2 업로드 성공분만 Media Library에 한 번의 KV write로 등록한다. 개별 등록 실패 시 해당 R2 객체를 삭제하고, Media Library 전체 write 실패 시 업로드 성공 객체 전체를 rollback한다. Content Pool 등록 실패는 이미 등록된 미디어를 삭제하지 않고 partial 결과로 보고한다. CSV와 UI가 objectKey나 public URL을 임의 생성하도록 허용하지 않는다.
+
+제품 전용 이미지 저장 로직을 만들거나 `products.js`에 이미지 배열을 넣지 않는다. 단계별 변경이 TEXT 게시에 미치는 영향을 매번 확인한다.
 
 ## 작업 절차
 

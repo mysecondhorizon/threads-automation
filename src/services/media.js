@@ -24,6 +24,9 @@ const MAX_DESCRIPTION_LENGTH =
 const MAX_IMAGE_URL_LENGTH =
   8192;
 
+const MAX_TAGS =
+  30;
+
 const SOURCE_TYPES =
   new Set([
     "general",
@@ -264,6 +267,85 @@ function normalizeLimitedText(
   return normalized;
 }
 
+function normalizeStringList(
+  value,
+  field = "tags"
+) {
+  const values = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[|;,]/u)
+      : value == null
+        ? []
+        : [value];
+
+  const normalized = [...new Set(
+    values.map(normalizeText).filter(Boolean)
+  )];
+
+  if (normalized.length > MAX_TAGS) {
+    throw createMediaLibraryError(
+      `Media ${field} has too many values`,
+      `media_${field}_too_many`
+    );
+  }
+
+  return normalized;
+}
+
+function normalizeNonNegativeInteger(
+  value,
+  fallback,
+  field
+) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  const normalized = Number(value);
+  if (!Number.isInteger(normalized) || normalized < 0) {
+    throw createMediaLibraryError(
+      `Media ${field} must be a non-negative integer`,
+      `media_${field}_invalid`
+    );
+  }
+  return normalized;
+}
+
+function normalizeNullablePositiveInteger(
+  value,
+  fallback,
+  field
+) {
+  if (value === undefined) return fallback;
+  if (value === null || value === "") return null;
+  const normalized = Number(value);
+  if (!Number.isInteger(normalized) || normalized < 1) {
+    throw createMediaLibraryError(
+      `Media ${field} must be a positive integer or null`,
+      `media_${field}_invalid`
+    );
+  }
+  return normalized;
+}
+
+function normalizeNullableDate(
+  value,
+  fallback = null
+) {
+  if (value === undefined) return fallback;
+  const normalized = normalizeNullableText(value);
+  if (!normalized) return null;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) {
+    throw createMediaLibraryError(
+      "Media date is invalid",
+      "media_date_invalid"
+    );
+  }
+  return date.toISOString();
+}
+
 function createMediaId() {
   if (
     globalThis.crypto &&
@@ -354,6 +436,40 @@ function normalizeMediaRecord(
         MAX_DESCRIPTION_LENGTH
       ),
 
+    tags:
+      normalizeStringList(
+        input?.tags === undefined
+          ? existingMedia?.tags
+          : input.tags
+      ),
+
+    maxUses:
+      normalizeNullablePositiveInteger(
+        input?.maxUses,
+        existingMedia?.maxUses ?? null,
+        "max_uses"
+      ),
+
+    usedCount:
+      normalizeNonNegativeInteger(
+        input?.usedCount,
+        existingMedia?.usedCount ?? 0,
+        "used_count"
+      ),
+
+    lastUsedAt:
+      normalizeNullableDate(
+        input?.lastUsedAt,
+        existingMedia?.lastUsedAt ?? null
+      ),
+
+    cooldownDays:
+      normalizeNonNegativeInteger(
+        input?.cooldownDays,
+        existingMedia?.cooldownDays ?? 0,
+        "cooldown_days"
+      ),
+
     active:
       normalizeActive(
         input?.active,
@@ -414,6 +530,31 @@ function normalizeStoredMedia(
       normalizeText(
         input?.description
       ),
+
+    tags:
+      normalizeStringList(
+        input?.tags
+      ),
+
+    maxUses:
+      Number.isInteger(input?.maxUses) && input.maxUses > 0
+        ? input.maxUses
+        : null,
+
+    usedCount:
+      Number.isInteger(input?.usedCount) && input.usedCount >= 0
+        ? input.usedCount
+        : 0,
+
+    lastUsedAt:
+      normalizeNullableText(
+        input?.lastUsedAt
+      ),
+
+    cooldownDays:
+      Number.isInteger(input?.cooldownDays) && input.cooldownDays >= 0
+        ? input.cooldownDays
+        : 0,
 
     active:
       input?.active !== false,
@@ -621,6 +762,52 @@ export async function createMedia(
   return media;
 }
 
+export async function createMediaBatch(
+  env,
+  inputs
+) {
+  if (!Array.isArray(inputs) || inputs.length === 0) {
+    throw createMediaLibraryError(
+      "Media batch must contain at least one item",
+      "media_batch_empty"
+    );
+  }
+
+  const store = await readMediaStore(env);
+  const availableSlots = MAX_MEDIA_RECORDS - store.records.length;
+  const created = [];
+  const failures = [];
+
+  for (let index = 0; index < inputs.length; index += 1) {
+    if (created.length >= availableSlots) {
+      failures.push({
+        index,
+        code: "media_library_limit_reached",
+        message: "Media Library has reached its record limit",
+      });
+      continue;
+    }
+
+    try {
+      const media = normalizeMediaRecord(inputs[index]);
+      assertUniqueObjectKey([...store.records, ...created], media);
+      created.push(media);
+    } catch (error) {
+      failures.push({
+        index,
+        code: error?.code || "media_validation_failed",
+        message: error?.message || String(error),
+      });
+    }
+  }
+
+  if (created.length > 0) {
+    await writeMediaStore(env, [...created].reverse().concat(store.records));
+  }
+
+  return { created, failures };
+}
+
 export async function getMedia(
   env,
   mediaId
@@ -788,4 +975,49 @@ export async function removeMedia(
   );
 
   return true;
+}
+
+export function isMediaAvailable(
+  media,
+  at = new Date()
+) {
+  if (!media?.active) return false;
+  if (media.maxUses !== null && media.usedCount >= media.maxUses) {
+    return false;
+  }
+  if (!media.lastUsedAt || !media.cooldownDays) return true;
+  const lastUsedAt = new Date(media.lastUsedAt);
+  const availableAt = lastUsedAt.getTime() + media.cooldownDays * 86400000;
+  return !Number.isNaN(availableAt) && availableAt <= new Date(at).getTime();
+}
+
+export async function listAvailableMedia(
+  env,
+  options = {}
+) {
+  const at = options.at || new Date();
+  const records = await listMedia(env, {
+    sourceType: options.sourceType,
+    productId: options.productId,
+  });
+  return records.filter((media) => isMediaAvailable(media, at));
+}
+
+export async function markMediaUsed(
+  env,
+  mediaId,
+  usedAt = new Date()
+) {
+  const media = await getMedia(env, mediaId);
+  if (!media) {
+    throw createMediaLibraryError(
+      "Media record was not found",
+      "media_not_found",
+      { mediaId: normalizeText(mediaId) }
+    );
+  }
+  return await updateMedia(env, media.id, {
+    usedCount: media.usedCount + 1,
+    lastUsedAt: new Date(usedAt).toISOString(),
+  });
 }
