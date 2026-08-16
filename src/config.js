@@ -18,6 +18,8 @@ export const config = {
       "threads_basic",
       "threads_content_publish",
       "threads_manage_insights",
+      "threads_read_replies",
+      "threads_manage_replies",
     ],
   },
 
