@@ -1,0 +1,307 @@
+# AGENTS.md
+
+이 문서는 `mysecondhorizon/threads-automation` 저장소에서 작업하는 개발 에이전트를 위한 장기 지침이다. 저장소 전체에 적용하며, 실제 코드와 이 문서가 다를 때는 먼저 현재 구현을 조사하고 차이를 사용자에게 설명한 뒤 안전하게 작업한다.
+
+## 프로젝트 목적
+
+이 프로젝트는 Cloudflare Workers와 공식 Threads API를 사용하는 Threads 자동 게시 시스템이다.
+
+계정과 콘텐츠의 방향은 다음과 같다.
+
+- 40대 평범한 직장인의 현실적인 일상과 생활을 다룬다.
+- 광고 계정처럼 보이지 않도록 공감과 생활 콘텐츠로 신뢰를 먼저 쌓는다.
+- 제품은 생활 속에서 자연스럽게 필요한 순간에만 연결한다.
+- 쿠팡파트너스 수익화가 가능하되 광고성 표현과 허위 경험을 피한다.
+- 최근 게시 성과와 게시 이력을 다음 콘텐츠 생성에 반영한다.
+- 동일 소재, 동일 문단 구조, AI 특유의 반복 문체를 최소화한다.
+
+## 현재 아키텍처
+
+- 런타임: Cloudflare Workers
+- Worker 진입점: `src/index.js`
+- Worker 설정: `wrangler.jsonc`
+- 주 데이터 저장소: Cloudflare KV의 `THREADS_KV` 바인딩
+- 기본 브랜치: `main`
+- 현재 저장소에는 `package.json`과 자동화된 테스트 스위트가 없다. 검증 명령을 선택할 때 이를 전제로 한다.
+
+자동 게시의 주 실행 흐름은 다음과 같다.
+
+```text
+Cloudflare Cron
+-> src/index.js scheduled()
+-> src/services/auto-post/scheduler.js
+-> src/services/auto-post/engine.js
+-> src/services/auto-post/publisher.js
+-> src/services/threads.js
+-> Threads API
+```
+
+HTTP 수동 실행과 검수 게시도 같은 핵심 게시 계층을 사용한다. 새로운 게시 유형을 추가할 때 cron 경로만 고치지 말고 수동 실행, preview, 검수 게시, 상태 및 로그 경로의 영향을 함께 확인한다.
+
+## 주요 파일과 책임
+
+### Worker와 라우트
+
+- `src/index.js`: Worker의 `fetch()` 및 `scheduled()` 진입점과 라우팅을 담당한다.
+- `src/routes/auto-post.js`: 관리자 요청으로 자동 게시를 실행한다.
+- `src/routes/auto-post-preview.js`: 게시 전 AI 결과를 생성하고 preview 데이터를 반환한다.
+- `src/routes/auto-post-preview-page.js`: preview 및 검수 게시 관리자 UI를 제공한다.
+- `src/routes/auto-post-publish-reviewed.js`: 사용자가 검수한 콘텐츠를 게시 계층에 전달한다.
+- `src/routes/admin.js`: 관리자 로그인, 수동 Threads 게시 및 기존 관리 화면을 담당한다.
+- `src/routes/products.js`, `src/routes/products-page.js`: 제품 데이터 API와 관리 UI를 담당한다. 공통 이미지 기능을 이 영역에 종속시키지 않는다.
+
+### 자동 게시 서비스
+
+- `src/services/auto-post/scheduler.js`: cron 실행, Threads 데이터 동기화, 일일 게시 한도 및 게시 간격 검사, 자동 게시 실행과 스케줄 결과 기록을 담당한다.
+- `src/services/auto-post/engine.js`: context 구성, 콘텐츠 생성과 재생성, 정책 검증, 게시, 실행 상태 및 오류 처리를 총괄한다.
+- `src/services/auto-post-engine.js`: 기존 import 호환성을 위한 auto-post 엔진 공개 진입점이다.
+- `src/services/auto-post/publisher.js`: 프로필 확인, 본문 게시, 성공 로그 및 선택적 첫 댓글 게시를 조정한다.
+- `src/services/auto-post/reviewed-publisher.js`: 검수된 글의 메타데이터를 정규화하고 검증한 뒤 공통 publisher를 호출한다.
+- `src/services/auto-post/first-comment.js`: 본문 게시 후 첫 댓글을 게시한다.
+- `src/services/auto-post/lock.js`: 중복 실행 방지 lock을 관리한다.
+- `src/services/auto-post/daily-limit-guard.js`: 일일 자동 게시 제한을 검사한다.
+- `src/services/auto-post/schedule-guard.js`: 최근 게시물과의 시간 간격을 검사한다.
+- `src/services/auto-post/execution-store.js`, `schedule-store.js`, `status.js`: 실행 및 스케줄 상태를 KV에 저장하고 조회한다.
+
+### AI, Threads API 및 운영 데이터
+
+- `src/services/ai.js`: OpenAI 요청, structured output schema, AI 응답 정규화 및 Threads 글 생성을 담당한다.
+- `src/services/post-regenerator.js`: 최근 글과의 유사도를 검사하며 구별되는 글을 재생성한다.
+- `src/services/post-similarity.js`: 게시물 간 유사성 신호를 계산한다.
+- `src/services/auto-post-validator.js`: 텍스트 품질과 운영 정책을 최종 검증한다.
+- `src/services/threads.js`: 공식 Threads API 요청을 담당한다. 게시 API 변경 시 가장 신중하게 다룬다.
+- `src/services/threads-sync.js`: Threads 게시물과 insight 데이터를 KV 운영 데이터로 동기화한다.
+- `src/services/logger.js`: 게시 성공/실패 로그와 구조화된 `post_log.metadata`를 저장한다.
+- `src/services/history.js`: 게시 로그 및 동기화 데이터를 최근 게시 이력으로 구성한다.
+- `src/services/thread-context.js`: 게시 이력, 제품, 성과 및 현재 사용 가능 정책을 다음 AI 요청의 context로 집계한다.
+- `src/services/analytics.js`: 게시 성과와 메타데이터별 그룹 성과를 계산한다.
+- `src/services/products.js`: 제품 데이터 저장과 조회를 담당한다. 미디어 저장소 역할을 맡기지 않는다.
+- `src/services/kv.js`: `THREADS_KV` 접근을 공통화한다.
+
+## 프롬프트 책임과 콘텐츠 원칙
+
+조합되는 프롬프트는 `src/prompts/threads/index.js`에서 관리한다. 규칙을 추가할 때 같은 규칙을 여러 프롬프트에 반복하지 말고 다음 책임을 유지한다.
+
+- `identity.js`: 화자, 말투, 40대 직장인의 생활 사실성
+- `policy.js`: 계정 운영 정책과 콘텐츠 다양성
+- `content.js`: 콘텐츠 유형, 소재, 후킹, 본문 구조, 질문 및 마무리
+- `product.js`: 제품 사실성, 제품 경험, 링크 및 경제적 이해관계 고지
+- `analytics.js`: 성과 데이터의 해석과 학습 방식
+- `validation.js`: 게시 직전 최종 품질 검사
+- `output.js`: AI가 반환해야 하는 JSON 형식
+- `index.js`: 위 프롬프트의 조합 순서와 단일 system prompt export
+
+`src/prompts/threads-original.js`는 현재 조합 경로에 포함되지 않는 이전 단일 프롬프트다. 명시적인 마이그레이션 목적 없이 새 규칙을 이 파일에 추가하지 않는다.
+
+콘텐츠 작성과 검증에서 다음 원칙을 지킨다.
+
+- 항상 동일한 3문단 구조를 사용하지 않는다.
+- 모든 문단 사이에 기계적으로 빈 줄을 넣지 않는다.
+- `첫 문장 -> 설명 -> 결론`의 고정 패턴을 반복하지 않는다.
+- 문단 수, 문장 길이, 줄바꿈과 마무리 리듬을 다양하게 한다.
+- 최근 글과 소재뿐 아니라 문단 패턴과 표현 리듬도 지나치게 비슷하면 피한다.
+- 성과 표본이 적을 때 특정 유형이 우수하거나 열등하다고 성급하게 결론 내리지 않는다.
+
+현재 `contentType`은 정확히 다음 9개 값 중 하나다.
+
+- `순간 공감형`
+- `현실 고민형`
+- `작은 발견형`
+- `실패·실수형`
+- `의견·선택형`
+- `생활 정보형`
+- `제품 발견형`
+- `제품 경험형`
+- `제품 연결형`
+
+이 enum을 변경할 때는 프롬프트 출력 형식, `ai.js` structured output schema, 응답 정규화, preview, validator, logger, history, context 및 analytics를 함께 점검한다.
+
+## 게시 메타데이터와 학습 순환
+
+AI 게시 결과와 `post_log.metadata`는 다음 필드를 사용한다.
+
+- `style`
+- `contentType`
+- `topic`
+- `emotion`
+- `hookStyle`
+- `endingStyle`
+- `questionUsed`
+- `productId`
+- `productConnected`
+- `affiliateLinkUsed`
+- `affiliateDisclosureRequired`
+
+메타데이터 흐름은 다음과 같다.
+
+```text
+AI 생성
+-> 자동 게시 또는 검수 게시
+-> auto-post/publisher.js
+-> logger.js
+-> post_log.metadata
+-> history.js
+-> thread-context.js
+-> analytics.js
+-> 다음 AI 생성 context
+```
+
+메타데이터를 추가하거나 이름을 바꿀 때는 이 순환 전체와 AI JSON schema를 원자적으로 업데이트한다. 기존 KV 로그에는 새 필드가 없을 수 있으므로 읽기 경로는 누락된 값에 안전해야 한다.
+
+`thread-context.js`는 현재 다음 운영 신호를 집계한다.
+
+- `todayQuestionCount`
+- `todayProductConnectedCount`
+- `todayAffiliateLinkCount`
+- `recentContentTypes`
+- `recentTopics`
+- `recentEmotions`
+- `recentHookStyles`
+- `recentEndingStyles`
+- `recentProductIds`
+
+publishing context는 다음 허용 상태를 제공한다.
+
+- `questionAvailable`
+- `productConnectedAvailable`
+- `affiliateLinkAvailable`
+
+`auto-post-validator.js`의 `validateAutoPostPolicy()`는 질문형, 제품 연결, 제휴 링크의 사용 제한과 조합을 방어한다. AI 프롬프트만 신뢰하지 말고 코드 수준 검증을 유지한다.
+
+`analytics.js`는 `contentType`, `topic`, `hookStyle`, `endingStyle`, `emotion`별로 `count`, `totalViews`, `totalInteractions`, `averageViews`, `averageEngagementRate` 등의 그룹 성과를 계산한다. 새 분석 차원을 추가할 때는 과소 표본 처리 원칙을 유지한다.
+
+## 제품 및 제휴 링크 정책
+
+- 제품 링크는 본문 `text`에 넣지 않는다.
+- 필요한 제품 링크는 `firstComment`에 넣는다.
+- 쿠팡파트너스 경제적 이해관계 고지가 필요하면 본문 `text`에 작성한다.
+- 확인된 경험 정보가 없는 제품을 실제 사용 후기처럼 작성하지 않는다.
+- 제품 정보가 부족하거나 사실성을 보장할 수 없으면 일반 생활 콘텐츠로 전환한다.
+- 제품 콘텐츠와 일반 콘텐츠 모두 향후 같은 Media Library를 사용한다.
+
+## 기존 TEXT 게시 보호 원칙
+
+기존 TEXT 본문 게시와 첫 댓글 게시의 안정성이 최우선이다. 이미지 기능을 추가하면서 기존 함수를 불필요하게 리팩터링하거나 요청 방식을 통합하지 않는다.
+
+현재 `src/services/threads.js`의 동작은 의도적으로 두 경로가 다르다.
+
+- 본문 `publishTextPost()`는 `media_type=TEXT`와 `auto_publish_text=true`로 생성 요청에서 즉시 게시하고, 반환된 `id`를 게시물 ID로 사용한다.
+- 첫 댓글 `publishTextReply()`는 TEXT 컨테이너를 만든 뒤 `publishContainer()`로 게시한다.
+
+이 구조는 과거 Threads API의 `Media not found` 문제에 대응해 안정화된 구현이다. IMAGE 게시를 추가할 때 TEXT 요청 파라미터, 반환값 형태, 첫 댓글 흐름, 성공 로그 및 오류 step을 회귀 검증한다. 새 IMAGE 함수는 기존 TEXT 함수를 대체하기보다 별도의 명확한 경로로 추가한다.
+
+## 공통 이미지 Media Layer 설계
+
+이미지 기능은 `products.js` 또는 제품 전용 UI에 종속시키지 않는다. 일반 사진과 제품 사진이 공유하는 공통 미디어 계층을 만든다.
+
+목표 흐름은 다음과 같다.
+
+```text
+이미지 원본
+-> Cloudflare R2
+-> Media Library
+-> 게시글 생성 시 등록된 이미지 선택
+-> TEXT 또는 IMAGE 게시
+-> Threads
+```
+
+예상 저장 구조는 다음 필드를 기본으로 하며, 실제 구현 전 현재 코드와 API 요구사항을 다시 확인한다.
+
+- `id`
+- `sourceType`: `general | product`
+- `productId`: nullable
+- `objectKey`
+- `imageUrl`: nullable
+- `altText`
+- `description`
+- `active`
+- `createdAt`
+- `updatedAt`
+
+설계 원칙은 다음과 같다.
+
+- R2 bucket 이름은 `threads-media`, Worker binding 이름은 `THREADS_MEDIA`로 한다.
+- 미디어 메타데이터 목록은 우선 `THREADS_KV` 기반 Media Library로 관리한다.
+- R2 객체 저장과 KV 메타데이터 저장의 실패 및 정합성 처리 방식을 명시한다.
+- AI가 임의의 이미지 URL이나 object key를 만들게 하지 않는다.
+- AI는 코드가 제공한 활성 미디어 후보 중 `mediaId`만 선택한다.
+- 실제 `imageUrl`은 게시 직전에 Media Library에서 조회하고 검증한다.
+- 일반 이미지와 제품 이미지는 `sourceType`과 nullable `productId`로 구분하되 같은 서비스와 관리 UI를 사용한다.
+- 향후 AI 결과의 후보 필드는 `mediaType: TEXT | IMAGE`, `mediaId`, `imageAltText`다.
+- IMAGE 선택이나 조회가 실패했을 때 기존 TEXT 게시를 위험하게 자동 변환하지 않는다. fallback 정책은 구현 단계에서 명시적으로 정하고 로그에 남긴다.
+- 외부에서 Threads가 접근할 이미지 URL의 공개 방식, 수명 및 보안을 구현 전에 확인한다.
+- 이미지 사용 이력을 기록하여 최근 이미지 중복을 방지한다.
+- 업로드 시 MIME type, 파일 크기, 확장자, object key 및 관리자 인증을 검증한다.
+
+현재 저장소에는 `THREADS_MEDIA` R2 binding, Media Library, 관리자 이미지 UI, `mediaId`/`imageAltText` AI 필드 및 IMAGE 게시 함수가 없다. 이미지 작업을 시작할 때 이 상태를 다시 확인한다.
+
+## 이미지 게시 로드맵
+
+기존 TEXT 기능을 보호하기 위해 다음 순서를 기본으로 한다. 각 단계는 가능한 한 독립적으로 검증하고 보고한 뒤 다음 단계로 넘어간다.
+
+1. `wrangler.jsonc` R2 binding 및 공통 media storage
+2. KV 기반 Media Library
+3. 관리자 이미지 업로드/조회/수정/비활성화 UI
+4. preview 페이지 이미지 표시 및 선택
+5. `threads.js` IMAGE 게시 지원
+6. `publisher.js`에서 TEXT/IMAGE 명시적 분기
+7. AI context에 선택 가능한 media 제공
+8. AI structured output에 `mediaType`/`mediaId` 선택 추가
+9. 이미지 사용 이력 기록 및 중복 방지
+10. 제품 데이터와 `mediaId` 연결
+
+제품 전용 이미지 로직부터 만들거나 여러 단계를 한 번에 결합하지 않는다. 단계별 변경 범위가 TEXT 게시에 미치는 영향을 매번 확인한다.
+
+## 작업 절차
+
+기능 개발 요청을 받으면 사용자가 파일을 복사하거나 여러 명령을 반복 실행하도록 요구하지 말고, 에이전트가 저장소를 직접 조사하고 가능한 범위에서 수정 및 검증한다.
+
+기본 절차는 다음과 같다.
+
+1. `git status --short --branch`로 브랜치와 working tree를 확인한다.
+2. 관련 코드, 데이터 흐름, 기존 규칙과 호출자를 검색한다.
+3. 기존 미커밋 변경이 있으면 소유권을 사용자에게 둔 채 겹침과 영향을 분석한다.
+4. 변경 범위를 최소의 논리적 단위로 정한다.
+5. 관련 파일을 직접 수정한다.
+6. 변경한 모든 JavaScript 파일에 가능한 한 `node --check <file>`을 실행한다.
+7. `git diff --check`를 실행한다.
+8. 가능한 구조 검증과 핵심 회귀 검증을 수행한다.
+9. 전체 `git diff`와 `git status`를 검토해 의도하지 않은 변경이 없는지 확인한다.
+10. 변경 내용, 검증 결과, 남은 위험을 사용자에게 보고한다.
+11. commit 전에 사용자에게 결과를 보고하고 명시적인 요청을 기다린다.
+
+대규모 작업은 논리적인 단계로 나눈다. 안정적으로 운영 중인 기능을 단지 정리하거나 추상화하기 위해 불필요하게 변경하지 않는다.
+
+## Git 규칙
+
+- 기본 브랜치는 `main`이다.
+- 작업 시작 전과 보고 전 `git status`를 확인한다.
+- 기존 미커밋 변경을 덮어쓰거나 삭제하거나 임의로 포함하지 않는다.
+- 사용자가 명시적으로 요청하지 않으면 commit 또는 push하지 않는다.
+- 테스트와 diff 검토가 끝나기 전 commit하지 않는다.
+- 기존 commit을 임의로 reset, amend, rebase 또는 force push하지 않는다.
+- push 요청을 받으면 먼저 working tree, 대상 branch, upstream 및 push할 commit을 다시 확인한다.
+- 파괴적인 Git 명령으로 문제를 해결하지 않는다.
+
+## 검증 규칙
+
+최소 검증 기준은 다음과 같다.
+
+- 변경된 각 `.js` 파일: `node --check <file>`
+- 모든 변경: `git diff --check`
+- 변경 통계: `git diff --stat`
+- 최종 검토: `git diff` 및 `git status --short --branch`
+
+테스트 도구가 없는 현재 상태에서는 관련 import/export, 모든 호출자, KV 저장/조회 호환성, HTTP route와 cron 양쪽 경로를 정적으로 추적한다. 실행 가능한 테스트가 향후 추가되면 관련 테스트도 반드시 실행한다. 검증하지 못한 부분은 성공한 것처럼 표현하지 않고 명확히 보고한다.
+
+## 보안 원칙
+
+다음 값을 코드, 문서, 테스트 fixture 또는 로그에 하드코딩하지 않는다.
+
+- OpenAI API key
+- Threads access token
+- OAuth secret
+- 관리자 비밀번호
+- Cloudflare secret 및 기타 인증 정보
+
+기존 Cloudflare environment, secret 및 KV 구조를 유지한다. 새로운 secret은 binding 이름과 설정 방법만 문서화하고 실제 값을 저장소에 기록하지 않는다.
