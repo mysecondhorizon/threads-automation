@@ -8,6 +8,14 @@ function normalizePostMetadata(
   metadata
 ) {
   return {
+    source:
+      metadata?.source ||
+      null,
+
+    candidateId:
+      metadata?.candidateId ||
+      null,
+
     style:
       metadata?.style ||
       null,

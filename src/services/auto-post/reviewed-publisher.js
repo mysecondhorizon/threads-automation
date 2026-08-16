@@ -48,6 +48,7 @@ function createExecution(
   {
     postType,
     firstComment,
+    source,
   }
 ) {
   const now =
@@ -58,7 +59,7 @@ function createExecution(
       executionId,
 
     source:
-      "reviewed_preview",
+      source,
 
     status:
       "starting",
@@ -280,6 +281,8 @@ export async function publishReviewedAutoPost(
     affiliateLinkUsed = false,
     affiliateDisclosureRequired = false,
     firstComment = "",
+    source = "reviewed_preview",
+    candidateId = null,
   }
 ) {
   const executionId =
@@ -290,7 +293,20 @@ export async function publishReviewedAutoPost(
       postType
     );
 
+  const normalizedSource =
+    source === "manual_product_test"
+      ? "manual_product_test"
+      : "reviewed_preview";
+
   const metadata = {
+    source:
+      normalizedSource,
+
+    candidateId:
+      candidateId
+        ? String(candidateId).trim() || null
+        : null,
+
     style:
       normalizePostType(
         postType
@@ -376,6 +392,9 @@ export async function publishReviewedAutoPost(
 
         firstComment:
           "",
+
+        source:
+          normalizedSource,
       }
     );
 
@@ -551,7 +570,7 @@ export async function publishReviewedAutoPost(
       executionId,
 
       source:
-        "reviewed_preview",
+        normalizedSource,
 
       username:
         profile.username,

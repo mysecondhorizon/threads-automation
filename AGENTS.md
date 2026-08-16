@@ -38,6 +38,16 @@ Cloudflare Cron
 
 HTTP 수동 실행과 검수 게시도 같은 핵심 게시 계층을 사용한다. 새로운 게시 유형을 추가할 때 cron 경로만 고치지 말고 수동 실행, preview, 검수 게시, 상태 및 로그 경로의 영향을 함께 확인한다.
 
+### 게시 운영 실험
+
+현재 게시 슬롯은 KST 기준 08:10, 11:30, 14:30, 18:40의 일반 AUTO 4회와 20:30의 PRODUCT REVIEW 1회다. Cloudflare Cron은 각각 UTC `10 23`, `30 2`, `30 5`, `40 9`, `30 11`로 설정한다.
+
+- 일반 AUTO는 제품 데이터를 생성 context에서 제외하고 제품 관련 contentType, `productId`, `productConnected`, `affiliateLinkUsed`, `affiliateDisclosureRequired`가 생성되면 게시 전에 차단한다. 일일 자동 게시 한도는 4개다.
+- PRODUCT REVIEW cron은 사용 가능한 활성 제품으로 검수 후보를 KV에 저장할 뿐 Threads 게시 함수를 호출하지 않는다.
+- 제품 후보는 제품 정보, 광고 고지와 활성화된 제휴 링크가 실제 제품 데이터에 있을 때만 생성한다. 고지는 본문에, 실제 링크는 첫 댓글에만 둔다.
+- 제품 후보의 실제 게시는 관리자 검수 버튼이 기존 reviewed publish 경로를 호출할 때만 수행한다. 이 경로는 `productId`를 유지하고 게시 로그의 `metadata.source`를 `manual_product_test`로 기록한다.
+- 수동 제품 테스트 게시는 KST 하루 1개로 제한해 AUTO 4개와 합쳐 하루 목표 최대 5개를 유지한다.
+
 ## 주요 파일과 책임
 
 ### Worker와 라우트
@@ -49,6 +59,7 @@ HTTP 수동 실행과 검수 게시도 같은 핵심 게시 계층을 사용한�
 - `src/routes/auto-post-publish-reviewed.js`: 사용자가 검수한 콘텐츠를 게시 계층에 전달한다.
 - `src/routes/admin.js`: 관리자 로그인, 수동 Threads 게시 및 기존 관리 화면을 담당한다.
 - `src/routes/products.js`, `src/routes/products-page.js`: 제품 데이터 API와 관리 UI를 담당한다. 공통 이미지 기능을 이 영역에 종속시키지 않는다.
+- `src/routes/product-review.js`, `src/routes/product-review-page.js`: 제품글 후보 생성·목록 API와 수동 검수 UI를 담당한다.
 
 ### 자동 게시 서비스
 
@@ -76,6 +87,7 @@ HTTP 수동 실행과 검수 게시도 같은 핵심 게시 계층을 사용한�
 - `src/services/thread-context.js`: 게시 이력, 제품, 성과 및 현재 사용 가능 정책을 다음 AI 요청의 context로 집계한다.
 - `src/services/analytics.js`: 게시 성과와 메타데이터별 그룹 성과를 계산한다.
 - `src/services/products.js`: 제품 데이터 저장과 조회를 담당한다. 미디어 저장소 역할을 맡기지 않는다.
+- `src/services/product-review.js`: 제품글 후보 선택·생성·KV 저장, 검수 게시 입력 고정과 일일 수동 제품 게시 제한을 담당한다.
 - `src/services/media.js`: 일반 및 제품 이미지가 공유하는 KV 기반 Media Library의 메타데이터 CRUD를 담당한다. R2 객체 CRUD는 수행하지 않는다.
 - `src/services/media-batch.js`: 여러 이미지의 R2 업로드, Media Library 일괄 등록, Content Pool 초기 등록과 실패 시 R2 정리를 조정한다.
 - `src/services/content-pool.js`: Cron이 향후 소비할 일반/제품 콘텐츠 재고의 CRUD, 가용성 판정, 후보 조회와 사용 횟수 기록을 담당한다.

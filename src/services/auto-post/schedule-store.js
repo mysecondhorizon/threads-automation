@@ -145,6 +145,10 @@ export async function saveScheduleRun(
     source:
       "cron",
 
+    operation:
+      input?.operation ||
+      "auto_general",
+
     cron:
       input?.cron ||
       null,
@@ -181,6 +185,15 @@ export async function saveScheduleRun(
     postId:
       input?.postId ||
       null,
+
+    candidateId:
+      input?.candidateId ||
+      null,
+
+    published:
+      input?.published === undefined
+        ? Boolean(input?.postId)
+        : Boolean(input.published),
 
     generation:
       input?.generation ||

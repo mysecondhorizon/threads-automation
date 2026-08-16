@@ -11,6 +11,14 @@ import {
 } from "../services/auto-post/errors.js";
 
 import {
+  ProductReviewError,
+  getProductReviewCandidate,
+  prepareProductReviewPublishInput,
+  assertManualProductPublishAvailable,
+  markProductReviewPublished,
+} from "../services/product-review.js";
+
+import {
   ok,
   fail,
 } from "../utils/response.js";
@@ -79,6 +87,11 @@ function normalizeRequestBody(
     String(
       body?.firstComment || ""
     ).trim();
+
+  const candidateId =
+    String(
+      body?.candidateId || ""
+    ).trim() || null;
 
   if (!text) {
     throw new AutoPostEngineError(
@@ -176,6 +189,8 @@ function normalizeRequestBody(
     affiliateDisclosureRequired,
 
     firstComment,
+
+    candidateId,
   };
 }
 
@@ -199,16 +214,45 @@ export async function handlePublishReviewedAutoPost(
         request
       );
 
-    const input =
+    let input =
       normalizeRequestBody(
         body
       );
+
+    let productReviewCandidate =
+      null;
+
+    if (input.candidateId) {
+      productReviewCandidate =
+        await getProductReviewCandidate(
+          env,
+          input.candidateId
+        );
+
+      await assertManualProductPublishAvailable(
+        env
+      );
+
+      input =
+        prepareProductReviewPublishInput(
+          productReviewCandidate,
+          input
+        );
+    }
 
     const result =
       await publishReviewedAutoPost(
         env,
         input
       );
+
+    if (productReviewCandidate) {
+      await markProductReviewPublished(
+        env,
+        productReviewCandidate.id,
+        result.post_id
+      );
+    }
 
     return ok(
       result
@@ -232,6 +276,20 @@ export async function handlePublishReviewedAutoPost(
 
           details:
             error.details,
+        }
+      );
+    }
+
+    if (
+      error instanceof
+      ProductReviewError
+    ) {
+      return fail(
+        error.message,
+        error.code === "manual_product_daily_limit_reached" ? 409 : 400,
+        {
+          code: error.code,
+          details: error.details,
         }
       );
     }

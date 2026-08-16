@@ -21,11 +21,24 @@ import {
   syncThreadsData,
 } from "../threads-sync.js";
 
+import {
+  generateProductReviewCandidate,
+} from "../product-review.js";
+
 const MINIMUM_INTERVAL_MINUTES =
   90;
 
 const DAILY_AUTO_POST_LIMIT =
-  3;
+  4;
+
+export const PRODUCT_REVIEW_CRON =
+  "30 11 * * *";
+
+export function getScheduledOperation(cron) {
+  return String(cron || "").trim() === PRODUCT_REVIEW_CRON
+    ? "product_review"
+    : "auto_general";
+}
 
 function serializeSchedulerError(
   error
@@ -176,8 +189,20 @@ export async function runScheduledAutoPost(
   {
     cron = null,
     scheduledTime = null,
+    services = {},
   } = {}
 ) {
+  const operation =
+    getScheduledOperation(cron);
+
+  const generateProductReview =
+    services.generateProductReviewCandidate ||
+    generateProductReviewCandidate;
+
+  const executeScheduledAutoPost =
+    services.executeAutoPost ||
+    executeAutoPost;
+
   const startedAt =
     new Date().toISOString();
 
@@ -192,10 +217,58 @@ export async function runScheduledAutoPost(
       scheduledTime,
 
       startedAt,
+
+      operation,
     }
   );
 
   try {
+    if (operation === "product_review") {
+      const candidate =
+        await generateProductReview(
+          env,
+          {
+            source: "cron_product_review",
+            cron,
+            scheduledTime,
+          }
+        );
+
+      const completedAt =
+        new Date().toISOString();
+
+      await safeSaveScheduleRun(
+        env,
+        {
+          operation,
+          cron,
+          scheduledTime,
+          startedAt,
+          completedAt,
+          status: "review_ready",
+          skipped: false,
+          published: false,
+          candidateId: candidate.id,
+          postId: null,
+          generation: candidate.generation,
+          error: null,
+        }
+      );
+
+      return {
+        ok: true,
+        skipped: false,
+        published: false,
+        operation,
+        source: "cron_product_review",
+        cron,
+        scheduledTime,
+        startedAt,
+        completedAt,
+        candidate,
+      };
+    }
+
     const syncResult =
       await syncThreadsData(
         env
@@ -282,11 +355,14 @@ export async function runScheduledAutoPost(
     );
 
     const result =
-      await executeAutoPost(
+      await executeScheduledAutoPost(
         env,
         {
           source:
-            "cron",
+            "cron_auto_general",
+
+          generalOnly:
+            true,
         }
       );
 
@@ -296,6 +372,8 @@ export async function runScheduledAutoPost(
     await safeSaveScheduleRun(
       env,
       {
+        operation,
+
         cron,
 
         scheduledTime,
@@ -389,7 +467,9 @@ export async function runScheduledAutoPost(
         false,
 
       source:
-        "cron",
+        "cron_auto_general",
+
+      operation,
 
       cron,
 
@@ -428,6 +508,8 @@ export async function runScheduledAutoPost(
       await safeSaveScheduleRun(
         env,
         {
+          operation,
+
           cron,
 
           scheduledTime,
@@ -513,6 +595,8 @@ export async function runScheduledAutoPost(
     await safeSaveScheduleRun(
       env,
       {
+        operation,
+
         cron,
 
         scheduledTime,

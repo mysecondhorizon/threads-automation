@@ -20,6 +20,7 @@ import {
 
 import {
   AutoPostValidationError,
+  validateAutoPostPolicy,
 } from "../auto-post-validator.js";
 
 import {
@@ -76,6 +77,14 @@ const ALLOWED_EXECUTION_SOURCES =
   new Set([
     "manual",
     "cron",
+    "cron_auto_general",
+  ]);
+
+const PRODUCT_CONTENT_TYPES =
+  new Set([
+    "제품 발견형",
+    "제품 경험형",
+    "제품 연결형",
   ]);
 
 let activeExecutionPromise =
@@ -98,6 +107,49 @@ function normalizeExecutionSource(
   }
 
   return "manual";
+}
+
+export function enforceGeneralAutoPolicy(generatedPost) {
+  const violations = [];
+  if (PRODUCT_CONTENT_TYPES.has(String(generatedPost?.contentType || "").trim())) {
+    violations.push("contentType");
+  }
+  if (generatedPost?.productConnected === true) violations.push("productConnected");
+  if (generatedPost?.affiliateLinkUsed === true) violations.push("affiliateLinkUsed");
+  if (generatedPost?.affiliateDisclosureRequired === true) {
+    violations.push("affiliateDisclosureRequired");
+  }
+  if (String(generatedPost?.productId || "").trim()) violations.push("productId");
+  if (violations.length) {
+    throw new AutoPostValidationError(
+      "General AUTO slots cannot publish product-connected content.",
+      {
+        code: "general_auto_product_content_forbidden",
+        details: { violations },
+      }
+    );
+  }
+  return true;
+}
+
+export function applyGeneralAutoContext(context) {
+  context.publishing.goal = [
+    AUTO_POST_GOAL,
+    "Generate only general, relatable, or practical daily-life content.",
+    "Do not select product discovery, product experience, or product-connected content.",
+  ].join(" ");
+  context.publishing.productConnectedAvailable = false;
+  context.publishing.affiliateLinkAvailable = false;
+  context.publishing.linkAvailable = false;
+  context.products = {
+    ...context.products,
+    availableProducts: [],
+    productExperience: [],
+    productDetails: [],
+    productPrices: [],
+    productPhotos: [],
+  };
+  return context;
 }
 
 function createExecutionId() {
@@ -572,7 +624,8 @@ function buildSuccessResult(
 
 async function runExecution(
   env,
-  source
+  source,
+  { generalOnly = false } = {}
 ) {
   const executionId =
     createExecutionId();
@@ -660,6 +713,12 @@ async function runExecution(
     context.publishing.requestedTone =
       AUTO_POST_TONE;
 
+    if (generalOnly) {
+      applyGeneralAutoContext(
+        context
+      );
+    }
+
     await updateExecution(
       env,
       execution,
@@ -687,6 +746,17 @@ async function runExecution(
 
     generatedPost =
       generation.generatedPost;
+
+    if (generalOnly) {
+      validateAutoPostPolicy(
+        generatedPost,
+        context
+      );
+
+      enforceGeneralAutoPolicy(
+        generatedPost
+      );
+    }
 
     const validation =
       generation.validation;
@@ -761,6 +831,8 @@ async function runExecution(
           "",
 
         metadata: {
+          source,
+
           style:
             generatedPost
               ?.postType ||
@@ -978,6 +1050,7 @@ export async function executeAutoPost(
   env,
   {
     source = "manual",
+    generalOnly = false,
   } = {}
 ) {
   const executionSource =
@@ -1011,7 +1084,8 @@ export async function executeAutoPost(
   activeExecutionPromise =
     runExecution(
       env,
-      executionSource
+      executionSource,
+      { generalOnly }
     );
 
   try {

@@ -27,6 +27,14 @@ import {
 } from "./routes/products.js";
 
 import {
+  handleProductReviews,
+} from "./routes/product-review.js";
+
+import {
+  handleProductReviewPage,
+} from "./routes/product-review-page.js";
+
+import {
   handleMediaManagementPage,
 } from "./routes/media-management-page.js";
 
@@ -260,6 +268,29 @@ export default {
       )
     ) {
       return handleProducts(
+        request,
+        env
+      );
+    }
+
+    if (
+      pathname === "/admin/product-review-page" &&
+      method === "GET"
+    ) {
+      return handleProductReviewPage(
+        request,
+        env
+      );
+    }
+
+    if (
+      pathname === "/admin/product-reviews" &&
+      (
+        method === "GET" ||
+        method === "POST"
+      )
+    ) {
+      return handleProductReviews(
         request,
         env
       );

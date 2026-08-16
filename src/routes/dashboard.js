@@ -1304,6 +1304,12 @@ export async function handleDashboard(
       gap:10px;
       flex-wrap:wrap;
     ">
+      <a href="/admin/product-review-page">
+        <button type="button" style="padding:10px 14px;">
+          제품글 테스트 / 검수
+        </button>
+      </a>
+
       <a href="/admin/post">
         <button
           type="button"
