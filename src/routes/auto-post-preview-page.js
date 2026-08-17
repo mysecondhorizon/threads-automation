@@ -242,6 +242,35 @@ export async function handleAutoPostPreviewPage(
         "
       ></div>
 
+      <section
+        id="media-preview"
+        style="
+          display:none;
+          margin-bottom:16px;
+          padding:14px;
+          border:1px solid #ddd;
+          border-radius:10px;
+          background:#fafafa;
+        "
+      >
+        <strong>이미지 미리보기</strong>
+        <div style="margin-top:8px;color:#666;font-size:13px;">
+          mediaId: <code id="media-preview-id"></code><br>
+          sourceType: <span id="media-preview-source"></span><br>
+          <span id="media-preview-description"></span>
+        </div>
+        <img
+          id="media-preview-image"
+          alt=""
+          style="display:block;max-width:100%;max-height:360px;margin-top:12px;border-radius:8px;"
+        >
+        <div
+          id="media-preview-fallback"
+          role="status"
+          style="display:none;margin-top:12px;color:#b00020;"
+        ></div>
+      </section>
+
       <textarea
         id="post-text"
         rows="9"
@@ -421,8 +450,38 @@ export async function handleAutoPostPreviewPage(
 
     const postMetadata =
     document.getElementById(
-      "post-metadata"
-    );
+        "post-metadata"
+      );
+
+    const mediaPreview =
+      document.getElementById(
+        "media-preview"
+      );
+
+    const mediaPreviewId =
+      document.getElementById(
+        "media-preview-id"
+      );
+
+    const mediaPreviewSource =
+      document.getElementById(
+        "media-preview-source"
+      );
+
+    const mediaPreviewDescription =
+      document.getElementById(
+        "media-preview-description"
+      );
+
+    const mediaPreviewImage =
+      document.getElementById(
+        "media-preview-image"
+      );
+
+    const mediaPreviewFallback =
+      document.getElementById(
+        "media-preview-fallback"
+      );
 
     const postText =
       document.getElementById(
@@ -529,6 +588,75 @@ export async function handleAutoPostPreviewPage(
           : "#666";
     }
 
+    function renderMediaPreview(data) {
+      const media =
+        data.media || {};
+
+      const mediaId =
+        String(
+          data.mediaId ||
+          media.id ||
+          ""
+        ).trim();
+
+      mediaPreview.style.display =
+        mediaId ? "block" : "none";
+
+      mediaPreviewImage.hidden =
+        !mediaId;
+
+      mediaPreviewFallback.hidden =
+        true;
+
+      mediaPreviewFallback.textContent =
+        "";
+
+      if (!mediaId) {
+        mediaPreviewImage.removeAttribute("src");
+        return;
+      }
+
+      mediaPreviewId.textContent =
+        mediaId;
+      mediaPreviewSource.textContent =
+        String(
+          data.mediaSourceType ||
+          media.sourceType ||
+          "-"
+        );
+      mediaPreviewDescription.textContent =
+        String(
+          data.imageAltText ||
+          media.altText ||
+          media.description ||
+          ""
+        );
+      mediaPreviewImage.alt =
+        String(
+          data.imageAltText ||
+          media.altText ||
+          media.description ||
+          "이미지 미리보기"
+        );
+      mediaPreviewImage.onload = () => {
+        mediaPreviewImage.hidden =
+          false;
+        mediaPreviewFallback.hidden =
+          true;
+      };
+      mediaPreviewImage.onerror = () => {
+        mediaPreviewImage.hidden =
+          true;
+        mediaPreviewFallback.textContent =
+          "이미지 미리보기를 불러오지 못했습니다. mediaId가 없거나 비활성화된 미디어일 수 있습니다.";
+        mediaPreviewFallback.hidden =
+          false;
+      };
+      mediaPreviewImage.src =
+        "/media/" +
+        encodeURIComponent(mediaId);
+    }
+
     function renderPreview(
       payload
     ) {
@@ -548,6 +676,10 @@ export async function handleAutoPostPreviewPage(
 
       latestPreview =
         data;
+
+      renderMediaPreview(
+        data
+      );
 
       postType.textContent =
         [
