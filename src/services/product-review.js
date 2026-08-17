@@ -151,7 +151,7 @@ function sanitizeProductReviewBody(value, product) {
 }
 
 function buildServerManagedFirstComment(product) {
-  return `${text(product.affiliateDisclosure)}\n\n${text(product.affiliateLink)}`;
+  return `${text(product.affiliateLink)}\n\n${text(product.affiliateDisclosure)}`;
 }
 
 export function buildProductReviewPayload(generatedPost, product) {
