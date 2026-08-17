@@ -17,6 +17,24 @@ function normalizeText(
   ).trim();
 }
 
+const PRODUCT_CSV_FIELDS = [
+  "productKey", "name", "category", "description",
+  "experienceStatus", "experience", "selectionReason", "price",
+  "affiliateLink", "affiliateDisclosure", "linkEnabled", "active",
+];
+
+function normalizeProductKey(value) {
+  return normalizeText(value);
+}
+
+function parseBoolean(value, fieldName) {
+  if (value === true || value === false) return value;
+  const normalized = normalizeText(value).toLowerCase();
+  if (["true", "1", "yes", "y"].includes(normalized)) return true;
+  if (["false", "0", "no", "n"].includes(normalized)) return false;
+  throw new Error(`${fieldName} must be true or false`);
+}
+
 function normalizeBoolean(
   value
 ) {
@@ -45,6 +63,29 @@ function normalizePrice(
   }
 
   return price;
+}
+
+function validatePrice(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const normalized = normalizeText(value);
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) {
+    throw new Error("price must be a non-negative number");
+  }
+  const price = Number(normalized);
+  if (!Number.isFinite(price) || price < 0) {
+    throw new Error("price must be a non-negative number");
+  }
+  return price;
+}
+
+function validateAffiliateLink(value) {
+  const link = normalizeText(value);
+  if (!link) return "";
+  let url;
+  try { url = new URL(link); }
+  catch { throw new Error("affiliateLink must be a valid URL"); }
+  if (url.protocol !== "https:") throw new Error("affiliateLink must use https");
+  return link;
 }
 
 function createProductId() {
@@ -78,6 +119,11 @@ function normalizeProduct(
       ) ||
       existingProduct?.id ||
       createProductId(),
+
+    productKey:
+      normalizeProductKey(input?.productKey) ||
+      existingProduct?.productKey ||
+      "",
 
     name:
       normalizeText(
@@ -173,7 +219,24 @@ function validateProduct(
     );
   }
 
+  if (product.affiliateLink) validateAffiliateLink(product.affiliateLink);
+
   return product;
+}
+
+export function validateProductInput(input, existingProduct = null) {
+  const raw = input || {};
+  return validateProduct(normalizeProduct({
+    ...raw,
+    price: validatePrice(raw.price),
+    affiliateLink: validateAffiliateLink(raw.affiliateLink),
+    linkEnabled: raw.linkEnabled === undefined
+      ? existingProduct?.linkEnabled ?? false
+      : parseBoolean(raw.linkEnabled, "linkEnabled"),
+    active: raw.active === undefined
+      ? existingProduct?.active ?? true
+      : parseBoolean(raw.active, "active"),
+  }, existingProduct));
 }
 
 async function readProductStore(
@@ -361,6 +424,92 @@ export async function saveProduct(
   );
 
   return product;
+}
+
+export async function resolveProductIdByKey(env, productKey) {
+  const key = normalizeProductKey(productKey);
+  if (!key) return null;
+  const product = (await getProducts(env)).find((item) => item?.productKey === key);
+  return product?.id || null;
+}
+
+const OPTIONAL_PRODUCT_FIELDS = [
+  "category",
+  "description",
+  "experienceStatus",
+  "experience",
+  "selectionReason",
+  "price",
+  "affiliateLink",
+  "affiliateDisclosure",
+  "linkEnabled",
+  "active",
+];
+
+function preserveEmptyCsvFields(row, existingProduct) {
+  const merged = { ...row };
+  for (const field of OPTIONAL_PRODUCT_FIELDS) {
+    if (typeof merged[field] === "string" && !merged[field].trim()) {
+      merged[field] = existingProduct[field];
+    }
+  }
+  return merged;
+}
+
+export async function batchUpsertProducts(env, rows) {
+  if (!Array.isArray(rows)) throw new Error("rows must be an array");
+  const products = [...(await readProductStore(env)).products];
+  const results = [];
+  rows.forEach((row, index) => {
+    try {
+      const productKey = normalizeProductKey(row?.productKey);
+      if (!productKey) throw new Error("productKey is required");
+      const existingIndex = products.findIndex((item) => item?.productKey === productKey);
+      const existingProduct = existingIndex >= 0 ? products[existingIndex] : null;
+      const input = existingProduct
+        ? preserveEmptyCsvFields(row, existingProduct)
+        : row;
+      const product = validateProductInput({ ...input, productKey, id: existingProduct?.id }, existingProduct);
+      if (existingIndex >= 0) products[existingIndex] = product;
+      else products.unshift(product);
+      results.push({ row: index + 1, status: existingProduct ? "updated" : "created", productKey, product });
+    } catch (error) {
+      results.push({ row: index + 1, status: "failed", productKey: normalizeProductKey(row?.productKey) || null, error: error.message });
+    }
+  });
+  if (results.some((item) => item.status !== "failed")) await writeProductStore(env, products);
+  return {
+    created: results.filter((item) => item.status === "created"),
+    updated: results.filter((item) => item.status === "updated"),
+    failed: results.filter((item) => item.status === "failed"),
+    results,
+  };
+}
+
+export function parseProductCsv(csvText) {
+  const text = String(csvText || "").replace(/^\uFEFF/, "");
+  const rows = [];
+  let row = [], cell = "", quoted = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const character = text[i];
+    if (character === '"') {
+      if (quoted && text[i + 1] === '"') { cell += '"'; i += 1; }
+      else quoted = !quoted;
+    } else if (character === "," && !quoted) { row.push(cell); cell = ""; }
+    else if ((character === "\n" || character === "\r") && !quoted) {
+      if (character === "\r" && text[i + 1] === "\n") i += 1;
+      row.push(cell); cell = "";
+      if (row.some((value) => value.trim())) rows.push(row);
+      row = [];
+    } else cell += character;
+  }
+  if (cell || row.length) { row.push(cell); if (row.some((value) => value.trim())) rows.push(row); }
+  if (rows.length < 2) return [];
+  const headers = rows.shift().map((header) => header.trim());
+  const unknown = headers.filter((header) => header && !PRODUCT_CSV_FIELDS.includes(header));
+  if (unknown.length) throw new Error(`Unsupported CSV field: ${unknown[0]}`);
+  if (!headers.includes("productKey")) throw new Error("CSV must include productKey");
+  return rows.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])));
 }
 
 export async function removeProduct(

@@ -24,6 +24,7 @@ import {
 
 import {
   handleProducts,
+  handleProductBatchUpload,
 } from "./routes/products.js";
 
 import {
@@ -268,6 +269,16 @@ export default {
       )
     ) {
       return handleProducts(
+        request,
+        env
+      );
+    }
+
+    if (
+      pathname === "/admin/products/batch" &&
+      method === "POST"
+    ) {
+      return handleProductBatchUpload(
         request,
         env
       );

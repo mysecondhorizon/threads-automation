@@ -6,6 +6,8 @@ import {
   getProducts,
   saveProduct,
   removeProduct,
+  parseProductCsv,
+  batchUpsertProducts,
 } from "../services/products.js";
 
 import {
@@ -87,5 +89,21 @@ export async function handleProducts(
         "Product API Error",
       400
     );
+  }
+}
+
+export async function handleProductBatchUpload(request, env) {
+  const auth = await requireAdminApiSession(request, env);
+  if (!auth.ok) return auth.response;
+  try {
+    const formData = await request.formData();
+    const file = formData.get("file");
+    if (!file || typeof file.text !== "function") return fail("CSV file is required", 400);
+    const rows = parseProductCsv(await file.text());
+    const result = await batchUpsertProducts(env, rows);
+    return ok({ summary: { created: result.created.length, updated: result.updated.length, failed: result.failed.length }, results: result.results });
+  } catch (error) {
+    console.error(error);
+    return fail(error.message || "Product CSV upload failed", 400);
   }
 }

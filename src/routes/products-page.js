@@ -499,6 +499,14 @@ export async function handleProductsPage(
     </form>
   </section>
 
+  <section style="border:1px solid #ddd;border-radius:14px;padding:20px;background:#fff;margin-bottom:24px;">
+    <h2 style="margin-top:0;">Batch Product CSV</h2>
+    <p style="color:#666;">productKey,name,category,description,experienceStatus,experience,selectionReason,price,affiliateLink,affiliateDisclosure,linkEnabled,active</p>
+    <input id="product-csv-file" type="file" accept=".csv,text/csv">
+    <button id="product-csv-upload" type="button" style="padding:9px 13px;">Upload CSV</button>
+    <pre id="product-csv-result" style="white-space:pre-wrap;"></pre>
+  </section>
+
   <section>
     <div style="
       display:flex;
@@ -554,6 +562,13 @@ export async function handleProductsPage(
       document.getElementById(
         "save-button"
       );
+
+    const csvFile =
+      document.getElementById("product-csv-file");
+    const csvUploadButton =
+      document.getElementById("product-csv-upload");
+    const csvResult =
+      document.getElementById("product-csv-result");
 
     let products =
       [];
@@ -974,6 +989,10 @@ export async function handleProductsPage(
                       )}
                     </h3>
 
+                    <div style="color:#555;font-size:13px;margin-bottom:5px;">
+                      key: \${escapeHtml(product.productKey || "-")}
+                    </div>
+
                     <div style="
                       color:#666;
                       font-size:14px;
@@ -1183,6 +1202,25 @@ export async function handleProductsPage(
           "</article>";
       }
     }
+
+    csvUploadButton.addEventListener("click", async () => {
+      const file = csvFile.files?.[0];
+      if (!file) { csvResult.textContent = "Select a CSV file first."; return; }
+      csvUploadButton.disabled = true;
+      csvResult.textContent = "Uploading...";
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch("/admin/products/batch", { method: "POST", body: formData });
+        const payload = await response.json();
+        if (!response.ok || payload.ok === false) throw new Error(payload.error || "CSV upload failed");
+        csvResult.textContent = JSON.stringify(payload.summary, null, 2) + "\n" +
+          payload.results.filter((item) => item.status === "failed").map((item) => "row " + item.row + ": " + item.error).join("\n");
+        await loadProducts();
+      } catch (error) {
+        csvResult.textContent = error instanceof Error ? error.message : String(error);
+      } finally { csvUploadButton.disabled = false; }
+    });
 
     form.addEventListener(
       "submit",
