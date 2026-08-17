@@ -1,4 +1,6 @@
 import { config } from "../config.js";
+import { getMedia } from "./media.js";
+import { getMediaObject } from "./media-storage.js";
 
 export class ThreadsApiError extends Error {
   constructor(
@@ -196,6 +198,33 @@ async function createTextContainer(
     containerId:
       data.id,
   };
+}
+
+async function createImageContainer(
+  accessToken,
+  userId,
+  text,
+  imageUrl
+) {
+  const body = new URLSearchParams({
+    media_type: "IMAGE",
+    image_url: imageUrl,
+    text,
+    access_token: accessToken,
+  });
+  const response = await fetch(
+    `${config.threads.graphBase}/${userId}/threads`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+    }
+  );
+  const data = await readThreadsResponse(response, "create_image_container");
+  if (!data.id) {
+    throw new ThreadsApiError("create_image_container", data);
+  }
+  return { containerId: data.id };
 }
 
 function serializeTopicError(
@@ -614,6 +643,97 @@ export async function publishTextPost(
 
     autoPublished:
       true,
+  };
+}
+
+export async function publishImagePost(
+  env,
+  accessToken,
+  userId,
+  text,
+  mediaId
+) {
+  const normalizedText = normalizeThreadsText(text);
+  const normalizedMediaId = String(mediaId || "").trim();
+
+  if (!normalizedText) {
+    throw new ThreadsApiError("validate_post_text", {
+      message: "Threads post text is empty",
+    });
+  }
+  if (!normalizedMediaId) {
+    throw new ThreadsApiError("validate_image_media", {
+      message: "Media ID is required for an IMAGE post",
+    });
+  }
+
+  let media;
+  try {
+    media = await getMedia(env, normalizedMediaId);
+  } catch (error) {
+    throw new ThreadsApiError("validate_image_media", {
+      message: "Media Library lookup failed",
+      cause: error?.message || String(error),
+    });
+  }
+  if (!media) {
+    throw new ThreadsApiError("validate_image_media", {
+      message: "Media record was not found",
+      mediaId: normalizedMediaId,
+    });
+  }
+  if (media.active === false) {
+    throw new ThreadsApiError("validate_image_media", {
+      message: "Media record is inactive",
+      mediaId: normalizedMediaId,
+    });
+  }
+
+  let object;
+  try {
+    object = await getMediaObject(env, media.objectKey);
+  } catch (error) {
+    throw new ThreadsApiError("validate_image_media", {
+      message: "Media object lookup failed",
+      mediaId: normalizedMediaId,
+      cause: error?.message || String(error),
+    });
+  }
+  if (!object) {
+    throw new ThreadsApiError("validate_image_media", {
+      message: "Media object was not found",
+      mediaId: normalizedMediaId,
+    });
+  }
+  const contentType = object.httpMetadata?.contentType;
+  if (contentType && !/^image\//iu.test(contentType)) {
+    throw new ThreadsApiError("validate_image_media", {
+      message: "Media object is not an image",
+      mediaId: normalizedMediaId,
+      contentType,
+    });
+  }
+
+  const imageUrl = `${config.app.baseUrl}/media/${encodeURIComponent(normalizedMediaId)}`;
+  let containerId;
+  ({ containerId } = await createImageContainer(
+    accessToken,
+    userId,
+    normalizedText,
+    imageUrl
+  ));
+  const { postId } = await publishContainer(
+    accessToken,
+    userId,
+    containerId,
+    { step: "publish_image" }
+  );
+  return {
+    containerId,
+    postId,
+    autoPublished: false,
+    mediaId: normalizedMediaId,
+    imageUrl,
   };
 }
 
