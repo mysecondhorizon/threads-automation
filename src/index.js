@@ -47,6 +47,10 @@ import {
 } from "./routes/media-management.js";
 
 import {
+  handlePublicMedia,
+} from "./routes/media-public.js";
+
+import {
   handleScheduleStatus,
 } from "./routes/schedule-status.js";
 
@@ -98,6 +102,16 @@ export default {
       new URL(
         request.url
       );
+
+    if (
+      url.pathname.startsWith("/media/")
+    ) {
+      return handlePublicMedia(
+        request,
+        env,
+        url
+      );
+    }
 
     const {
       pathname,
