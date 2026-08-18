@@ -63,6 +63,91 @@ function extractOutputText(
     .trim();
 }
 
+function parseJsonOutputText(value) {
+  const text = String(value || "").trim();
+  const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/iu);
+  return JSON.parse(fenced ? fenced[1].trim() : text);
+}
+
+export async function requestOpenAiJson(
+  env,
+  {
+    instructions,
+    input,
+    name,
+    schema,
+  }
+) {
+  if (!env.OPENAI_API_KEY) {
+    throw new AiServiceError("OPENAI_API_KEY is not configured");
+  }
+
+  let response;
+  try {
+    response = await fetch(OPENAI_RESPONSES_URL, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: env.OPENAI_MODEL || "gpt-5.6",
+        store: false,
+        reasoning: { effort: "low" },
+        instructions,
+        input,
+        text: {
+          format: {
+            type: "json_schema",
+            name,
+            strict: true,
+            schema,
+          },
+        },
+      }),
+    });
+  } catch (error) {
+    throw new AiServiceError("OpenAI request failed", {
+      category: "network",
+      message: error?.message || String(error),
+    });
+  }
+
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new AiServiceError("OpenAI returned invalid response JSON", {
+      category: "malformed_response",
+      status: response.status,
+    });
+  }
+
+  if (!response.ok) {
+    throw new AiServiceError("OpenAI request failed", {
+      category: "http",
+      status: response.status,
+    });
+  }
+
+  const outputText = extractOutputText(data);
+  if (!outputText) {
+    throw new AiServiceError("OpenAI returned no text", {
+      category: "malformed_response",
+      status: response.status,
+    });
+  }
+
+  try {
+    return parseJsonOutputText(outputText);
+  } catch {
+    throw new AiServiceError("OpenAI returned invalid JSON", {
+      category: "malformed_response",
+      status: response.status,
+    });
+  }
+}
+
 function normalizeLineBreaks(
   value
 ) {
