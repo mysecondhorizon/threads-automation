@@ -225,6 +225,29 @@ export async function handleAdminPostPage(
   <hr style="margin:32px 0;">
 
   <section>
+    <h2>AI Selection 진단</h2>
+
+    <p>
+      Content Pool 후보 평가와 AI 선택 결과를 게시 없이 1회 확인합니다.
+    </p>
+
+    <button
+      id="ai-selection-diagnostic-button"
+      type="button"
+      style="padding:12px 20px;cursor:pointer;"
+    >
+      AI Selection 진단
+    </button>
+
+    <pre
+      id="ai-selection-diagnostic-status"
+      style="white-space:pre-wrap;line-height:1.6;"
+    ></pre>
+  </section>
+
+  <hr style="margin:32px 0;">
+
+  <section>
     <h2>Threads 게시</h2>
 
     <form
@@ -308,6 +331,111 @@ export async function handleAdminPostPage(
       document.getElementById(
         "auto-post-status"
       );
+
+    const aiSelectionDiagnosticButton =
+      document.getElementById(
+        "ai-selection-diagnostic-button"
+      );
+
+    const aiSelectionDiagnosticStatus =
+      document.getElementById(
+        "ai-selection-diagnostic-status"
+      );
+
+    let aiSelectionDiagnosticStarted =
+      false;
+
+    function diagnosticValue(value) {
+      return value == null
+        ? "-"
+        : String(value);
+    }
+
+    function showAiSelectionDiagnostic(
+      status,
+      data
+    ) {
+      const lines = [
+        "HTTP status: " + status,
+      ];
+
+      if (!data?.ok) {
+        if (status === 401) {
+          lines.push(
+            "관리자 로그인이 필요합니다."
+          );
+        }
+
+        if (data?.code) {
+          lines.push(
+            "error code: " +
+            diagnosticValue(data.code)
+          );
+        }
+
+        if (data?.category) {
+          lines.push(
+            "error category: " +
+            diagnosticValue(data.category)
+          );
+        }
+
+        aiSelectionDiagnosticStatus.textContent =
+          lines.join("\\n");
+        return;
+      }
+
+      const selection =
+        data.selection || {};
+      const validation =
+        data.validation || {};
+      const sideEffects =
+        data.sideEffects || {};
+
+      lines.push(
+        "totalCandidates: " +
+        diagnosticValue(data.totalCandidates),
+        "eligibleCandidates: " +
+        diagnosticValue(data.eligibleCandidates),
+        "packagedCandidates: " +
+        diagnosticValue(data.packagedCandidates),
+        "candidateId: " +
+        diagnosticValue(selection.candidateId),
+        "productId: " +
+        diagnosticValue(selection.productId),
+        "mediaId: " +
+        diagnosticValue(selection.mediaId),
+        "contentType: " +
+        diagnosticValue(selection.contentType),
+        "source: " +
+        diagnosticValue(selection.source),
+        "validation: " +
+        diagnosticValue(validation.ok)
+      );
+
+      if (selection.fallbackCategory) {
+        lines.push(
+          "fallbackCategory: " +
+          diagnosticValue(
+            selection.fallbackCategory
+          )
+        );
+      }
+
+      lines.push(
+        "sideEffects.kvWrite: " +
+        diagnosticValue(sideEffects.kvWrite),
+        "sideEffects.threadsPublish: " +
+        diagnosticValue(
+          sideEffects.threadsPublish
+        ),
+        "sideEffects.poolMutation: " +
+        diagnosticValue(sideEffects.poolMutation)
+      );
+
+      aiSelectionDiagnosticStatus.textContent =
+        lines.join("\\n");
+    }
 
     function updateCharacterCount() {
       characterCount.textContent =
@@ -629,6 +757,56 @@ export async function handleAdminPostPage(
 
           autoPostButton.textContent =
             "AI 글 생성 후 즉시 게시";
+        }
+      }
+    );
+
+    aiSelectionDiagnosticButton.addEventListener(
+      "click",
+      async function () {
+        if (aiSelectionDiagnosticStarted) {
+          return;
+        }
+
+        aiSelectionDiagnosticStarted =
+          true;
+        aiSelectionDiagnosticButton.disabled =
+          true;
+        aiSelectionDiagnosticButton.textContent =
+          "AI Selection 진단 실행 중...";
+        aiSelectionDiagnosticStatus.textContent =
+          "AI Selection 진단을 실행하고 있습니다.";
+
+        try {
+          const response =
+            await fetch(
+              "/admin/diagnostics/ai-selection",
+              {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                  accept: "application/json",
+                },
+              }
+            );
+          let data = {};
+
+          try {
+            data = await response.json();
+          } catch {
+            data = {};
+          }
+
+          showAiSelectionDiagnostic(
+            response.status,
+            data
+          );
+        } catch {
+          aiSelectionDiagnosticStatus.textContent =
+            "HTTP status: network error";
+        } finally {
+          aiSelectionDiagnosticButton.textContent =
+            "AI Selection 진단 완료";
         }
       }
     );
