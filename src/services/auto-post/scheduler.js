@@ -25,11 +25,126 @@ import {
   generateProductReviewCandidate,
 } from "../product-review.js";
 
+import {
+  buildAiCandidatePackage,
+} from "../ai-candidate-package.js";
+
+import {
+  selectAiCandidate,
+} from "../ai-candidate-selector.js";
+
 const MINIMUM_INTERVAL_MINUTES =
   90;
 
 const DAILY_AUTO_POST_LIMIT =
   4;
+
+function isShadowSelectionEnabled(env) {
+  const value =
+    String(env?.CRON_AI_SELECTION_SHADOW || "")
+      .trim()
+      .toLowerCase();
+
+  return value === "true" || value === "1" || value === "on";
+}
+
+export async function runCronAiSelectionShadow(
+  env,
+  {
+    services = {},
+    at = new Date(),
+  } = {}
+) {
+  if (!isShadowSelectionEnabled(env)) {
+    return {
+      enabled: false,
+      skipped: true,
+      reason: "disabled",
+    };
+  }
+
+  try {
+    const buildPackage =
+      services.buildAiCandidatePackage ||
+      buildAiCandidatePackage;
+    const selectCandidate =
+      services.selectAiCandidate ||
+      selectAiCandidate;
+
+    const candidatePackage =
+      await buildPackage(env, { at });
+
+    if (!candidatePackage.candidates.length) {
+      console.log(
+        "Cron AI selection shadow skipped",
+        {
+          source: "cron_ai_selection_shadow",
+          reason: "no_eligible_candidates",
+        }
+      );
+
+      return {
+        enabled: true,
+        skipped: true,
+        reason: "no_eligible_candidates",
+      };
+    }
+
+    const result =
+      await selectCandidate(env, {
+        candidatePackage,
+      });
+    const selection = result.selection || {};
+
+    console.log(
+      "Cron AI selection shadow completed",
+      {
+        source: "cron_ai_selection_shadow",
+        selectionSource: result.source,
+        candidateId: selection.candidateId || null,
+        productId: selection.productId || null,
+        mediaId: selection.mediaId || null,
+        contentType: selection.contentType || null,
+        reason:
+          result.source === "fallback"
+            ? result.fallback?.category || "deterministic_scoring_fallback"
+            : "ai_selection",
+      }
+    );
+
+    return {
+      enabled: true,
+      skipped: false,
+      source: result.source,
+      selection: {
+        candidateId: selection.candidateId || null,
+        productId: selection.productId || null,
+        mediaId: selection.mediaId || null,
+        contentType: selection.contentType || null,
+      },
+      reason:
+        result.source === "fallback"
+          ? result.fallback?.category || "deterministic_scoring_fallback"
+          : "ai_selection",
+    };
+  } catch (error) {
+    console.error(
+      "Cron AI selection shadow failed",
+      {
+        source: "cron_ai_selection_shadow",
+        reason: "shadow_pipeline_failed",
+        category: error?.details?.category || error?.code || "unknown",
+      }
+    );
+
+    return {
+      enabled: true,
+      skipped: true,
+      reason: "shadow_pipeline_failed",
+      category: error?.details?.category || error?.code || "unknown",
+    };
+  }
+}
 
 export const PRODUCT_REVIEW_CRON =
   "30 11 * * *";
@@ -354,7 +469,15 @@ export async function runScheduledAutoPost(
       }
     );
 
-    const result =
+    await runCronAiSelectionShadow(
+      env,
+      {
+        services,
+        at: scheduledTime || new Date(),
+      }
+    );
+
+    const publishResult =
       await executeScheduledAutoPost(
         env,
         {
@@ -389,16 +512,16 @@ export async function runScheduledAutoPost(
           false,
 
         executionId:
-          result.executionId,
+          publishResult.executionId,
 
         postId:
-          result.post_id,
+          publishResult.post_id,
 
         generation:
-          result.generation,
+          publishResult.generation,
 
         similarity:
-          result.similarity,
+          publishResult.similarity,
 
         sync: {
           deleted:
@@ -436,26 +559,26 @@ export async function runScheduledAutoPost(
       "Scheduled auto post completed",
       {
         source:
-          result.source,
+          publishResult.source,
 
         cron,
 
         scheduledTime,
 
         executionId:
-          result.executionId,
+          publishResult.executionId,
 
         postId:
-          result.post_id,
+          publishResult.post_id,
 
         generation:
-          result.generation,
+          publishResult.generation,
 
         similarity:
-          result.similarity,
+          publishResult.similarity,
 
         firstComment:
-          result.firstComment,
+          publishResult.firstComment,
       }
     );
 
@@ -486,7 +609,7 @@ export async function runScheduledAutoPost(
 
       guard,
 
-      result,
+      result: publishResult,
     };
   } catch (
     error
