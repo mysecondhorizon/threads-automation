@@ -90,6 +90,10 @@ import {
 } from "./routes/logs.js";
 
 import {
+  handleAiSelectionDiagnostic,
+} from "./routes/ai-selection-diagnostic.js";
+
+import {
   runScheduledAutoPost,
 } from "./services/auto-post/scheduler.js";
 
@@ -283,6 +287,15 @@ export default {
       )
     ) {
       return handleProducts(
+        request,
+        env
+      );
+    }
+
+    if (
+      pathname === "/admin/diagnostics/ai-selection"
+    ) {
+      return handleAiSelectionDiagnostic(
         request,
         env
       );
