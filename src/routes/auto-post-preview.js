@@ -25,6 +25,12 @@ import {
 } from "../services/post-regenerator.js";
 
 import {
+  buildCurrentTopicGenerationContext,
+  readCurrentTopicInventory,
+  selectCurrentTopic,
+} from "../services/current-topic-inventory.js";
+
+import {
   ok,
   fail,
 } from "../utils/response.js";
@@ -63,6 +69,9 @@ async function readRequestOptions(
 
       tone:
         DEFAULT_TONE,
+
+      useCurrentTopic:
+        false,
     };
   }
 
@@ -78,6 +87,9 @@ async function readRequestOptions(
 
       tone:
         DEFAULT_TONE,
+
+      useCurrentTopic:
+        false,
     };
   }
 
@@ -99,6 +111,10 @@ async function readRequestOptions(
     tone:
       tone ||
       DEFAULT_TONE,
+
+    useCurrentTopic:
+      body?.useCurrentTopic ===
+      true,
   };
 }
 
@@ -116,6 +132,38 @@ function normalizeFirstComment(
 
     text,
   };
+}
+
+export async function applyCurrentTopicToPreviewContext(
+  env,
+  context,
+  {
+    readInventory =
+      readCurrentTopicInventory,
+    selectTopic =
+      selectCurrentTopic,
+    buildGenerationContext =
+      buildCurrentTopicGenerationContext,
+  } = {}
+) {
+  const inventory =
+    await readInventory(
+      env
+    );
+
+  const currentTopic =
+    buildGenerationContext(
+      selectTopic(
+        inventory
+      )
+    );
+
+  if (currentTopic) {
+    context.currentTopic =
+      currentTopic;
+  }
+
+  return currentTopic;
 }
 
 function buildSimilaritySummary(
@@ -198,6 +246,17 @@ export async function handleAutoPostPreview(
     context.publishing.requestedTone =
       options.tone;
 
+    let currentTopic =
+      null;
+
+    if (options.useCurrentTopic) {
+      currentTopic =
+        await applyCurrentTopicToPreviewContext(
+          env,
+          context
+        );
+    }
+
     const generation =
       await generateDistinctThreadPost(
         env,
@@ -211,6 +270,9 @@ export async function handleAutoPostPreview(
 
           maxAttempts:
             MAX_GENERATION_ATTEMPTS,
+
+          reselectTargetOnRecentPatternConflict:
+            options.useCurrentTopic,
         }
       );
 
@@ -331,7 +393,12 @@ export async function handleAutoPostPreview(
 
         tone:
           options.tone,
+
+        useCurrentTopic:
+          options.useCurrentTopic,
       },
+
+      currentTopic,
 
       context: {
         version:

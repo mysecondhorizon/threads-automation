@@ -633,6 +633,43 @@ function normalizeFormatForContext(
   };
 }
 
+function normalizeCurrentTopicForContext(value) {
+  const textList = (items) =>
+    Array.isArray(items)
+      ? items
+        .filter((item) => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean)
+      : [];
+
+  const topicId = String(value?.topicId || "").trim();
+  const category = String(value?.category || "").trim();
+  const subject = String(value?.subject || "").trim();
+  const personaRelevance = String(value?.personaRelevance || "").trim();
+  const allowedAngles = textList(value?.allowedAngles);
+  const verifiedFacts = textList(value?.verifiedFacts);
+
+  if (!topicId || !category || !subject || !personaRelevance || !allowedAngles.length || !verifiedFacts.length) {
+    return null;
+  }
+
+  const selectedAngle = String(value?.selectedAngle || "").trim();
+
+  return {
+    topicId,
+    category,
+    subject,
+    verifiedFacts,
+    personaRelevance,
+    allowedAngles,
+    forbiddenClaims: textList(value?.forbiddenClaims),
+    selectedAngle:
+      allowedAngles.includes(selectedAngle)
+        ? selectedAngle
+        : allowedAngles[0],
+  };
+}
+
 function buildAiContextData(
   context
 ) {
@@ -655,6 +692,11 @@ function buildAiContextData(
             normalizePostForContext
           )
       : [];
+
+  const currentTopic =
+    normalizeCurrentTopicForContext(
+      context?.currentTopic
+    );
 
   return {
     meta: {
@@ -922,6 +964,10 @@ function buildAiContextData(
             ?.lowPerformanceTopics
         ),
     },
+
+    ...(currentTopic
+      ? { currentTopic }
+      : {}),
   };
 }
 
@@ -972,6 +1018,16 @@ function buildGenerationInput(
       ),
       "[/THREAD_CONTEXT_JSON]"
     );
+
+    if (contextData.currentTopic) {
+      lines.push(
+        "",
+        "currentTopic is a factual basis for a natural persona observation, not a news summary.",
+        "Use only verifiedFacts as factual support, use at most one fact naturally, and do not invent numbers, dates, launch details, product features, or certainty.",
+        "Do not claim direct use, attendance, or personal experience. Do not start as a news report or say you saw it in the news.",
+        "Use personaRelevance as everyday context and selectedAngle as the main angle. Follow forbiddenClaims and keep facts, curiosity, and preference clearly distinct."
+      );
+    }
   }
 
   return lines.join(
@@ -1396,6 +1452,26 @@ export async function generateThreadPost(
               .productExperience
               .length
           : 0,
+
+      currentTopicId:
+        context?.currentTopic
+          ?.topicId ||
+        null,
+
+      currentTopicCategory:
+        context?.currentTopic
+          ?.category ||
+        null,
+
+      currentTopicSubject:
+        context?.currentTopic
+          ?.subject ||
+        null,
+
+      selectedAngle:
+        context?.currentTopic
+          ?.selectedAngle ||
+        null,
 
       recordData:
         parsedPost.recordData,

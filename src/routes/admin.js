@@ -270,8 +270,21 @@ export async function handleAdminPostPage(
       Current Topic 조회
     </button>
 
+    <button
+      id="current-topic-auto-preview-button"
+      type="button"
+      style="padding:12px 20px;cursor:pointer;margin-left:8px;"
+    >
+      Current Topic AUTO Preview
+    </button>
+
     <pre
       id="current-topic-diagnostic-status"
+      style="white-space:pre-wrap;line-height:1.6;"
+    ></pre>
+
+    <pre
+      id="current-topic-auto-preview-status"
       style="white-space:pre-wrap;line-height:1.6;"
     ></pre>
   </section>
@@ -388,10 +401,23 @@ export async function handleAdminPostPage(
         "current-topic-diagnostic-status"
       );
 
+    const currentTopicAutoPreviewButton =
+      document.getElementById(
+        "current-topic-auto-preview-button"
+      );
+
+    const currentTopicAutoPreviewStatus =
+      document.getElementById(
+        "current-topic-auto-preview-status"
+      );
+
     let aiSelectionDiagnosticStarted =
       false;
 
     let currentTopicRefreshStarted =
+      false;
+
+    let currentTopicAutoPreviewStarted =
       false;
 
     function diagnosticValue(value) {
@@ -611,6 +637,72 @@ export async function handleAdminPostPage(
         response.status,
         data
       );
+    }
+
+    function showCurrentTopicAutoPreview(
+      status,
+      data
+    ) {
+      const lines = [
+        "HTTP status: " + status,
+      ];
+
+      if (!data?.ok) {
+        if (status === 401) {
+          lines.push(
+            "관리자 로그인이 필요합니다."
+          );
+        }
+
+        if (typeof data?.code === "string") {
+          lines.push(
+            "error code: " +
+            diagnosticValue(data.code)
+          );
+        }
+
+        currentTopicAutoPreviewStatus.textContent =
+          lines.join("\\n");
+        return;
+      }
+
+      const topic =
+        data.currentTopic;
+      const generation =
+        data.generation || {};
+
+      lines.push(
+        "topicApplied: " +
+          diagnosticValue(Boolean(topic)),
+        "text: " +
+          diagnosticValue(data.text),
+        "formatSignature: " +
+          diagnosticValue(generation.formatSignature),
+        "targetFormatId: " +
+          diagnosticValue(generation.targetFormatId),
+        "validation: " +
+          diagnosticValue(data.validation?.length != null)
+      );
+
+      if (topic && typeof topic === "object") {
+        lines.push(
+          "topicId: " +
+            diagnosticValue(topic.topicId),
+          "category: " +
+            diagnosticValue(topic.category),
+          "subject: " +
+            diagnosticValue(topic.subject),
+          "selectedAngle: " +
+            diagnosticValue(topic.selectedAngle)
+        );
+      } else {
+        lines.push(
+          "Current Topic이 없어 기존 AUTO context로 생성했습니다."
+        );
+      }
+
+      currentTopicAutoPreviewStatus.textContent =
+        lines.join("\\n");
     }
 
     function updateCharacterCount() {
@@ -1041,6 +1133,60 @@ export async function handleAdminPostPage(
         } finally {
           currentTopicReadButton.disabled =
             false;
+        }
+      }
+    );
+
+    currentTopicAutoPreviewButton.addEventListener(
+      "click",
+      async function () {
+        if (currentTopicAutoPreviewStarted) {
+          return;
+        }
+
+        currentTopicAutoPreviewStarted =
+          true;
+        currentTopicAutoPreviewButton.disabled =
+          true;
+        currentTopicAutoPreviewButton.textContent =
+          "Current Topic AUTO Preview 생성 중...";
+        currentTopicAutoPreviewStatus.textContent =
+          "Current Topic inventory를 읽고 AUTO 초안을 생성하고 있습니다.";
+
+        try {
+          const response =
+            await fetch(
+              "/admin/auto-post/preview",
+              {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                  "content-type": "application/json",
+                  accept: "application/json",
+                },
+                body: JSON.stringify({
+                  useCurrentTopic: true,
+                }),
+              }
+            );
+          let data = {};
+
+          try {
+            data = await response.json();
+          } catch {
+            data = {};
+          }
+
+          showCurrentTopicAutoPreview(
+            response.status,
+            data
+          );
+        } catch {
+          currentTopicAutoPreviewStatus.textContent =
+            "HTTP status: network error";
+        } finally {
+          currentTopicAutoPreviewButton.textContent =
+            "Current Topic AUTO Preview 완료";
         }
       }
     );

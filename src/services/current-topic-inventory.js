@@ -291,3 +291,21 @@ export function selectCurrentTopic(inventory, { at = new Date(), category = null
       return capturedDifference || left.id.localeCompare(right.id);
     })[0] || null;
 }
+
+export function buildCurrentTopicGenerationContext(topic) {
+  if (!topic || typeof topic !== "object") return null;
+
+  const normalized = normalizeCurrentTopic(topic, topic);
+  if (!normalized) return null;
+
+  return {
+    topicId: normalized.id,
+    category: normalized.category,
+    subject: normalized.subject,
+    verifiedFacts: [...normalized.verifiedFacts],
+    personaRelevance: normalized.personaRelevance,
+    allowedAngles: [...normalized.allowedAngles],
+    forbiddenClaims: [...normalized.forbiddenClaims],
+    selectedAngle: normalized.allowedAngles[0] || null,
+  };
+}
