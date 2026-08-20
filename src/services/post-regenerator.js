@@ -28,7 +28,8 @@ const DEFAULT_MAX_ATTEMPTS =
 
 function buildRetryGoal(
   originalGoal,
-  generationError
+  generationError,
+  targetFormat
 ) {
   const details =
     generationError
@@ -45,7 +46,7 @@ function buildRetryGoal(
       "중요 추가 지시:",
       "방금 생성한 초안은 최근 글과 문장·문단 구조가 겹치거나 목표 포맷에서 벗어났다.",
       `실패한 포맷: ${details.signature || "확인 불가"}`,
-      `반드시 적용할 포맷: ${details.targetPrompt || "publishing.targetFormat을 따른다."}`,
+      `반드시 적용할 포맷: ${targetFormat?.prompt || details.targetPrompt || "publishing.targetFormat을 따른다."}`,
       "첫 문장 단독 문단과 마지막 한 줄 결론을 습관적으로 만들지 않는다.",
       "본문에 포맷 설명이나 signature를 출력하지 않는다.",
     ].join("\n");
@@ -113,6 +114,9 @@ export async function generateDistinctThreadPost(
     maxAttempts =
       DEFAULT_MAX_ATTEMPTS,
 
+    reselectTargetOnRecentPatternConflict =
+      false,
+
     generatePost =
       generateThreadPost,
   } = {}
@@ -148,9 +152,12 @@ export async function generateDistinctThreadPost(
       );
   }
 
-  const targetFormat =
+  let targetFormat =
     context.publishing
       .targetFormat;
+
+  const failedTargetFormatIds =
+    new Set();
 
   const disclosures =
     getContextFormatDisclosures(
@@ -180,6 +187,11 @@ export async function generateDistinctThreadPost(
         context
       );
 
+    attemptContext
+      .publishing
+      .targetFormat =
+      targetFormat;
+
     if (
       attempt > 1 &&
       lastSimilarityError
@@ -189,7 +201,8 @@ export async function generateDistinctThreadPost(
         .goal =
         buildRetryGoal(
           originalGoal,
-          lastSimilarityError
+          lastSimilarityError,
+          targetFormat
         );
     }
 
@@ -261,6 +274,58 @@ export async function generateDistinctThreadPost(
 
       lastSimilarityError =
         error;
+
+      const reasons =
+        Array.isArray(
+          error?.details?.reasons
+        )
+          ? error.details.reasons
+          : [];
+
+      if (
+        reselectTargetOnRecentPatternConflict &&
+        error?.code ===
+          "post_format_validation_failed" &&
+        reasons.includes(
+          "recent_pattern_too_similar"
+        ) &&
+        targetFormat?.id
+      ) {
+        failedTargetFormatIds.add(
+          targetFormat.id
+        );
+
+        const nextTargetFormat =
+          selectTargetPostFormat(
+            recentFormats,
+            {
+              sequence:
+                context.publishing
+                  .publishSequence ||
+                1,
+              excludedFormatIds: [
+                ...failedTargetFormatIds,
+              ],
+            }
+          );
+
+        if (nextTargetFormat) {
+          targetFormat =
+            nextTargetFormat;
+        } else {
+          error.details = {
+            ...error.details,
+
+            attempts:
+              attempt,
+
+            regenerated:
+              attempt > 1,
+          };
+
+          throw error;
+        }
+      }
 
       if (
         attempt >=

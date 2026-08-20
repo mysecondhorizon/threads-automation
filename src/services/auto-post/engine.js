@@ -751,6 +751,9 @@ async function runExecution(
 
           maxAttempts:
             MAX_GENERATION_ATTEMPTS,
+
+          reselectTargetOnRecentPatternConflict:
+            true,
         }
       );
 

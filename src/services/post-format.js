@@ -241,15 +241,23 @@ function targetCanUseOneXOne(target) {
   );
 }
 
-export function selectTargetPostFormat(recentValues, { sequence = 1 } = {}) {
+export function selectTargetPostFormat(
+  recentValues,
+  { sequence = 1, excludedFormatIds = [] } = {}
+) {
   const recent = normalizeRecentFormats(recentValues);
+  const excludedIds = new Set(
+    (Array.isArray(excludedFormatIds) ? excludedFormatIds : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  );
   const trend = recent.slice(0, RECENT_TREND_LIMIT);
   const repeatedFirstSingle = trend.filter((item) => item.firstParagraphSingleSentence).length >= 2;
   const repeatedLastSingle = trend.filter((item) => item.lastParagraphSingleSentence).length >= 2;
   const repeatedOneXOne = trend.some((item) => item.oneXOnePattern);
   const rotation = Math.max(0, Number(sequence || 1) - 1) % FORMAT_POOL.length;
 
-  const ranked = FORMAT_POOL.map((target, index) => {
+  const ranked = FORMAT_POOL.filter((target) => !excludedIds.has(target.id)).map((target, index) => {
     let score = recent.slice(0, 6).reduce((sum, format, recentIndex) => {
       const distance = targetDistance(format, target);
       if (distance === 0) return sum + 18 / (recentIndex + 1);
@@ -269,7 +277,8 @@ export function selectTargetPostFormat(recentValues, { sequence = 1 } = {}) {
   ranked.sort((left, right) =>
     left.score - right.score || left.rotationDistance - right.rotationDistance
   );
-  const selected = ranked[0].target;
+  const selected = ranked[0]?.target;
+  if (!selected) return null;
   return {
     ...getPostFormatPool().find((item) => item.id === selected.id),
     recentAvoidance: {
