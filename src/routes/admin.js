@@ -248,6 +248,37 @@ export async function handleAdminPostPage(
   <hr style="margin:32px 0;">
 
   <section>
+    <h2>Current Topic</h2>
+
+    <p>
+      최신 topic inventory를 조회하거나, 관리자 세션으로 1회 refresh합니다.
+    </p>
+
+    <button
+      id="current-topic-refresh-button"
+      type="button"
+      style="padding:12px 20px;cursor:pointer;"
+    >
+      Current Topic Refresh
+    </button>
+
+    <button
+      id="current-topic-read-button"
+      type="button"
+      style="padding:12px 20px;cursor:pointer;margin-left:8px;"
+    >
+      Current Topic 조회
+    </button>
+
+    <pre
+      id="current-topic-diagnostic-status"
+      style="white-space:pre-wrap;line-height:1.6;"
+    ></pre>
+  </section>
+
+  <hr style="margin:32px 0;">
+
+  <section>
     <h2>Threads 게시</h2>
 
     <form
@@ -342,7 +373,25 @@ export async function handleAdminPostPage(
         "ai-selection-diagnostic-status"
       );
 
+    const currentTopicRefreshButton =
+      document.getElementById(
+        "current-topic-refresh-button"
+      );
+
+    const currentTopicReadButton =
+      document.getElementById(
+        "current-topic-read-button"
+      );
+
+    const currentTopicDiagnosticStatus =
+      document.getElementById(
+        "current-topic-diagnostic-status"
+      );
+
     let aiSelectionDiagnosticStarted =
+      false;
+
+    let currentTopicRefreshStarted =
       false;
 
     function diagnosticValue(value) {
@@ -435,6 +484,133 @@ export async function handleAdminPostPage(
 
       aiSelectionDiagnosticStatus.textContent =
         lines.join("\\n");
+    }
+
+    function currentTopicList(value) {
+      return Array.isArray(value)
+        ? value
+          .filter((item) => typeof item === "string")
+          .map((item) => diagnosticValue(item))
+        : [];
+    }
+
+    function appendCurrentTopic(
+      lines,
+      label,
+      topic
+    ) {
+      if (!topic || typeof topic !== "object") {
+        lines.push(label + ": -");
+        return;
+      }
+
+      lines.push(
+        label + ".id: " +
+          diagnosticValue(topic.id),
+        label + ".category: " +
+          diagnosticValue(topic.category),
+        label + ".subject: " +
+          diagnosticValue(topic.subject),
+        label + ".verifiedFacts: " +
+          (currentTopicList(topic.verifiedFacts).join(" | ") || "-"),
+        label + ".personaRelevance: " +
+          diagnosticValue(topic.personaRelevance),
+        label + ".allowedAngles: " +
+          (currentTopicList(topic.allowedAngles).join(" | ") || "-"),
+        label + ".expiresAt: " +
+          diagnosticValue(topic.expiresAt)
+      );
+    }
+
+    function showCurrentTopicDiagnostic(
+      status,
+      data
+    ) {
+      const lines = [
+        "HTTP status: " + status,
+        "ok: " + (data?.ok === true ? "true" : "false"),
+      ];
+
+      if (!data?.ok) {
+        if (status === 401) {
+          lines.push(
+            "관리자 로그인이 필요합니다."
+          );
+        }
+
+        if (typeof data?.code === "string") {
+          lines.push(
+            "error code: " +
+            diagnosticValue(data.code)
+          );
+        }
+
+        currentTopicDiagnosticStatus.textContent =
+          lines.join("\\n");
+        return;
+      }
+
+      lines.push(
+        "capturedAt: " +
+          diagnosticValue(data.capturedAt),
+        "expiresAt: " +
+          diagnosticValue(data.expiresAt),
+        "topicCount: " +
+          diagnosticValue(data.topicCount),
+        "expiredCount: " +
+          diagnosticValue(data.expiredCount)
+      );
+
+      const topics =
+        Array.isArray(data.topics)
+          ? data.topics
+          : [];
+
+      topics.forEach((topic, index) => {
+        appendCurrentTopic(
+          lines,
+          "topics[" + index + "]",
+          topic
+        );
+      });
+
+      appendCurrentTopic(
+        lines,
+        "selectedTopic",
+        data.selectedTopic
+      );
+
+      currentTopicDiagnosticStatus.textContent =
+        lines.join("\\n");
+    }
+
+    async function requestCurrentTopicDiagnostic(
+      method,
+      path
+    ) {
+      const response =
+        await fetch(
+          path,
+          {
+            method,
+            credentials: "same-origin",
+            headers: {
+              accept: "application/json",
+            },
+          }
+        );
+      let data = {};
+
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
+
+      showCurrentTopicDiagnostic(
+        response.status,
+        data
+      );
     }
 
     function updateCharacterCount() {
@@ -807,6 +983,64 @@ export async function handleAdminPostPage(
         } finally {
           aiSelectionDiagnosticButton.textContent =
             "AI Selection 진단 완료";
+        }
+      }
+    );
+
+    currentTopicRefreshButton.addEventListener(
+      "click",
+      async function () {
+        if (currentTopicRefreshStarted) {
+          return;
+        }
+
+        currentTopicRefreshStarted =
+          true;
+        currentTopicRefreshButton.disabled =
+          true;
+        currentTopicReadButton.disabled =
+          true;
+        currentTopicRefreshButton.textContent =
+          "Current Topic Refresh 실행 중...";
+        currentTopicDiagnosticStatus.textContent =
+          "Current Topic Refresh를 실행하고 있습니다.";
+
+        try {
+          await requestCurrentTopicDiagnostic(
+            "POST",
+            "/admin/diagnostics/current-topics/refresh"
+          );
+        } catch {
+          currentTopicDiagnosticStatus.textContent =
+            "HTTP status: network error";
+        } finally {
+          currentTopicReadButton.disabled =
+            false;
+          currentTopicRefreshButton.textContent =
+            "Current Topic Refresh 완료";
+        }
+      }
+    );
+
+    currentTopicReadButton.addEventListener(
+      "click",
+      async function () {
+        currentTopicReadButton.disabled =
+          true;
+        currentTopicDiagnosticStatus.textContent =
+          "Current Topic을 조회하고 있습니다.";
+
+        try {
+          await requestCurrentTopicDiagnostic(
+            "GET",
+            "/admin/diagnostics/current-topics"
+          );
+        } catch {
+          currentTopicDiagnosticStatus.textContent =
+            "HTTP status: network error";
+        } finally {
+          currentTopicReadButton.disabled =
+            false;
         }
       }
     );
