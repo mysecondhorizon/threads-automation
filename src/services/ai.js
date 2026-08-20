@@ -76,6 +76,7 @@ export async function requestOpenAiJson(
     input,
     name,
     schema,
+    tools,
   }
 ) {
   if (!env.OPENAI_API_KEY) {
@@ -96,6 +97,9 @@ export async function requestOpenAiJson(
         reasoning: { effort: "low" },
         instructions,
         input,
+        ...(Array.isArray(tools) && tools.length
+          ? { tools }
+          : {}),
         text: {
           format: {
             type: "json_schema",

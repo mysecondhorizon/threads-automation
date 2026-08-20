@@ -94,6 +94,10 @@ import {
 } from "./routes/ai-selection-diagnostic.js";
 
 import {
+  handleCurrentTopicDiagnostic,
+} from "./routes/current-topic-diagnostic.js";
+
+import {
   runScheduledAutoPost,
 } from "./services/auto-post/scheduler.js";
 
@@ -296,6 +300,16 @@ export default {
       pathname === "/admin/diagnostics/ai-selection"
     ) {
       return handleAiSelectionDiagnostic(
+        request,
+        env
+      );
+    }
+
+    if (
+      pathname === "/admin/diagnostics/current-topics" ||
+      pathname === "/admin/diagnostics/current-topics/refresh"
+    ) {
+      return handleCurrentTopicDiagnostic(
         request,
         env
       );
