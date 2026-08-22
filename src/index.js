@@ -496,6 +496,7 @@ export default {
       method === "GET"
     ) {
       return handleShortToken(
+        request,
         env
       );
     }
@@ -505,6 +506,7 @@ export default {
       method === "GET"
     ) {
       return handleTokenExchange(
+        request,
         env
       );
     }
@@ -514,6 +516,7 @@ export default {
       method === "GET"
     ) {
       return handleProfile(
+        request,
         env
       );
     }

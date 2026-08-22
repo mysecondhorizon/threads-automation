@@ -1,8 +1,12 @@
 import { getJson, putJson } from "../services/kv.js";
+import { requireAdminApiSession } from "../middleware/auth.js";
 import { getThreadsProfile } from "../services/threads.js";
 import { ok, fail } from "../utils/response.js";
 
-export async function handleShortToken(env) {
+export async function handleShortToken(request, env) {
+  const adminAuth = await requireAdminApiSession(request, env);
+  if (!adminAuth.ok) return adminAuth.response;
+
   const token = await getJson(
     env,
     "threads_short_lived_token"
@@ -15,7 +19,10 @@ export async function handleShortToken(env) {
   return ok({ token });
 }
 
-export async function handleTokenExchange(env) {
+export async function handleTokenExchange(request, env) {
+  const adminAuth = await requireAdminApiSession(request, env);
+  if (!adminAuth.ok) return adminAuth.response;
+
   const savedToken = await getJson(
     env,
     "threads_short_lived_token"
@@ -68,7 +75,10 @@ export async function handleTokenExchange(env) {
   });
 }
 
-export async function handleProfile(env) {
+export async function handleProfile(request, env) {
+  const adminAuth = await requireAdminApiSession(request, env);
+  if (!adminAuth.ok) return adminAuth.response;
+
   const auth = await getJson(env, "threads_auth");
 
   if (!auth?.access_token) {
