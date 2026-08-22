@@ -55,6 +55,18 @@ const MAX_SIMILARITY_POSTS =
 const MAX_GENERATION_ATTEMPTS =
   2;
 
+export class CurrentTopicPreviewSelectionError extends Error {
+  constructor(
+    message = "Specified current topic is unavailable"
+  ) {
+    super(message);
+    this.name =
+      "CurrentTopicPreviewSelectionError";
+    this.code =
+      "current_topic_not_found_or_expired";
+  }
+}
+
 async function readRequestOptions(
   request
 ) {
@@ -77,6 +89,9 @@ async function readRequestOptions(
 
       useCurrentTopic:
         false,
+
+      currentTopicId:
+        null,
     };
   }
 
@@ -95,6 +110,9 @@ async function readRequestOptions(
 
       useCurrentTopic:
         false,
+
+      currentTopicId:
+        null,
     };
   }
 
@@ -108,6 +126,11 @@ async function readRequestOptions(
       body?.tone || ""
     ).trim();
 
+  const currentTopicId =
+    String(
+      body?.currentTopicId || ""
+    ).trim().slice(0, 160);
+
   return {
     goal:
       goal ||
@@ -120,6 +143,10 @@ async function readRequestOptions(
     useCurrentTopic:
       body?.useCurrentTopic ===
       true,
+
+    currentTopicId:
+      currentTopicId ||
+      null,
   };
 }
 
@@ -143,6 +170,9 @@ export async function applyCurrentTopicToPreviewContext(
   env,
   context,
   {
+    currentTopicId =
+      null,
+
     readInventory =
       readCurrentTopicInventory,
     selectTopic =
@@ -153,15 +183,35 @@ export async function applyCurrentTopicToPreviewContext(
       resolveCurrentTopicGenerationContext,
   } = {}
 ) {
-  const currentTopic =
-    await resolveGenerationContext(
-      env,
-      {
-        readInventory,
-        selectTopic,
-        buildGenerationContext,
-      }
-    );
+  let currentTopic;
+
+  if (currentTopicId) {
+    const inventory =
+      await readInventory(env);
+    const topic =
+      Array.isArray(inventory?.topics)
+        ? inventory.topics.find(
+          (item) => item?.id === currentTopicId
+        )
+        : null;
+
+    currentTopic =
+      buildGenerationContext(topic);
+
+    if (!currentTopic) {
+      throw new CurrentTopicPreviewSelectionError();
+    }
+  } else {
+    currentTopic =
+      await resolveGenerationContext(
+        env,
+        {
+          readInventory,
+          selectTopic,
+          buildGenerationContext,
+        }
+      );
+  }
 
   if (currentTopic) {
     context.currentTopic =
@@ -258,7 +308,11 @@ export async function handleAutoPostPreview(
       currentTopic =
         await applyCurrentTopicToPreviewContext(
           env,
-          context
+          context,
+          {
+            currentTopicId:
+              options.currentTopicId,
+          }
         );
     }
 
@@ -423,6 +477,9 @@ export async function handleAutoPostPreview(
 
         useCurrentTopic:
           options.useCurrentTopic,
+
+        currentTopicId:
+          options.currentTopicId,
       },
 
       currentTopic,
@@ -450,6 +507,23 @@ export async function handleAutoPostPreview(
       },
     });
   } catch (error) {
+    if (
+      error instanceof
+      CurrentTopicPreviewSelectionError
+    ) {
+      return fail(
+        error.message,
+        404,
+        {
+          code:
+            error.code,
+
+          step:
+            "current_topic_selection",
+        }
+      );
+    }
+
     if (
       error instanceof
       PostSimilarityError

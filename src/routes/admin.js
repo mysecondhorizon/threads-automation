@@ -280,6 +280,23 @@ export async function handleAdminPostPage(
       Current Topic AUTO Preview
     </button>
 
+    <select
+      id="current-topic-select"
+      disabled
+      style="margin-left:8px;padding:10px;max-width:360px;"
+    >
+      <option value="">Current Topic을 먼저 조회하세요</option>
+    </select>
+
+    <button
+      id="current-topic-selected-preview-button"
+      type="button"
+      disabled
+      style="padding:12px 20px;cursor:pointer;margin-left:8px;"
+    >
+      Preview Selected Topic
+    </button>
+
     <button
       id="run-cron-auto-general-button"
       type="button"
@@ -436,6 +453,16 @@ export async function handleAdminPostPage(
         "current-topic-auto-preview-button"
       );
 
+    const currentTopicSelect =
+      document.getElementById(
+        "current-topic-select"
+      );
+
+    const currentTopicSelectedPreviewButton =
+      document.getElementById(
+        "current-topic-selected-preview-button"
+      );
+
     const currentTopicAutoPreviewStatus =
       document.getElementById(
         "current-topic-auto-preview-status"
@@ -478,6 +505,9 @@ export async function handleAdminPostPage(
       false;
 
     let currentTopicAutoPreviewStarted =
+      false;
+
+    let currentTopicSelectedPreviewStarted =
       false;
 
     let cronAutoGeneralStarted =
@@ -613,6 +643,54 @@ export async function handleAdminPostPage(
       );
     }
 
+    function updateCurrentTopicSelect(
+      topics
+    ) {
+      currentTopicSelect.textContent =
+        "";
+
+      const placeholder =
+        document.createElement(
+          "option"
+        );
+      placeholder.value = "";
+      placeholder.textContent =
+        "Current Topic을 선택하세요";
+      currentTopicSelect.appendChild(
+        placeholder
+      );
+
+      topics.forEach((topic) => {
+        if (
+          !topic ||
+          typeof topic !== "object" ||
+          !topic.id
+        ) {
+          return;
+        }
+
+        const option =
+          document.createElement(
+            "option"
+          );
+        option.value = String(topic.id);
+        option.textContent =
+          String(topic.category || "-") +
+          " — " +
+          String(topic.subject || "-");
+        currentTopicSelect.appendChild(
+          option
+        );
+      });
+
+      const available = topics.length > 0;
+      currentTopicSelect.disabled =
+        !available;
+      currentTopicSelectedPreviewButton.disabled =
+        !available ||
+        currentTopicSelectedPreviewStarted;
+    }
+
     function showCurrentTopicDiagnostic(
       status,
       data
@@ -656,6 +734,10 @@ export async function handleAdminPostPage(
         Array.isArray(data.topics)
           ? data.topics
           : [];
+
+      updateCurrentTopicSelect(
+        topics
+      );
 
       topics.forEach((topic, index) => {
         appendCurrentTopic(
@@ -1376,6 +1458,74 @@ export async function handleAdminPostPage(
         } finally {
           currentTopicAutoPreviewButton.textContent =
             "Current Topic AUTO Preview 완료";
+        }
+      }
+    );
+
+    currentTopicSelectedPreviewButton.addEventListener(
+      "click",
+      async function () {
+        const currentTopicId =
+          String(
+            currentTopicSelect.value || ""
+          ).trim();
+
+        if (!currentTopicId) {
+          currentTopicAutoPreviewStatus.textContent =
+            "Current Topic을 먼저 선택하세요.";
+          return;
+        }
+
+        if (currentTopicSelectedPreviewStarted) {
+          return;
+        }
+
+        currentTopicSelectedPreviewStarted =
+          true;
+        currentTopicSelectedPreviewButton.disabled =
+          true;
+        currentTopicSelect.disabled =
+          true;
+        currentTopicSelectedPreviewButton.textContent =
+          "Selected Topic Preview 생성 중...";
+        currentTopicAutoPreviewStatus.textContent =
+          "선택한 Current Topic으로 AUTO 초안을 생성하고 있습니다.";
+
+        try {
+          const response =
+            await fetch(
+              "/admin/auto-post/preview",
+              {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                  "content-type": "application/json",
+                  accept: "application/json",
+                },
+                body: JSON.stringify({
+                  useCurrentTopic: true,
+                  currentTopicId,
+                }),
+              }
+            );
+          let data = {};
+
+          try {
+            data = await response.json();
+          } catch {
+            data = {};
+          }
+
+          showCurrentTopicAutoPreview(
+            response.status,
+            data
+          );
+        } catch {
+          currentTopicAutoPreviewStatus.textContent =
+            "HTTP status: network error";
+        } finally {
+          currentTopicSelectedPreviewButton.textContent =
+            "Preview Selected Topic 완료";
         }
       }
     );
