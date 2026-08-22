@@ -278,6 +278,18 @@ export async function handleAdminPostPage(
       Current Topic AUTO Preview
     </button>
 
+    <button
+      id="run-cron-auto-general-button"
+      type="button"
+      style="padding:12px 20px;cursor:pointer;margin-left:8px;background:#8b0000;color:#fff;border:none;border-radius:6px;"
+    >
+      Run Cron AUTO Once
+    </button>
+
+    <p style="color:#8b0000;">
+      실제 Threads 게시 1건이 발생합니다.
+    </p>
+
     <pre
       id="current-topic-diagnostic-status"
       style="white-space:pre-wrap;line-height:1.6;"
@@ -285,6 +297,11 @@ export async function handleAdminPostPage(
 
     <pre
       id="current-topic-auto-preview-status"
+      style="white-space:pre-wrap;line-height:1.6;"
+    ></pre>
+
+    <pre
+      id="run-cron-auto-general-status"
       style="white-space:pre-wrap;line-height:1.6;"
     ></pre>
   </section>
@@ -411,6 +428,16 @@ export async function handleAdminPostPage(
         "current-topic-auto-preview-status"
       );
 
+    const runCronAutoGeneralButton =
+      document.getElementById(
+        "run-cron-auto-general-button"
+      );
+
+    const runCronAutoGeneralStatus =
+      document.getElementById(
+        "run-cron-auto-general-status"
+      );
+
     let aiSelectionDiagnosticStarted =
       false;
 
@@ -418,6 +445,9 @@ export async function handleAdminPostPage(
       false;
 
     let currentTopicAutoPreviewStarted =
+      false;
+
+    let cronAutoGeneralStarted =
       false;
 
     function diagnosticValue(value) {
@@ -1257,6 +1287,79 @@ export async function handleAdminPostPage(
         } finally {
           currentTopicAutoPreviewButton.textContent =
             "Current Topic AUTO Preview 완료";
+        }
+      }
+    );
+
+    runCronAutoGeneralButton.addEventListener(
+      "click",
+      async function () {
+        if (cronAutoGeneralStarted) {
+          return;
+        }
+
+        const confirmed = window.confirm(
+          "cron_auto_general 경로로 실제 Threads 게시 1건을 실행합니다. 계속할까요?"
+        );
+        if (!confirmed) {
+          return;
+        }
+
+        cronAutoGeneralStarted = true;
+        runCronAutoGeneralButton.disabled = true;
+        runCronAutoGeneralButton.textContent =
+          "Cron AUTO 실행 중...";
+        runCronAutoGeneralStatus.textContent =
+          "실제 Threads 게시를 실행하고 있습니다. 다시 실행하지 마세요.";
+
+        try {
+          const response = await fetch(
+            "/admin/diagnostics/run-cron-auto-general",
+            {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { accept: "application/json" },
+            }
+          );
+          let data = {};
+
+          try {
+            data = await response.json();
+          } catch {
+            data = {};
+          }
+
+          const lines = ["HTTP status: " + response.status];
+          if (!response.ok || !data.ok) {
+            if (response.status === 401) {
+              lines.push("관리자 로그인이 필요합니다.");
+            }
+            if (data.code) lines.push("error code: " + diagnosticValue(data.code));
+            if (data.step) lines.push("step: " + diagnosticValue(data.step));
+          } else {
+            const generation = data.generation || {};
+            const validation = data.validation || {};
+            lines.push(
+              "executed: " + diagnosticValue(data.executed),
+              "source: " + diagnosticValue(data.source),
+              "postId: " + diagnosticValue(data.postId),
+              "contentMode: " + diagnosticValue(data.contentMode),
+              "currentTopicId: " + diagnosticValue(data.currentTopicId),
+              "currentTopicCategory: " + diagnosticValue(data.currentTopicCategory),
+              "currentTopicSelectedAngle: " + diagnosticValue(data.currentTopicSelectedAngle),
+              "formatSignature: " + diagnosticValue(generation.formatSignature),
+              "targetFormatId: " + diagnosticValue(generation.targetFormatId),
+              "validation.length: " + diagnosticValue(validation.length),
+              "validation.maxLength: " + diagnosticValue(validation.maxLength),
+              "",
+              String(data.text || "")
+            );
+          }
+          runCronAutoGeneralStatus.textContent = lines.join("\\n");
+        } catch {
+          runCronAutoGeneralStatus.textContent = "HTTP status: network error";
+        } finally {
+          runCronAutoGeneralButton.textContent = "Run Cron AUTO Once 완료";
         }
       }
     );

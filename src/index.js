@@ -102,6 +102,10 @@ import {
 } from "./routes/current-topic-auto-diagnostic.js";
 
 import {
+  handleCronAutoGeneralDiagnostic,
+} from "./routes/cron-auto-general-diagnostic.js";
+
+import {
   runScheduledAutoPost,
 } from "./services/auto-post/scheduler.js";
 
@@ -321,6 +325,10 @@ export default {
 
     if (pathname === "/admin/diagnostics/current-topic-auto") {
       return handleCurrentTopicAutoDiagnostic(request, env);
+    }
+
+    if (pathname === "/admin/diagnostics/run-cron-auto-general") {
+      return handleCronAutoGeneralDiagnostic(request, env);
     }
 
     if (
