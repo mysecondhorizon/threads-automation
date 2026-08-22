@@ -34,6 +34,55 @@ const BASE_FORBIDDEN_CLAIMS = [
   "Do not present uncertain facts as confirmed.",
 ];
 
+const CATEGORY_RELATABILITY = {
+  ai_digital: 7,
+  apps_services: 10,
+  devices: 9,
+  work_productivity: 11,
+  consumer_lifestyle: 15,
+  seasonal_life: 14,
+  light_culture: 8,
+};
+
+const DAILY_LIFE_SIGNALS = [
+  "daily", "life", "work", "office", "home", "shopping", "price",
+  "delivery", "reservation", "season", "holiday", "commute", "phone",
+  "app", "service", "payment", "consumer", "food", "일상", "생활",
+  "직장", "회사", "집", "장보기", "가격", "배송", "예약", "계절",
+  "휴일", "명절", "출근", "퇴근", "스마트폰", "앱", "서비스", "결제",
+  "소비", "식사", "과일",
+];
+
+const CONVERSATION_SIGNALS = [
+  "benefit", "pain", "choice", "question", "compare", "change", "habit",
+  "friction", "save", "convenient", "불편", "고민", "선택", "질문", "비교",
+  "바뀌", "습관", "절약", "편하", "문제", "체감", "궁금",
+];
+
+const PRACTICAL_HOOK_SIGNALS = [
+  "time", "cost", "price", "reservation", "delivery", "mistake", "problem",
+  "save", "change", "불편", "시간", "비용", "가격", "예약", "배송", "실수",
+  "문제", "절약", "바뀌", "체감",
+];
+
+const PRESS_RELEASE_SIGNALS = [
+  "press release", "b2b", "developer", "api", "platform", "enterprise",
+  "partner", "investor", "ir", "보도자료", "사업자", "개발자", "플랫폼",
+  "파트너", "엔터프라이즈", "투자자",
+];
+
+const NEWS_SUMMARY_SIGNALS = [
+  "announced", "announcement", "launched", "launch", "introduced", "expansion",
+  "quarter", "earnings", "growth", "발표", "공개", "출시", "도입", "확대",
+  "개편", "협약", "실적", "분기", "성장",
+];
+
+const ABSTRACT_POLICY_SIGNALS = [
+  "policy", "regulation", "guideline", "terms", "pricing", "fee", "settlement",
+  "rules", "정책", "규정", "제도", "법", "가이드라인", "약관", "요금제",
+  "수수료", "정산",
+];
+
 export class CurrentTopicInventoryError extends Error {
   constructor(message, code = "current_topic_inventory_error", details = null) {
     super(message);
@@ -64,6 +113,101 @@ function validDate(value) {
 function isFresh(topic, at) {
   const expiresAt = validDate(topic?.expiresAt);
   return Boolean(expiresAt && expiresAt.getTime() > at.getTime());
+}
+
+function countSignals(value, signals, { points, maximum }) {
+  const normalized = String(value || "").normalize("NFKC").toLowerCase();
+  const matches = signals.filter((signal) => normalized.includes(signal)).length;
+  return Math.min(matches * points, maximum);
+}
+
+function topicSearchText(topic) {
+  return [
+    topic?.subject,
+    topic?.personaRelevance,
+    ...(Array.isArray(topic?.allowedAngles) ? topic.allowedAngles : []),
+    ...(Array.isArray(topic?.verifiedFacts) ? topic.verifiedFacts : []),
+  ].join(" ");
+}
+
+function freshnessScore(topic, at) {
+  const capturedAt = validDate(topic?.capturedAt);
+  if (!capturedAt) return 0;
+
+  const ageHours = Math.max(
+    0,
+    (at.getTime() - capturedAt.getTime()) / (60 * 60 * 1000)
+  );
+
+  if (ageHours <= 6) return 12;
+  if (ageHours <= 18) return 9;
+  if (ageHours <= 36) return 6;
+  return 3;
+}
+
+export function scoreCurrentTopicThreadsWorthiness(topic, { at = new Date() } = {}) {
+  const now = validDate(at);
+  const normalized = normalizeCurrentTopic(topic, topic);
+  if (!now || !normalized || !isFresh(normalized, now)) return null;
+
+  const sourceText = topicSearchText(normalized);
+  const relatability = Math.min(
+    (CATEGORY_RELATABILITY[normalized.category] || 0) +
+      countSignals(sourceText, DAILY_LIFE_SIGNALS, { points: 3, maximum: 15 }),
+    30
+  );
+  const conversationPotential = countSignals(sourceText, CONVERSATION_SIGNALS, {
+    points: 3,
+    maximum: 20,
+  });
+  const personaFit = Math.min(
+    (normalized.category === "work_productivity" ? 10 : 6) +
+      countSignals(normalized.personaRelevance, DAILY_LIFE_SIGNALS, {
+        points: 2,
+        maximum: 12,
+      }),
+    20
+  );
+  const timeliness = freshnessScore(normalized, now);
+  const practicalHookPotential = countSignals(sourceText, PRACTICAL_HOOK_SIGNALS, {
+    points: 3,
+    maximum: 18,
+  });
+  const pressReleasePenalty = countSignals(sourceText, PRESS_RELEASE_SIGNALS, {
+    points: 7,
+    maximum: 28,
+  });
+  const newsSummaryRisk = countSignals(sourceText, NEWS_SUMMARY_SIGNALS, {
+    points: 3,
+    maximum: 12,
+  });
+  const abstractPolicyPenalty = countSignals(sourceText, ABSTRACT_POLICY_SIGNALS, {
+    points: 7,
+    maximum: 28,
+  });
+  const score =
+    relatability +
+    conversationPotential +
+    personaFit +
+    timeliness +
+    practicalHookPotential -
+    pressReleasePenalty -
+    newsSummaryRisk -
+    abstractPolicyPenalty;
+
+  return {
+    score,
+    scoreBreakdown: {
+      relatability,
+      conversationPotential,
+      personaFit,
+      timeliness,
+      practicalHookPotential,
+      pressReleasePenalty,
+      newsSummaryRisk,
+      abstractPolicyPenalty,
+    },
+  };
 }
 
 function topicId(category, subject) {
@@ -286,10 +430,21 @@ export function selectCurrentTopic(inventory, { at = new Date(), category = null
     .filter((topic) => isFresh(topic, now))
     .filter((topic) => !requestedCategory || topic.category === requestedCategory)
     .filter((topic) => !recentIds.has(topic.id))
+    .map((topic) => ({
+      topic,
+      worthiness: scoreCurrentTopicThreadsWorthiness(topic, { at: now }),
+    }))
+    .filter(({ worthiness }) => Boolean(worthiness))
     .sort((left, right) => {
-      const capturedDifference = new Date(right.capturedAt).getTime() - new Date(left.capturedAt).getTime();
-      return capturedDifference || left.id.localeCompare(right.id);
-    })[0] || null;
+      const scoreDifference = right.worthiness.score - left.worthiness.score;
+      const capturedDifference = new Date(right.topic.capturedAt).getTime() - new Date(left.topic.capturedAt).getTime();
+      return scoreDifference || capturedDifference || left.topic.id.localeCompare(right.topic.id);
+    })
+    .map(({ topic, worthiness }) => ({
+      ...topic,
+      score: worthiness.score,
+      scoreBreakdown: worthiness.scoreBreakdown,
+    }))[0] || null;
 }
 
 export function buildCurrentTopicGenerationContext(topic) {

@@ -416,4 +416,24 @@ targetFormat이 마지막 단독 문단을 허용하지 않으면
 
 소재 순환과 반복 방지는
 운영 정책의 중복 방지 규칙을 함께 따른다.
+
+==================================================
+[First-sentence hook]
+==================================================
+
+Every draft must open with a natural first-sentence hook that gives a reader a reason to continue.
+Choose one hook family and return that exact family name in hookStyle:
+
+- benefit_hook
+- pain_hook
+- curiosity_hook
+- question_hook
+- contrast_hook
+- relatable_scene_hook
+
+Use history.recentHookStyles to avoid a recently repeated hook family when a natural alternative is available. Do not force question_hook, and do not use a trendy, exaggerated, or clickbait voice.
+
+The hook is only the first sentence. Follow publishing.targetFormat: do not create a standalone one-sentence paragraph when that format does not allow one.
+
+When currentTopic is supplied, do not lead with a factual announcement or news summary. Derive the hook from personaRelevance and selectedAngle as an everyday benefit, friction, choice, curiosity, or question. Use at most one verified fact naturally and never invent a feature, number, date, direct use, attendance, or personal experience.
 `.trim();
