@@ -152,6 +152,9 @@ export async function generateDistinctThreadPost(
             1,
 
           excludeInfeasibleTargets,
+
+          selectConcretePattern:
+            excludeInfeasibleTargets,
         }
       );
 
@@ -350,6 +353,9 @@ export async function generateDistinctThreadPost(
               ],
 
               excludeInfeasibleTargets,
+
+              selectConcretePattern:
+                excludeInfeasibleTargets,
             }
           );
 

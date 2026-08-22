@@ -241,7 +241,31 @@ function targetCanUseOneXOne(target) {
   );
 }
 
-function patternCanAvoidRecentSimilarity(
+function enumerateConcretePatterns(pattern) {
+  const results = [];
+
+  const visit = (index, sentencePattern) => {
+    if (index >= pattern.sentenceRanges.length) {
+      results.push({
+        paragraphCount: pattern.paragraphCount,
+        sentencePattern,
+        sentenceRanges: sentencePattern.map((count) => [count, count]),
+        signature: `p${pattern.paragraphCount}:s${sentencePattern.join("-")}`,
+      });
+      return;
+    }
+
+    const [minimum, maximum] = pattern.sentenceRanges[index];
+    for (let count = minimum; count <= maximum; count += 1) {
+      visit(index + 1, [...sentencePattern, count]);
+    }
+  };
+
+  visit(0, []);
+  return results;
+}
+
+function concretePatternCanAvoidRecentSimilarity(
   pattern,
   recentFormats
 ) {
@@ -251,65 +275,53 @@ function patternCanAvoidRecentSimilarity(
       RECENT_PATTERN_LIMIT
     );
 
-  const evaluateSentencePattern = (
-    index,
-    sentencePattern
-  ) => {
-    if (
-      index >=
-      pattern.sentenceRanges.length
-    ) {
-      return !recent.some(
-        (recentFormat) =>
-          arePostFormatsSimilar(
-            recentFormat,
-            {
-              signature: "candidate",
-              paragraphCount:
-                pattern.paragraphCount,
-              sentencePattern,
-            }
-          )
-      );
-    }
-
-    const [minimum, maximum] =
-      pattern.sentenceRanges[index];
-
-    for (
-      let count = minimum;
-      count <= maximum;
-      count += 1
-    ) {
-      if (
-        evaluateSentencePattern(
-          index + 1,
-          [...sentencePattern, count]
-        )
-      ) {
-        return true;
-      }
-    }
-
-    return false;
-  };
-
-  return evaluateSentencePattern(
-    0,
-    []
+  return !recent.some(
+    (recentFormat) =>
+      arePostFormatsSimilar(
+        recentFormat,
+        pattern
+      )
   );
+}
+
+export function selectConcreteTargetPattern(
+  target,
+  recentFormats
+) {
+  const recent = normalizeRecentFormats(recentFormats)
+    .slice(0, RECENT_PATTERN_LIMIT);
+  const candidates = (Array.isArray(target?.patterns) ? target.patterns : [])
+    .flatMap((pattern, patternOrder) =>
+      enumerateConcretePatterns(pattern).map((candidate) => ({
+        ...candidate,
+        patternOrder,
+        nearestRecentDistance: recent.length
+          ? Math.min(...recent.map((format) => patternDistance(format, candidate)))
+          : 0,
+      }))
+    )
+    .filter((candidate) =>
+      concretePatternCanAvoidRecentSimilarity(candidate, recent)
+    );
+
+  candidates.sort((left, right) =>
+    right.nearestRecentDistance - left.nearestRecentDistance ||
+    left.patternOrder - right.patternOrder ||
+    left.signature.localeCompare(right.signature)
+  );
+
+  return candidates[0] || null;
 }
 
 function targetHasFeasiblePattern(
   target,
   recentFormats
 ) {
-  return target.patterns.some(
-    (pattern) =>
-      patternCanAvoidRecentSimilarity(
-        pattern,
-        recentFormats
-      )
+  return Boolean(
+    selectConcreteTargetPattern(
+      target,
+      recentFormats
+    )
   );
 }
 
@@ -319,6 +331,7 @@ export function selectTargetPostFormat(
     sequence = 1,
     excludedFormatIds = [],
     excludeInfeasibleTargets = false,
+    selectConcretePattern = false,
   } = {}
 ) {
   const recent = normalizeRecentFormats(recentValues);
@@ -365,8 +378,28 @@ export function selectTargetPostFormat(
   );
   const selected = ranked[0]?.target;
   if (!selected) return null;
+  const target = getPostFormatPool().find((item) => item.id === selected.id);
+  const selectedPattern = selectConcretePattern
+    ? selectConcreteTargetPattern(target, recent)
+    : null;
+  if (selectConcretePattern && !selectedPattern) return null;
+
   return {
-    ...getPostFormatPool().find((item) => item.id === selected.id),
+    ...target,
+    ...(selectedPattern
+      ? {
+        patterns: [{
+          paragraphCount: selectedPattern.paragraphCount,
+          sentenceRanges: selectedPattern.sentenceRanges.map((range) => [...range]),
+        }],
+        selectedPattern: {
+          paragraphCount: selectedPattern.paragraphCount,
+          sentencePattern: [...selectedPattern.sentencePattern],
+        },
+        selectedPatternSignature: selectedPattern.signature,
+        prompt: `${target.prompt} 이번 글은 정확히 ${selectedPattern.paragraphCount}문단, 문장 수 ${selectedPattern.sentencePattern.join(" / ")}로 작성한다.`,
+      }
+      : {}),
     recentAvoidance: {
       repeatedFirstSingle,
       repeatedLastSingle,
@@ -430,6 +463,7 @@ export function validatePostFormat(
           signature: format.signature,
           targetFormatId: targetFormat?.id || null,
           targetPrompt: targetFormat?.prompt || null,
+          selectedPatternSignature: targetFormat?.selectedPatternSignature || null,
           matchedSignature: (exactMatch || similarMatch)?.signature || null,
         },
       }
