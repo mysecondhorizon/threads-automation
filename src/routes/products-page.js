@@ -5,6 +5,7 @@ import {
 import {
   html,
 } from "../utils/response.js";
+import { renderAdminNavigation } from "../services/admin-navigation.js";
 
 export async function handleProductsPage(
   request,
@@ -42,6 +43,7 @@ export async function handleProductsPage(
   padding:0 20px;
   background:#f7f7f7;
 ">
+  ${renderAdminNavigation("/admin/products-page")}
   <header style="
     display:flex;
     justify-content:space-between;

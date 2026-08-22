@@ -22,6 +22,7 @@ import {
   ok,
   fail,
 } from "../utils/response.js";
+import { renderAdminNavigation } from "../services/admin-navigation.js";
 
 export function handleAdminLoginPage() {
   return html(`<!DOCTYPE html>
@@ -139,6 +140,7 @@ export async function handleAdminPostPage(
 </head>
 
 <body style="font-family:Arial,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;">
+  ${renderAdminNavigation("/admin/post")}
   <h1>Second Horizon</h1>
 
   <section>

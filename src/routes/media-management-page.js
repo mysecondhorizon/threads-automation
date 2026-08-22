@@ -1,5 +1,6 @@
 import { requireAdminSession } from "../middleware/auth.js";
 import { html } from "../utils/response.js";
+import { renderAdminNavigation } from "../services/admin-navigation.js";
 
 export async function handleMediaManagementPage(request, env) {
   const auth = await requireAdminSession(request, env);
@@ -23,6 +24,7 @@ export async function handleMediaManagementPage(request, env) {
   </style>
 </head>
 <body>
+  ${renderAdminNavigation("/admin/media-page")}
   <h1>미디어 및 주간 운영 재고</h1>
   <p><a href="/admin/post">게시 관리</a> · <a href="/admin/products-page">제품 관리</a></p>
 

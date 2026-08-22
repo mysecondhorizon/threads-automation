@@ -80,6 +80,11 @@ import {
 } from "./routes/admin.js";
 
 import {
+  handleAdminHomePage,
+  handleEndpointOverviewPage,
+} from "./routes/admin-overview.js";
+
+import {
   handleShortToken,
   handleTokenExchange,
   handleProfile,
@@ -302,6 +307,14 @@ export default {
         request,
         env
       );
+    }
+
+    if (pathname === "/admin" && method === "GET") {
+      return handleAdminHomePage(request, env);
+    }
+
+    if (pathname === "/admin/endpoints" && method === "GET") {
+      return handleEndpointOverviewPage(request, env);
     }
 
     if (
