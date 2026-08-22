@@ -54,6 +54,10 @@ import {
   publishAutoPost,
 } from "./publisher.js";
 
+import {
+  selectGeneralAutoMedia,
+} from "../general-auto-media-selection.js";
+
 export {
   getAutoPostStatus,
 } from "./status.js";
@@ -278,6 +282,19 @@ function buildGeneralAutoContentMetadata(context) {
     currentTopicCategory: currentTopic.category,
     currentTopicSelectedAngle: currentTopic.selectedAngle,
   };
+}
+
+function textMediaSelection(reason = null) {
+  return {
+    mode: "TEXT",
+    mediaId: null,
+    contentPoolId: null,
+    reason,
+  };
+}
+
+function shouldSelectGeneralAutoMedia(source, generalOnly) {
+  return source === "cron_auto_general" && generalOnly === true;
 }
 
 function createExecutionId() {
@@ -652,7 +669,9 @@ function buildSuccessResult(
   validation,
   similarity,
   generation,
-  firstCommentResult
+  firstCommentResult,
+  mediaSelection,
+  trackingWarnings
 ) {
   return {
     executionId,
@@ -702,6 +721,27 @@ function buildSuccessResult(
     productConnected:
       generatedPost
         .productConnected,
+
+    publishMode:
+      mediaSelection?.mode ||
+      "TEXT",
+
+    mediaId:
+      mediaSelection?.mediaId ||
+      null,
+
+    contentPoolId:
+      mediaSelection?.contentPoolId ||
+      null,
+
+    mediaSelectionReason:
+      mediaSelection?.reason ||
+      null,
+
+    trackingWarnings:
+      Array.isArray(trackingWarnings)
+        ? trackingWarnings
+        : [],
 
     affiliateLinkUsed:
       generatedPost
@@ -779,6 +819,9 @@ async function runExecution(
 
   let generatedPost =
     null;
+
+  let mainPublished =
+    false;
 
   await saveExecution(
     env,
@@ -908,6 +951,42 @@ async function runExecution(
       );
     }
 
+    let mediaSelection =
+      textMediaSelection();
+
+    if (
+      shouldSelectGeneralAutoMedia(
+        source,
+        generalOnly
+      )
+    ) {
+      try {
+        mediaSelection =
+          await selectGeneralAutoMedia(
+            env,
+            {
+              generatedPost,
+              currentTopic:
+                context.currentTopic ||
+                null,
+            }
+          );
+      } catch (error) {
+        console.warn(
+          "General AUTO media selection unavailable",
+          {
+            category:
+              "media_selection_unavailable",
+          }
+        );
+
+        mediaSelection =
+          textMediaSelection(
+            "media_selection_unavailable"
+          );
+      }
+    }
+
     const validation =
       generation.validation;
 
@@ -966,6 +1045,8 @@ async function runExecution(
       profile,
       publishResult,
       firstCommentResult,
+      mediaSelection: publishedMediaSelection,
+      trackingWarnings,
     } = await publishAutoPost(
       env,
       {
@@ -979,6 +1060,8 @@ async function runExecution(
           generatedPost
             ?.firstComment ||
           "",
+
+        mediaSelection,
 
         metadata: {
           source,
@@ -1042,6 +1125,15 @@ async function runExecution(
                 ?.affiliateDisclosureRequired
             ),
 
+          publishMode:
+            mediaSelection.mode,
+
+          mediaId:
+            mediaSelection.mediaId,
+
+          contentPoolId:
+            mediaSelection.contentPoolId,
+
           ...(generalOnly
             ? buildGeneralAutoContentMetadata(context)
             : {}),
@@ -1049,47 +1141,69 @@ async function runExecution(
       }
     );
 
+    mainPublished =
+      true;
+
     const normalizedFirstComment =
       normalizeFirstCommentResult(
         generatedPost,
         firstCommentResult
       );
 
-    await updateExecution(
-      env,
-      execution,
-      {
-        status:
-          "completed",
+    try {
+      await updateExecution(
+        env,
+        execution,
+        {
+          status:
+            "completed",
 
-        step:
-          "completed",
+          step:
+            "completed",
 
-        completedAt:
-          new Date().toISOString(),
+          completedAt:
+            new Date().toISOString(),
 
-        postId:
-          publishResult.postId,
+          postId:
+            publishResult.postId,
 
-        username:
-          profile.username,
+          username:
+            profile.username,
 
-        textLength:
-          validation.length,
+          textLength:
+            validation.length,
 
-        generation:
-          generationResult,
+          generation:
+            generationResult,
 
-        similarity:
-          similarityResult,
+          similarity:
+            similarityResult,
 
-        firstComment:
-          normalizedFirstComment,
+          firstComment:
+            normalizedFirstComment,
 
-        error:
-          null,
+          error:
+            null,
+        }
+      );
+    } catch (error) {
+      if (mainPublished) {
+        console.warn(
+          "Auto post completion tracking failed",
+          {
+            executionId,
+
+            source,
+
+            postId:
+              publishResult.postId,
+
+            category:
+              "execution_completion_update_failed",
+          }
+        );
       }
-    );
+    }
 
     return buildSuccessResult(
       executionId,
@@ -1101,7 +1215,9 @@ async function runExecution(
       validation,
       similarity,
       generation,
-      firstCommentResult
+      firstCommentResult,
+      publishedMediaSelection,
+      trackingWarnings
     );
   } catch (
     error

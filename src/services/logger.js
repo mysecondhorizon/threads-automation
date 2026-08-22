@@ -33,6 +33,11 @@ function normalizeFirstCommentMetadata(
 function normalizePostMetadata(
   metadata
 ) {
+  const publishMode =
+    metadata?.publishMode === "IMAGE"
+      ? "IMAGE"
+      : "TEXT";
+
   return {
     source:
       metadata?.source ||
@@ -57,6 +62,20 @@ function normalizePostMetadata(
     candidateId:
       metadata?.candidateId ||
       null,
+
+    publishMode,
+
+    ...(publishMode === "IMAGE"
+      ? {
+        mediaId:
+          metadata?.mediaId ||
+          null,
+
+        contentPoolId:
+          metadata?.contentPoolId ||
+          null,
+      }
+      : {}),
 
     style:
       metadata?.style ||

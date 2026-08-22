@@ -198,6 +198,7 @@ function textSelection(reason, candidateCount, eligibleCount) {
   return {
     mode: "TEXT",
     mediaId: null,
+    contentPoolId: null,
     reason,
     score: null,
     candidateCount,
@@ -279,6 +280,7 @@ export function selectGeneralAutoMediaFromRecords(
   return {
     mode: "IMAGE",
     mediaId: text(selected.media.id),
+    contentPoolId: text(selected.poolItem.id),
     reason: "matched_media",
     score: selected.relevance,
     candidateCount,
