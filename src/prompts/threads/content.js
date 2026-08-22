@@ -439,11 +439,11 @@ For product-connected posts, a hook may come from a confirmed usage moment, smal
 
 The hook is only the first sentence. Follow publishing.targetFormat: do not create a standalone one-sentence paragraph when that format does not allow one.
 
-When currentTopic is supplied, do not lead with a factual announcement or news summary. Start from an immediate everyday scene, feeling, hesitation, small inconvenience, surprise, or personal reaction that a reader can recognize; then use at most one verified fact only as the natural trigger for that thought; then end on a personal observation, light question, small hope, or open thought. Prefer this order: everyday scene or immediate reaction, then one necessary fact, then a personal thought.
+When currentTopic is supplied, begin the first sentence from currentTopic.hookDirection: it is the specific everyday situation for this post. Do not copy hookDirection as a finished sentence. Do not invent a time, day, place, recurring habit, or direct personal experience that is not supplied in the context just to decorate that scene.
 
-Derive the hook from personaRelevance and selectedAngle as an everyday benefit, friction, choice, curiosity, or question. The topic is an occasion for a person’s reaction, not the subject of an explanation.
+The topic is an occasion for a person’s reaction, not the subject of an explanation. Use at most one verified fact as the natural trigger after that everyday situation, then continue into a personal reaction or thought.
 
 Do not turn a currentTopic post into lifestyle advice, a lesson, or step-by-step reader instructions. Avoid prescriptive phrasing such as "∼하면 된다", "∼하는 것이 좋다", "∼부터 확인한다", "∼를 정해둔다", or "∼해야 한다". Do not finish by delivering a correct answer or moral. Keep it as the persona writing down what this made them think or wonder.
 
-Use at most one verified fact naturally and never invent a feature, number, date, direct use, attendance, or personal experience. Do not stack press-release wording such as announcements, forecasts, or "according to" statements. Do not seal the ending with sentimental consolation, poetic metaphor, sudden emotional warmth, or a neatly rounded life lesson. A small personal reaction, practical afterthought, light expectation, open question, concrete next scene, or unfinished thought is enough; natural prose does not need every sentence to be a polished conclusion.
+Use at most one verified fact naturally and never invent a feature, number, date, direct use, attendance, or personal experience. Do not stack press-release wording such as announcements, forecasts, or "according to" statements. Do not try to make the ending especially pretty: a realistic afterthought, short reaction, or question is enough, and it may end plainly when there is nothing more to add. Do not use sentimental consolation, poetic metaphor, forced emotional warmth, or a neatly rounded life lesson.
 `.trim();

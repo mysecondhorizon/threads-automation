@@ -648,6 +648,7 @@ function normalizeCurrentTopicForContext(value) {
   const personaRelevance = String(value?.personaRelevance || "").trim();
   const allowedAngles = textList(value?.allowedAngles);
   const verifiedFacts = textList(value?.verifiedFacts);
+  const hookDirection = String(value?.hookDirection || "").trim();
 
   if (!topicId || !category || !subject || !personaRelevance || !allowedAngles.length || !verifiedFacts.length) {
     return null;
@@ -667,6 +668,7 @@ function normalizeCurrentTopicForContext(value) {
       allowedAngles.includes(selectedAngle)
         ? selectedAngle
         : allowedAngles[0],
+    ...(hookDirection ? { hookDirection } : {}),
   };
 }
 

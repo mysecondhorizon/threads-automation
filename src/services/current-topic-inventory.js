@@ -447,6 +447,65 @@ export function selectCurrentTopic(inventory, { at = new Date(), category = null
     }))[0] || null;
 }
 
+const HOOK_DIRECTION_RULES = [
+  {
+    type: "schedule_check",
+    signals: ["reservation", "booking", "schedule", "deadline", "ticket", "예약", "예매", "일정", "마감", "승차권"],
+    direction: "일정이나 예매 시점을 놓치지 않으려고 확인하는 상황",
+  },
+  {
+    type: "app_step_friction",
+    signals: ["app", "service", "login", "payment", "order", "앱", "서비스", "로그인", "결제", "주문", "인증"],
+    direction: "필요한 일을 하려고 앱이나 여러 단계를 오가는 번거로움",
+  },
+  {
+    type: "purchase_hesitation",
+    signals: ["price", "cost", "shopping", "purchase", "consumer", "가격", "비용", "장보기", "구매", "소비", "과일"],
+    direction: "가격이나 필요성을 두고 구매를 잠깐 망설이는 순간",
+  },
+  {
+    type: "compare_choice",
+    signals: ["compare", "choice", "option", "비교", "선택", "옵션", "고르"],
+    direction: "여러 선택지 앞에서 무엇을 고를지 다시 살피는 순간",
+  },
+  {
+    type: "convenience_gain",
+    signals: ["automation", "integrat", "convenien", "simpl", "자동화", "통합", "간편", "편의", "줄어들"],
+    direction: "반복하던 일을 조금 덜 번거롭게 만들 수 있을지 떠올리는 순간",
+  },
+];
+
+const CATEGORY_HOOK_DIRECTIONS = {
+  work_productivity: "반복되는 업무나 일정을 처리하며 작은 번거로움을 느끼는 순간",
+  ai_digital: "필요한 일을 하려고 앱이나 기기를 다시 확인하는 순간",
+  apps_services: "필요한 일을 하려고 앱이나 서비스를 여는 번거로움",
+  devices: "필요한 일을 하려고 기기를 다시 확인하는 순간",
+  consumer_lifestyle: "생활에 필요한 것을 고르며 잠깐 비교하게 되는 순간",
+  seasonal_life: "계절에 맞는 생활 준비를 하며 필요한 것을 다시 살피는 순간",
+  light_culture: "일상에서 가볍게 이야기해 볼 변화를 마주한 순간",
+};
+
+export function buildCurrentTopicHookDirection(topic) {
+  const normalized = normalizeCurrentTopic(topic, topic);
+  if (!normalized) return null;
+
+  const selectedAngle = text(topic?.selectedAngle, 220) || normalized.allowedAngles[0];
+  const sourceText = [
+    normalized.category,
+    normalized.subject,
+    normalized.personaRelevance,
+    selectedAngle,
+    ...normalized.verifiedFacts,
+    ...normalized.forbiddenClaims,
+  ].join(" ").normalize("NFKC").toLowerCase();
+
+  const matchedRule = HOOK_DIRECTION_RULES.find(
+    ({ signals }) => signals.some((signal) => sourceText.includes(signal))
+  );
+
+  return matchedRule?.direction || CATEGORY_HOOK_DIRECTIONS[normalized.category] || null;
+}
+
 export function buildCurrentTopicGenerationContext(topic) {
   if (!topic || typeof topic !== "object") return null;
 
@@ -462,5 +521,6 @@ export function buildCurrentTopicGenerationContext(topic) {
     allowedAngles: [...normalized.allowedAngles],
     forbiddenClaims: [...normalized.forbiddenClaims],
     selectedAngle: normalized.allowedAngles[0] || null,
+    hookDirection: buildCurrentTopicHookDirection(normalized),
   };
 }
