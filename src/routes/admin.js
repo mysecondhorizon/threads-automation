@@ -661,6 +661,74 @@ export async function handleAdminPostPage(
           );
         }
 
+        if (typeof data?.step === "string") {
+          lines.push(
+            "step: " +
+            diagnosticValue(data.step)
+          );
+        }
+
+        if (
+          status === 409 &&
+          data?.code ===
+            "post_format_validation_failed"
+        ) {
+          const details =
+            data?.details &&
+            typeof data.details === "object"
+              ? data.details
+              : {};
+
+          const reasons =
+            Array.isArray(details.reasons)
+              ? details.reasons
+                .filter(
+                  (reason) =>
+                    typeof reason === "string"
+                )
+                .map(
+                  (reason) => reason.trim()
+                )
+                .filter(Boolean)
+              : [];
+
+          if (reasons.length) {
+            lines.push(
+              "reasons: " +
+              reasons.join(", ")
+            );
+          }
+
+          [
+            ["signature", details.signature],
+            ["targetFormatId", details.targetFormatId],
+            ["targetPrompt", details.targetPrompt],
+            ["matchedSignature", details.matchedSignature],
+            ["attempts", details.attempts],
+            ["regenerated", details.regenerated],
+            ["reason", details.reason],
+          ].forEach(
+            ([label, value]) => {
+              if (value == null) return;
+
+              lines.push(
+                label + ": " +
+                diagnosticValue(value)
+              );
+            }
+          );
+
+          if (
+            reasons.includes(
+              "no_feasible_target_format"
+            )
+          ) {
+            lines.push(
+              "no_feasible_target_format: true"
+            );
+          }
+        }
+
         currentTopicAutoPreviewStatus.textContent =
           lines.join("\\n");
         return;
