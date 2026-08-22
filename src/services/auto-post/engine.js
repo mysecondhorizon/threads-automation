@@ -754,6 +754,9 @@ async function runExecution(
 
           reselectTargetOnRecentPatternConflict:
             true,
+
+          excludeInfeasibleTargets:
+            true,
         }
       );
 

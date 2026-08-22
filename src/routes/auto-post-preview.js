@@ -273,6 +273,9 @@ export async function handleAutoPostPreview(
 
           reselectTargetOnRecentPatternConflict:
             options.useCurrentTopic,
+
+          excludeInfeasibleTargets:
+            options.useCurrentTopic,
         }
       );
 

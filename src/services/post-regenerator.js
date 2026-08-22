@@ -117,6 +117,9 @@ export async function generateDistinctThreadPost(
     reselectTargetOnRecentPatternConflict =
       false,
 
+    excludeInfeasibleTargets =
+      false,
+
     generatePost =
       generateThreadPost,
   } = {}
@@ -139,8 +142,7 @@ export async function generateDistinctThreadPost(
     !context.publishing
       .targetFormat
   ) {
-    context.publishing
-      .targetFormat =
+    const initialTargetFormat =
       selectTargetPostFormat(
         recentFormats,
         {
@@ -148,8 +150,48 @@ export async function generateDistinctThreadPost(
             context.publishing
               .publishSequence ||
             1,
+
+          excludeInfeasibleTargets,
         }
       );
+
+    if (!initialTargetFormat) {
+      throw new PostSimilarityError(
+        "No feasible post format target is available",
+        {
+          code:
+            "post_format_validation_failed",
+
+          details: {
+            reasons: [
+              "no_feasible_target_format",
+            ],
+
+            signature:
+              null,
+
+            targetFormatId:
+              null,
+
+            targetPrompt:
+              null,
+
+            matchedSignature:
+              null,
+
+            attempts:
+              0,
+
+            regenerated:
+              false,
+          },
+        }
+      );
+    }
+
+    context.publishing
+      .targetFormat =
+      initialTargetFormat;
   }
 
   let targetFormat =
@@ -306,6 +348,8 @@ export async function generateDistinctThreadPost(
               excludedFormatIds: [
                 ...failedTargetFormatIds,
               ],
+
+              excludeInfeasibleTargets,
             }
           );
 

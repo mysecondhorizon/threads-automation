@@ -241,9 +241,85 @@ function targetCanUseOneXOne(target) {
   );
 }
 
+function patternCanAvoidRecentSimilarity(
+  pattern,
+  recentFormats
+) {
+  const recent =
+    recentFormats.slice(
+      0,
+      RECENT_PATTERN_LIMIT
+    );
+
+  const evaluateSentencePattern = (
+    index,
+    sentencePattern
+  ) => {
+    if (
+      index >=
+      pattern.sentenceRanges.length
+    ) {
+      return !recent.some(
+        (recentFormat) =>
+          arePostFormatsSimilar(
+            recentFormat,
+            {
+              signature: "candidate",
+              paragraphCount:
+                pattern.paragraphCount,
+              sentencePattern,
+            }
+          )
+      );
+    }
+
+    const [minimum, maximum] =
+      pattern.sentenceRanges[index];
+
+    for (
+      let count = minimum;
+      count <= maximum;
+      count += 1
+    ) {
+      if (
+        evaluateSentencePattern(
+          index + 1,
+          [...sentencePattern, count]
+        )
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  return evaluateSentencePattern(
+    0,
+    []
+  );
+}
+
+function targetHasFeasiblePattern(
+  target,
+  recentFormats
+) {
+  return target.patterns.some(
+    (pattern) =>
+      patternCanAvoidRecentSimilarity(
+        pattern,
+        recentFormats
+      )
+  );
+}
+
 export function selectTargetPostFormat(
   recentValues,
-  { sequence = 1, excludedFormatIds = [] } = {}
+  {
+    sequence = 1,
+    excludedFormatIds = [],
+    excludeInfeasibleTargets = false,
+  } = {}
 ) {
   const recent = normalizeRecentFormats(recentValues);
   const excludedIds = new Set(
@@ -257,7 +333,17 @@ export function selectTargetPostFormat(
   const repeatedOneXOne = trend.some((item) => item.oneXOnePattern);
   const rotation = Math.max(0, Number(sequence || 1) - 1) % FORMAT_POOL.length;
 
-  const ranked = FORMAT_POOL.filter((target) => !excludedIds.has(target.id)).map((target, index) => {
+  const ranked = FORMAT_POOL.map(
+    (target, index) => ({ target, index })
+  )
+    .filter(({ target }) =>
+      !excludedIds.has(target.id) &&
+      (
+        !excludeInfeasibleTargets ||
+        targetHasFeasiblePattern(target, recent)
+      )
+    )
+    .map(({ target, index }) => {
     let score = recent.slice(0, 6).reduce((sum, format, recentIndex) => {
       const distance = targetDistance(format, target);
       if (distance === 0) return sum + 18 / (recentIndex + 1);
@@ -271,8 +357,8 @@ export function selectTargetPostFormat(
     if (repeatedLastSingle && targetCanUseSingle(target, "last")) score += 100;
     if (repeatedOneXOne && targetCanUseOneXOne(target)) score += 120;
     const rotationDistance = (index - rotation + FORMAT_POOL.length) % FORMAT_POOL.length;
-    return { target, score, rotationDistance };
-  });
+      return { target, score, rotationDistance };
+    });
 
   ranked.sort((left, right) =>
     left.score - right.score || left.rotationDistance - right.rotationDistance
