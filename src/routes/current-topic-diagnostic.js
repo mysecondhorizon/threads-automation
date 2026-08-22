@@ -20,6 +20,7 @@ function safeTopic(topic) {
     category: topic.category,
     subject: topic.subject,
     verifiedFacts: Array.isArray(topic.verifiedFacts) ? [...topic.verifiedFacts] : [],
+    talkingPoints: Array.isArray(topic.talkingPoints) ? [...topic.talkingPoints] : [],
     personaRelevance: topic.personaRelevance,
     allowedAngles: Array.isArray(topic.allowedAngles) ? [...topic.allowedAngles] : [],
     expiresAt: topic.expiresAt,

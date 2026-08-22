@@ -14,6 +14,7 @@ const INVENTORY_VERSION = 1;
 const DEFAULT_TTL_HOURS = 36;
 const MAX_TOPICS = 12;
 const MAX_FACTS = 3;
+const MAX_TALKING_POINTS = 3;
 const MAX_ANGLES = 4;
 const MAX_CLAIMS = 5;
 const MAX_SOURCES = 3;
@@ -246,6 +247,7 @@ export function normalizeCurrentTopic(value, { capturedAt, expiresAt } = {}) {
   const category = text(value?.category, 60);
   const subject = text(value?.subject, 180);
   const verifiedFacts = textList(value?.verifiedFacts, MAX_FACTS, 280);
+  const talkingPoints = textList(value?.talkingPoints, MAX_TALKING_POINTS, 220);
   const personaRelevance = text(value?.personaRelevance, 320);
   const allowedAngles = textList(value?.allowedAngles, MAX_ANGLES, 220);
 
@@ -270,6 +272,7 @@ export function normalizeCurrentTopic(value, { capturedAt, expiresAt } = {}) {
     category,
     subject,
     verifiedFacts,
+    talkingPoints,
     personaRelevance,
     allowedAngles,
     forbiddenClaims: textList(
@@ -311,6 +314,12 @@ function discoverySchema() {
             category: { type: "string" },
             subject: { type: "string" },
             verifiedFacts: { type: "array", items: { type: "string" } },
+            talkingPoints: {
+              type: "array",
+              minItems: 1,
+              maxItems: MAX_TALKING_POINTS,
+              items: { type: "string" },
+            },
             personaRelevance: { type: "string" },
             allowedAngles: { type: "array", items: { type: "string" } },
             forbiddenClaims: { type: "array", items: { type: "string" } },
@@ -331,6 +340,7 @@ function discoverySchema() {
             "category",
             "subject",
             "verifiedFacts",
+            "talkingPoints",
             "personaRelevance",
             "allowedAngles",
             "forbiddenClaims",
@@ -356,6 +366,7 @@ export async function discoverCurrentTopics(env, { at = new Date(), requestJson 
       "Only return categories ai_digital, apps_services, devices, work_productivity, consumer_lifestyle, seasonal_life, or light_culture.",
       "Exclude politics, elections, crime, disasters, wars, divisive controversy, medical or legal advice, financial recommendations, and serious social conflict.",
       "Return only facts supported by the web sources. Keep verifiedFacts to one to three concise factual statements.",
+      "For each topic, also return one to three talkingPoints: short everyday Korean expressions that are safe to use as the factual part of a Threads post. They must stay strictly within verifiedFacts, preserve a forecast, plan, or possibility as uncertain, and remove unnecessary press-release structure, organization names, official terms, causes, and background. Do not write a headline, news summary, or a full Threads post.",
       "Separate facts from persona relevance and allowedAngles. Do not invent personal use, experience, numbers, dates, launch details, or certainty beyond the sources.",
       "Provide only source URLs and titles used for factual traceability; do not quote article bodies.",
     ].join(" "),
@@ -517,6 +528,7 @@ export function buildCurrentTopicGenerationContext(topic) {
     category: normalized.category,
     subject: normalized.subject,
     verifiedFacts: [...normalized.verifiedFacts],
+    talkingPoints: [...normalized.talkingPoints],
     personaRelevance: normalized.personaRelevance,
     allowedAngles: [...normalized.allowedAngles],
     forbiddenClaims: [...normalized.forbiddenClaims],

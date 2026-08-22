@@ -648,6 +648,7 @@ function normalizeCurrentTopicForContext(value) {
   const personaRelevance = String(value?.personaRelevance || "").trim();
   const allowedAngles = textList(value?.allowedAngles);
   const verifiedFacts = textList(value?.verifiedFacts);
+  const talkingPoints = textList(value?.talkingPoints);
   const hookDirection = String(value?.hookDirection || "").trim();
 
   if (!topicId || !category || !subject || !personaRelevance || !allowedAngles.length || !verifiedFacts.length) {
@@ -661,6 +662,7 @@ function normalizeCurrentTopicForContext(value) {
     category,
     subject,
     verifiedFacts,
+    talkingPoints,
     personaRelevance,
     allowedAngles,
     forbiddenClaims: textList(value?.forbiddenClaims),
@@ -1025,7 +1027,7 @@ function buildGenerationInput(
       lines.push(
         "",
         "currentTopic is a factual basis for a natural persona observation, not a news summary.",
-        "Use only verifiedFacts as factual support, use at most one fact naturally, and do not invent numbers, dates, launch details, product features, or certainty.",
+        "verifiedFacts are the factual boundary, not source sentences to copy. Prefer one talkingPoint when available as the everyday factual wording; otherwise use only the smallest needed verifiedFacts fragment. Use at most one fact naturally, and do not invent numbers, dates, launch details, product features, or certainty.",
         "Do not claim direct use, attendance, or personal experience. Do not start as a news report or say you saw it in the news.",
         "Use personaRelevance as everyday context and selectedAngle as the main angle. Follow forbiddenClaims and keep facts, curiosity, and preference clearly distinct."
       );

@@ -539,6 +539,8 @@ export async function handleAdminPostPage(
           diagnosticValue(topic.subject),
         label + ".verifiedFacts: " +
           (currentTopicList(topic.verifiedFacts).join(" | ") || "-"),
+        label + ".talkingPoints: " +
+          (currentTopicList(topic.talkingPoints).join(" | ") || "-"),
         label + ".personaRelevance: " +
           diagnosticValue(topic.personaRelevance),
         label + ".allowedAngles: " +
