@@ -98,6 +98,10 @@ import {
 } from "./routes/current-topic-diagnostic.js";
 
 import {
+  handleCurrentTopicAutoDiagnostic,
+} from "./routes/current-topic-auto-diagnostic.js";
+
+import {
   runScheduledAutoPost,
 } from "./services/auto-post/scheduler.js";
 
@@ -313,6 +317,10 @@ export default {
         request,
         env
       );
+    }
+
+    if (pathname === "/admin/diagnostics/current-topic-auto") {
+      return handleCurrentTopicAutoDiagnostic(request, env);
     }
 
     if (

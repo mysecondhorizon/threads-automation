@@ -429,9 +429,9 @@ export async function readCurrentTopicInventory(env, { at = new Date() } = {}) {
   };
 }
 
-export function selectCurrentTopic(inventory, { at = new Date(), category = null, recentTopicIds = [] } = {}) {
+export function getEligibleCurrentTopics(inventory, { at = new Date(), category = null, recentTopicIds = [] } = {}) {
   const now = validDate(at);
-  if (!now) return null;
+  if (!now) return [];
 
   const recentIds = new Set(textList(recentTopicIds, 100, 160));
   const requestedCategory = text(category, 60);
@@ -455,7 +455,11 @@ export function selectCurrentTopic(inventory, { at = new Date(), category = null
       ...topic,
       score: worthiness.score,
       scoreBreakdown: worthiness.scoreBreakdown,
-    }))[0] || null;
+    }));
+}
+
+export function selectCurrentTopic(inventory, options = {}) {
+  return getEligibleCurrentTopics(inventory, options)[0] || null;
 }
 
 const HOOK_DIRECTION_RULES = [
@@ -534,6 +538,29 @@ export function buildCurrentTopicGenerationContext(topic) {
     forbiddenClaims: [...normalized.forbiddenClaims],
     selectedAngle: normalized.allowedAngles[0] || null,
     hookDirection: buildCurrentTopicHookDirection(normalized),
+    expiresAt: normalized.expiresAt,
+  };
+}
+
+export async function resolveCurrentTopicGeneration(
+  env,
+  {
+    at = new Date(),
+    recentTopicIds = [],
+    readInventory = readCurrentTopicInventory,
+    getEligibleTopics = getEligibleCurrentTopics,
+    buildGenerationContext = buildCurrentTopicGenerationContext,
+  } = {}
+) {
+  const inventory = await readInventory(env, { at });
+  const eligibleTopics = getEligibleTopics(inventory, { at, recentTopicIds });
+  const topic = eligibleTopics[0] || null;
+
+  return {
+    inventory,
+    eligibleTopics,
+    topic,
+    currentTopic: buildGenerationContext(topic),
   };
 }
 
@@ -547,7 +574,15 @@ export async function resolveCurrentTopicGenerationContext(
     buildGenerationContext = buildCurrentTopicGenerationContext,
   } = {}
 ) {
-  const inventory = await readInventory(env, { at });
-  const topic = selectTopic(inventory, { at, recentTopicIds });
-  return buildGenerationContext(topic);
+  const result = await resolveCurrentTopicGeneration(env, {
+    at,
+    recentTopicIds,
+    readInventory,
+    getEligibleTopics: (inventory, options) => {
+      const topic = selectTopic(inventory, options);
+      return topic ? [topic] : [];
+    },
+    buildGenerationContext,
+  });
+  return result.currentTopic;
 }

@@ -32,7 +32,7 @@ import {
 } from "../post-regenerator.js";
 
 import {
-  resolveCurrentTopicGenerationContext,
+  resolveCurrentTopicGeneration,
 } from "../current-topic-inventory.js";
 
 import {
@@ -184,23 +184,86 @@ export function shouldAttemptCurrentTopicForGeneralAuto(context, { source, gener
   return latestCronAutoPost?.contentMode !== "current_topic_reaction";
 }
 
-async function applyCurrentTopicForGeneralAuto(env, context, { source, generalOnly } = {}) {
+export async function resolveCurrentTopicForGeneralAuto(
+  env,
+  context,
+  {
+    source,
+    generalOnly,
+    resolveGeneration = resolveCurrentTopicGeneration,
+  } = {}
+) {
+  const recentPosts = Array.isArray(context?.history?.recentSevenDayPosts)
+    ? context.history.recentSevenDayPosts
+    : [];
+  const latestCronAutoPost = recentPosts.find(
+    (post) => post?.source === "cron_auto_general"
+  );
+  const lastSuccessfulCronContentMode = latestCronAutoPost?.contentMode || null;
+  const recentTopicIds = getRecentCronAutoTopicIds(context);
+
   if (!shouldAttemptCurrentTopicForGeneralAuto(context, { source, generalOnly })) {
-    return null;
+    return {
+      currentTopic: null,
+      nextContentMode: "everyday_personal",
+      cadence: { lastSuccessfulCronContentMode, reason: "last_successful_cron_current_topic" },
+      recentTopicIds,
+      inventoryAvailable: null,
+      eligibleTopicCount: 0,
+      fallbackReason: null,
+    };
   }
 
   try {
-    const currentTopic = await resolveCurrentTopicGenerationContext(env, {
-      recentTopicIds: getRecentCronAutoTopicIds(context),
-    });
-    if (currentTopic) context.currentTopic = currentTopic;
-    return currentTopic;
+    const result = await resolveGeneration(env, { recentTopicIds });
+    const inventoryAvailable = Array.isArray(result?.inventory?.topics)
+      ? result.inventory.topics.length > 0
+      : false;
+    const eligibleTopicCount = Array.isArray(result?.eligibleTopics)
+      ? result.eligibleTopics.length
+      : 0;
+
+    if (result?.currentTopic) {
+      return {
+        currentTopic: result.currentTopic,
+        nextContentMode: "current_topic_reaction",
+        cadence: { lastSuccessfulCronContentMode, reason: "current_topic_slot" },
+        recentTopicIds,
+        inventoryAvailable,
+        eligibleTopicCount,
+        fallbackReason: null,
+      };
+    }
+
+    return {
+      currentTopic: null,
+      nextContentMode: "everyday_personal",
+      cadence: { lastSuccessfulCronContentMode, reason: "current_topic_slot" },
+      recentTopicIds,
+      inventoryAvailable,
+      eligibleTopicCount,
+      fallbackReason: "no_eligible_current_topic",
+    };
   } catch (error) {
-    console.warn("Current topic AUTO fallback", {
-      code: error?.code || "current_topic_unavailable",
-    });
-    return null;
+    return {
+      currentTopic: null,
+      nextContentMode: "everyday_personal",
+      cadence: { lastSuccessfulCronContentMode, reason: "current_topic_slot" },
+      recentTopicIds,
+      inventoryAvailable: null,
+      eligibleTopicCount: 0,
+      fallbackReason: error?.code || "current_topic_unavailable",
+    };
   }
+}
+
+async function applyCurrentTopicForGeneralAuto(env, context, options = {}) {
+  const decision = await resolveCurrentTopicForGeneralAuto(env, context, options);
+  if (decision.currentTopic) context.currentTopic = decision.currentTopic;
+  if (decision.fallbackReason) {
+    console.warn("Current topic AUTO fallback", { code: decision.fallbackReason });
+  }
+  return decision.currentTopic;
 }
 
 function buildGeneralAutoContentMetadata(context) {
