@@ -25,6 +25,10 @@ import {
 } from "../services/post-regenerator.js";
 
 import {
+  selectGeneralAutoMedia,
+} from "../services/general-auto-media-selection.js";
+
+import {
   buildCurrentTopicGenerationContext,
   readCurrentTopicInventory,
   resolveCurrentTopicGenerationContext,
@@ -294,6 +298,23 @@ export async function handleAutoPostPreview(
         context
       );
 
+    let mediaSelection;
+    try {
+      mediaSelection = await selectGeneralAutoMedia(env, {
+        generatedPost,
+        currentTopic,
+      });
+    } catch {
+      mediaSelection = {
+        mode: "TEXT",
+        mediaId: null,
+        reason: "media_selection_unavailable",
+        score: null,
+        candidateCount: 0,
+        eligibleCount: 0,
+      };
+    }
+
     const firstComment =
       normalizeFirstComment(
         generatedPost
@@ -355,6 +376,8 @@ export async function handleAutoPostPreview(
           .affiliateDisclosureRequired,
 
       firstComment,
+
+      mediaSelection,
 
       validation: {
         length:

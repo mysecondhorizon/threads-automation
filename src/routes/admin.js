@@ -302,6 +302,17 @@ export async function handleAdminPostPage(
       style="white-space:pre-wrap;line-height:1.6;"
     ></pre>
 
+    <section
+      id="current-topic-auto-media-preview"
+      hidden
+      style="margin:12px 0;padding:12px;border:1px solid #ddd;border-radius:8px;max-width:560px;"
+    >
+      <strong>선택된 이미지 미리보기</strong>
+      <div id="current-topic-auto-media-summary" style="white-space:pre-wrap;line-height:1.6;margin-top:8px;"></div>
+      <img id="current-topic-auto-media-image" alt="" style="display:block;max-width:100%;max-height:320px;margin-top:10px;border-radius:8px;">
+      <div id="current-topic-auto-media-fallback" hidden style="margin-top:10px;color:#b00020;"></div>
+    </section>
+
     <pre
       id="run-cron-auto-general-status"
       style="white-space:pre-wrap;line-height:1.6;"
@@ -428,6 +439,26 @@ export async function handleAdminPostPage(
     const currentTopicAutoPreviewStatus =
       document.getElementById(
         "current-topic-auto-preview-status"
+      );
+
+    const currentTopicAutoMediaPreview =
+      document.getElementById(
+        "current-topic-auto-media-preview"
+      );
+
+    const currentTopicAutoMediaSummary =
+      document.getElementById(
+        "current-topic-auto-media-summary"
+      );
+
+    const currentTopicAutoMediaImage =
+      document.getElementById(
+        "current-topic-auto-media-image"
+      );
+
+    const currentTopicAutoMediaFallback =
+      document.getElementById(
+        "current-topic-auto-media-fallback"
       );
 
     const runCronAutoGeneralButton =
@@ -677,6 +708,9 @@ export async function handleAdminPostPage(
       status,
       data
     ) {
+      currentTopicAutoMediaPreview.hidden =
+        true;
+
       const lines = [
         "HTTP status: " + status,
       ];
@@ -801,6 +835,59 @@ export async function handleAdminPostPage(
         lines.push(
           "Current Topic이 없어 기존 AUTO context로 생성했습니다."
         );
+      }
+
+      const mediaSelection =
+        data.mediaSelection &&
+        typeof data.mediaSelection === "object"
+          ? data.mediaSelection
+          : {};
+      const mediaId =
+        mediaSelection.mode === "IMAGE"
+          ? String(mediaSelection.mediaId || "").trim()
+          : "";
+
+      lines.push(
+        "publishMode: " +
+          (mediaId ? "IMAGE" : "TEXT"),
+        "mediaId: " +
+          diagnosticValue(mediaId || null),
+        "media selection reason: " +
+          diagnosticValue(mediaSelection.reason),
+        "media candidateCount: " +
+          diagnosticValue(mediaSelection.candidateCount),
+        "media eligibleCount: " +
+          diagnosticValue(mediaSelection.eligibleCount)
+      );
+
+      if (mediaId) {
+        currentTopicAutoMediaPreview.hidden =
+          false;
+        currentTopicAutoMediaSummary.textContent =
+          "mediaId: " + mediaId + "\nreason: " +
+          diagnosticValue(mediaSelection.reason);
+        currentTopicAutoMediaFallback.hidden =
+          true;
+        currentTopicAutoMediaFallback.textContent =
+          "";
+        currentTopicAutoMediaImage.alt =
+          "Current Topic AUTO Preview 이미지";
+        currentTopicAutoMediaImage.onload = () => {
+          currentTopicAutoMediaImage.hidden =
+            false;
+          currentTopicAutoMediaFallback.hidden =
+            true;
+        };
+        currentTopicAutoMediaImage.onerror = () => {
+          currentTopicAutoMediaImage.hidden =
+            true;
+          currentTopicAutoMediaFallback.textContent =
+            "이미지 미리보기를 불러오지 못했습니다. 본문 preview는 그대로 확인할 수 있습니다.";
+          currentTopicAutoMediaFallback.hidden =
+            false;
+        };
+        currentTopicAutoMediaImage.src =
+          "/media/" + encodeURIComponent(mediaId);
       }
 
       currentTopicAutoPreviewStatus.textContent =

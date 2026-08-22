@@ -245,6 +245,23 @@ export async function handleAutoPostPreviewPage(
       ></div>
 
       <section
+        id="media-selection"
+        style="
+          margin-bottom:16px;
+          padding:14px;
+          border:1px solid #ddd;
+          border-radius:10px;
+          background:#fafafa;
+          white-space:pre-wrap;
+          line-height:1.6;
+          font-size:13px;
+        "
+      >
+        <strong>게시 이미지 선택</strong>
+        <div id="media-selection-summary" style="margin-top:8px;color:#555;"></div>
+      </section>
+
+      <section
         id="media-preview"
         style="
           display:none;
@@ -269,7 +286,8 @@ export async function handleAutoPostPreviewPage(
         <div
           id="media-preview-fallback"
           role="status"
-          style="display:none;margin-top:12px;color:#b00020;"
+          hidden
+          style="margin-top:12px;color:#b00020;"
         ></div>
       </section>
 
@@ -455,6 +473,11 @@ export async function handleAutoPostPreviewPage(
         "post-metadata"
       );
 
+    const mediaSelectionSummary =
+      document.getElementById(
+        "media-selection-summary"
+      );
+
     const mediaPreview =
       document.getElementById(
         "media-preview"
@@ -594,9 +617,17 @@ export async function handleAutoPostPreviewPage(
       const media =
         data.media || {};
 
+      const selection =
+        data.mediaSelection &&
+        typeof data.mediaSelection === "object"
+          ? data.mediaSelection
+          : {};
+
       const mediaId =
         String(
-          data.mediaId ||
+          selection.mode === "IMAGE"
+            ? selection.mediaId
+            : data.mediaId ||
           media.id ||
           ""
         ).trim();
@@ -659,6 +690,28 @@ export async function handleAutoPostPreviewPage(
         encodeURIComponent(mediaId);
     }
 
+    function renderMediaSelection(data) {
+      const selection =
+        data.mediaSelection &&
+        typeof data.mediaSelection === "object"
+          ? data.mediaSelection
+          : {};
+      const mode =
+        selection.mode === "IMAGE" &&
+        String(selection.mediaId || "").trim()
+          ? "IMAGE"
+          : "TEXT";
+
+      mediaSelectionSummary.textContent = [
+        "publishMode: " + mode,
+        "mediaId: " + String(selection.mediaId || "-"),
+        "reason: " + String(selection.reason || "text_only_preferred"),
+        "score: " + (selection.score == null ? "-" : String(selection.score)),
+        "candidateCount: " + String(selection.candidateCount ?? 0),
+        "eligibleCount: " + String(selection.eligibleCount ?? 0),
+      ].join("\\n");
+    }
+
     function renderPreview(
       payload
     ) {
@@ -678,6 +731,10 @@ export async function handleAutoPostPreviewPage(
 
       latestPreview =
         data;
+
+      renderMediaSelection(
+        data
+      );
 
       renderMediaPreview(
         data
