@@ -536,3 +536,18 @@ export function buildCurrentTopicGenerationContext(topic) {
     hookDirection: buildCurrentTopicHookDirection(normalized),
   };
 }
+
+export async function resolveCurrentTopicGenerationContext(
+  env,
+  {
+    at = new Date(),
+    recentTopicIds = [],
+    readInventory = readCurrentTopicInventory,
+    selectTopic = selectCurrentTopic,
+    buildGenerationContext = buildCurrentTopicGenerationContext,
+  } = {}
+) {
+  const inventory = await readInventory(env, { at });
+  const topic = selectTopic(inventory, { at, recentTopicIds });
+  return buildGenerationContext(topic);
+}

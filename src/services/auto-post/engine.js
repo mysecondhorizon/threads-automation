@@ -32,6 +32,10 @@ import {
 } from "../post-regenerator.js";
 
 import {
+  resolveCurrentTopicGenerationContext,
+} from "../current-topic-inventory.js";
+
+import {
   AutoPostEngineError,
   serializeAutoPostError,
 } from "./errors.js";
@@ -150,6 +154,67 @@ export function applyGeneralAutoContext(context) {
     productPhotos: [],
   };
   return context;
+}
+
+export function getRecentCronAutoTopicIds(context) {
+  const topicIds = new Set();
+  const recentPosts = Array.isArray(context?.history?.recentSevenDayPosts)
+    ? context.history.recentSevenDayPosts
+    : [];
+
+  for (const post of recentPosts) {
+    if (post?.source !== "cron_auto_general") continue;
+    const topicId = String(post?.currentTopicId || "").trim();
+    if (topicId) topicIds.add(topicId);
+  }
+
+  return [...topicIds];
+}
+
+export function shouldAttemptCurrentTopicForGeneralAuto(context, { source, generalOnly } = {}) {
+  if (!generalOnly || source !== "cron_auto_general") return false;
+
+  const recentPosts = Array.isArray(context?.history?.recentSevenDayPosts)
+    ? context.history.recentSevenDayPosts
+    : [];
+  const latestCronAutoPost = recentPosts.find(
+    (post) => post?.source === "cron_auto_general"
+  );
+
+  return latestCronAutoPost?.contentMode !== "current_topic_reaction";
+}
+
+async function applyCurrentTopicForGeneralAuto(env, context, { source, generalOnly } = {}) {
+  if (!shouldAttemptCurrentTopicForGeneralAuto(context, { source, generalOnly })) {
+    return null;
+  }
+
+  try {
+    const currentTopic = await resolveCurrentTopicGenerationContext(env, {
+      recentTopicIds: getRecentCronAutoTopicIds(context),
+    });
+    if (currentTopic) context.currentTopic = currentTopic;
+    return currentTopic;
+  } catch (error) {
+    console.warn("Current topic AUTO fallback", {
+      code: error?.code || "current_topic_unavailable",
+    });
+    return null;
+  }
+}
+
+function buildGeneralAutoContentMetadata(context) {
+  const currentTopic = context?.currentTopic;
+  if (!currentTopic) {
+    return { contentMode: "everyday_personal" };
+  }
+
+  return {
+    contentMode: "current_topic_reaction",
+    currentTopicId: currentTopic.topicId,
+    currentTopicCategory: currentTopic.category,
+    currentTopicSelectedAngle: currentTopic.selectedAngle,
+  };
 }
 
 function createExecutionId() {
@@ -727,6 +792,12 @@ async function runExecution(
       applyGeneralAutoContext(
         context
       );
+
+      await applyCurrentTopicForGeneralAuto(
+        env,
+        context,
+        { source, generalOnly }
+      );
     }
 
     await updateExecution(
@@ -907,6 +978,10 @@ async function runExecution(
               generatedPost
                 ?.affiliateDisclosureRequired
             ),
+
+          ...(generalOnly
+            ? buildGeneralAutoContentMetadata(context)
+            : {}),
         },
       }
     );

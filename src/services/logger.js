@@ -38,6 +38,22 @@ function normalizePostMetadata(
       metadata?.source ||
       null,
 
+    contentMode:
+      metadata?.contentMode ||
+      null,
+
+    currentTopicId:
+      metadata?.currentTopicId ||
+      null,
+
+    currentTopicCategory:
+      metadata?.currentTopicCategory ||
+      null,
+
+    currentTopicSelectedAngle:
+      metadata?.currentTopicSelectedAngle ||
+      null,
+
     candidateId:
       metadata?.candidateId ||
       null,

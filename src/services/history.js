@@ -143,6 +143,26 @@ function normalizePublishedPost(
         ? log.created_at
         : null,
 
+    source:
+      metadata.source ||
+      null,
+
+    contentMode:
+      metadata.contentMode ||
+      null,
+
+    currentTopicId:
+      metadata.currentTopicId ||
+      null,
+
+    currentTopicCategory:
+      metadata.currentTopicCategory ||
+      null,
+
+    currentTopicSelectedAngle:
+      metadata.currentTopicSelectedAngle ||
+      null,
+
     style:
       metadata.style ||
       null,

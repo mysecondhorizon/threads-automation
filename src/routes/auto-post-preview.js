@@ -27,6 +27,7 @@ import {
 import {
   buildCurrentTopicGenerationContext,
   readCurrentTopicInventory,
+  resolveCurrentTopicGenerationContext,
   selectCurrentTopic,
 } from "../services/current-topic-inventory.js";
 
@@ -144,18 +145,18 @@ export async function applyCurrentTopicToPreviewContext(
       selectCurrentTopic,
     buildGenerationContext =
       buildCurrentTopicGenerationContext,
+    resolveGenerationContext =
+      resolveCurrentTopicGenerationContext,
   } = {}
 ) {
-  const inventory =
-    await readInventory(
-      env
-    );
-
   const currentTopic =
-    buildGenerationContext(
-      selectTopic(
-        inventory
-      )
+    await resolveGenerationContext(
+      env,
+      {
+        readInventory,
+        selectTopic,
+        buildGenerationContext,
+      }
     );
 
   if (currentTopic) {
