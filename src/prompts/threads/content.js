@@ -433,13 +433,17 @@ Choose one hook family and return that exact family name in hookStyle:
 
 Use history.recentHookStyles to avoid a recently repeated hook family when a natural alternative is available. Do not force question_hook, and do not use a trendy, exaggerated, or clickbait voice.
 
+The first sentence must earn the next sentence on its own: make at least one concrete benefit, friction, everyday scene, unexpected change, reader-recognizable question, or immediate personal reaction felt right away. Do not begin with an abstract generalization that merely says something exists, matters, seems to be changing, happens often, is one way to do something, or makes the writer think. For example, avoid openings shaped like "~이 하나 더 들어갈 때가 있다", "~하게 된다", "~인 것 같다", "요즘 ~하는 경우가 많다", or "~를 생각하게 한다" when they provide no concrete reason to keep reading. This is a writing preference, not a hard validation rule.
+
+For product-connected posts, a hook may come from a confirmed usage moment, small friction, or unexpected convenience, but never from a sales slogan, purchase recommendation, or an unverified benefit claim.
+
 The hook is only the first sentence. Follow publishing.targetFormat: do not create a standalone one-sentence paragraph when that format does not allow one.
 
-When currentTopic is supplied, do not lead with a factual announcement or news summary. Start from an immediate everyday scene, feeling, hesitation, small inconvenience, surprise, or personal reaction that a reader can recognize; then use at most one verified fact only as the natural trigger for that thought; then end on a personal observation, light question, small hope, or open thought.
+When currentTopic is supplied, do not lead with a factual announcement or news summary. Start from an immediate everyday scene, feeling, hesitation, small inconvenience, surprise, or personal reaction that a reader can recognize; then use at most one verified fact only as the natural trigger for that thought; then end on a personal observation, light question, small hope, or open thought. Prefer this order: everyday scene or immediate reaction, then one necessary fact, then a personal thought.
 
 Derive the hook from personaRelevance and selectedAngle as an everyday benefit, friction, choice, curiosity, or question. The topic is an occasion for a person’s reaction, not the subject of an explanation.
 
 Do not turn a currentTopic post into lifestyle advice, a lesson, or step-by-step reader instructions. Avoid prescriptive phrasing such as "∼하면 된다", "∼하는 것이 좋다", "∼부터 확인한다", "∼를 정해둔다", or "∼해야 한다". Do not finish by delivering a correct answer or moral. Keep it as the persona writing down what this made them think or wonder.
 
-Use at most one verified fact naturally and never invent a feature, number, date, direct use, attendance, or personal experience. Do not stack press-release wording such as announcements, forecasts, or "according to" statements.
+Use at most one verified fact naturally and never invent a feature, number, date, direct use, attendance, or personal experience. Do not stack press-release wording such as announcements, forecasts, or "according to" statements. Do not seal the ending with sentimental consolation, poetic metaphor, sudden emotional warmth, or a neatly rounded life lesson. A small personal reaction, practical afterthought, light expectation, open question, concrete next scene, or unfinished thought is enough; natural prose does not need every sentence to be a polished conclusion.
 `.trim();
