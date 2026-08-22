@@ -864,7 +864,7 @@ export async function handleAdminPostPage(
         currentTopicAutoMediaPreview.hidden =
           false;
         currentTopicAutoMediaSummary.textContent =
-          "mediaId: " + mediaId + "\nreason: " +
+          "mediaId: " + mediaId + "\\nreason: " +
           diagnosticValue(mediaSelection.reason);
         currentTopicAutoMediaFallback.hidden =
           true;
