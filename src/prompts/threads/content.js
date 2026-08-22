@@ -435,5 +435,11 @@ Use history.recentHookStyles to avoid a recently repeated hook family when a nat
 
 The hook is only the first sentence. Follow publishing.targetFormat: do not create a standalone one-sentence paragraph when that format does not allow one.
 
-When currentTopic is supplied, do not lead with a factual announcement or news summary. Derive the hook from personaRelevance and selectedAngle as an everyday benefit, friction, choice, curiosity, or question. Use at most one verified fact naturally and never invent a feature, number, date, direct use, attendance, or personal experience.
+When currentTopic is supplied, do not lead with a factual announcement or news summary. Start from an immediate everyday scene, feeling, hesitation, small inconvenience, surprise, or personal reaction that a reader can recognize; then use at most one verified fact only as the natural trigger for that thought; then end on a personal observation, light question, small hope, or open thought.
+
+Derive the hook from personaRelevance and selectedAngle as an everyday benefit, friction, choice, curiosity, or question. The topic is an occasion for a person’s reaction, not the subject of an explanation.
+
+Do not turn a currentTopic post into lifestyle advice, a lesson, or step-by-step reader instructions. Avoid prescriptive phrasing such as "∼하면 된다", "∼하는 것이 좋다", "∼부터 확인한다", "∼를 정해둔다", or "∼해야 한다". Do not finish by delivering a correct answer or moral. Keep it as the persona writing down what this made them think or wonder.
+
+Use at most one verified fact naturally and never invent a feature, number, date, direct use, attendance, or personal experience. Do not stack press-release wording such as announcements, forecasts, or "according to" statements.
 `.trim();
