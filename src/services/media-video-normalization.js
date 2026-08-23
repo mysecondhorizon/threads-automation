@@ -9,6 +9,13 @@ import {
 const VIDEO_CONTENT_TYPE = "video/mp4";
 const NORMALIZER_INSTANCE_NAME = "video-orientation-normalizer";
 const ALLOWED_ROTATIONS = new Set([90, 180, 270]);
+const MAX_DIAGNOSTIC_MESSAGE_LENGTH = 256;
+
+function diagnosticMessage(error) {
+  return String(error?.message || error)
+    .replace(/\s+/gu, " ")
+    .slice(0, MAX_DIAGNOSTIC_MESSAGE_LENGTH);
+}
 
 export function createNormalizedVideoObjectKey(sourceObjectKey) {
   const source = String(sourceObjectKey || "");
@@ -34,9 +41,12 @@ export async function normalizeVideoOrientation(
   let normalizedBody;
   try {
     normalizedBody = await container.normalizeVideo(source.body, rotationDegrees);
-    console.log(`[video-normalize] RPC returned body=${Boolean(normalizedBody)}`);
+    console.log(
+      `[video-normalize] RPC result body=${normalizedBody !== null && normalizedBody !== undefined} ` +
+      `stream=${Boolean(normalizedBody && typeof normalizedBody.getReader === "function")}`
+    );
   } catch (error) {
-    console.error(`[video-normalize] RPC failed message=${error?.message || String(error)}`);
+    console.error(`[video-normalize] RPC failed message=${diagnosticMessage(error)}`);
     throw error;
   }
   if (!normalizedBody || typeof normalizedBody.getReader !== "function") {
@@ -47,9 +57,9 @@ export async function normalizeVideoOrientation(
     await putMediaObject(env, normalizedObjectKey, normalizedBody, {
       httpMetadata: { contentType: VIDEO_CONTENT_TYPE },
     });
-    console.log("[video-normalize] normalized temp R2 put succeeded");
+    console.log(`[video-normalize] normalized temp R2 put succeeded key=${normalizedObjectKey}`);
   } catch (error) {
-    console.error(`[video-normalize] normalized temp R2 put failed message=${error?.message || String(error)}`);
+    console.error(`[video-normalize] normalized temp R2 put failed message=${diagnosticMessage(error)}`);
     throw error;
   }
 }

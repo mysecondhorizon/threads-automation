@@ -172,9 +172,15 @@ export class VideoNormalizerContainer extends Container {
         readSmallText(probe.stdout),
         probe.exitCode,
       ]);
-      if (probeExitCode || !probeText.includes("video,h264") ||
-        (probeText.includes("audio,") && !probeText.includes("audio,aac")) ||
-        !probeText.includes("mov,mp4")) {
+      const hasVideoH264 = probeText.includes("video,h264");
+      const audioIsValid = !probeText.includes("audio,") || probeText.includes("audio,aac");
+      const hasMp4Format = probeText.includes("mov,mp4");
+      if (probeExitCode || !hasVideoH264 || !audioIsValid || !hasMp4Format) {
+        console.error(
+          `[video-normalize] output validation failed exit=${probeExitCode} ` +
+          `hasVideoH264=${hasVideoH264} audioIsValid=${audioIsValid} ` +
+          `hasMp4Format=${hasMp4Format} probeTail=${JSON.stringify(probeText.slice(-512))}`
+        );
         throw new Error("Normalized video output validation failed");
       }
 

@@ -42,9 +42,16 @@ const IMAGE_TYPES = new Set([
 ]);
 const VIDEO_CONTENT_TYPE = "video/mp4";
 const VIDEO_EXTENSION = ".mp4";
+const MAX_DIAGNOSTIC_MESSAGE_LENGTH = 256;
 
 function text(value) {
   return String(value ?? "").trim();
+}
+
+function diagnosticMessage(error) {
+  return String(error?.message || error)
+    .replace(/\s+/gu, " ")
+    .slice(0, MAX_DIAGNOSTIC_MESSAGE_LENGTH);
 }
 
 function splitList(value) {
@@ -238,13 +245,25 @@ async function videoUploadData(env, file, input, sourceObjectKey, temporaryObjec
         normalizedObjectKey,
         rotationDegrees,
       });
-      const normalizedRotationDegrees = await readMp4OrientationDegrees(env, normalizedObjectKey);
+      let normalizedRotationDegrees;
+      try {
+        normalizedRotationDegrees = await readMp4OrientationDegrees(env, normalizedObjectKey);
+        console.log(
+          `[video-normalize] orientation parser success=true rotation=${normalizedRotationDegrees}`
+        );
+      } catch (error) {
+        console.error(
+          `[video-normalize] orientation parser success=false ` +
+          `error=${diagnosticMessage(error)}`
+        );
+        throw error;
+      }
       console.log(`[video-normalize] orientation verification degrees=${normalizedRotationDegrees} expected=0`);
       if (normalizedRotationDegrees !== 0) {
         throw new Error("Normalized video orientation metadata is not identity");
       }
     } catch (error) {
-      console.error(`[video-normalize] normalization failed message=${error?.message || String(error)}`);
+      console.error(`[video-normalize] normalization failed message=${diagnosticMessage(error)}`);
       throw error;
     }
     processingObjectKey = normalizedObjectKey;
