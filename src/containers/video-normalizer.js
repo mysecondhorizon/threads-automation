@@ -257,6 +257,9 @@ export class VideoNormalizerContainer extends Container {
         `stderrTail=${JSON.stringify(ffmpegStderrResult.text)}`
       );
       if (ffmpegExitCode) throw new Error("Video orientation normalization failed");
+      if (!Number.isSafeInteger(outputSize) || outputSize <= 0) {
+        throw new Error("Normalized video output size is invalid");
+      }
 
       const probe = await this.ctx.container.exec([
         "ffprobe",
@@ -286,13 +289,16 @@ export class VideoNormalizerContainer extends Container {
         stderr: "ignore",
       });
       if (!output.stdout) throw new Error("Normalized video output is unavailable");
-      console.log("[video-normalize] output stream returning");
+      console.log(`[video-normalize] output stream returning size=${outputSize}`);
       this.ctx.waitUntil(
         output.exitCode
           .catch(() => {})
           .then(() => this.removeTemporaryFiles([inputPath, outputPath]).catch(() => {}))
       );
-      return output.stdout;
+      return {
+        body: output.stdout,
+        size: outputSize,
+      };
     } catch (error) {
       await this.removeTemporaryFiles([inputPath, outputPath].filter(Boolean)).catch(() => {});
       throw error;
