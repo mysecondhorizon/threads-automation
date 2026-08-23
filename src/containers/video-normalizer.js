@@ -75,6 +75,29 @@ async function readFileSize(container, path) {
   return exitCode === 0 && Number.isSafeInteger(size) && size >= 0 ? size : null;
 }
 
+const MP4_FORMAT_IDENTIFIERS = new Set(["mov", "mp4", "m4a", "3gp", "3g2", "mj2"]);
+
+function probeValidation(probeText) {
+  const lines = probeText
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const fieldsFor = (line) => line
+    .split(",")
+    .map((field) => field.trim().toLowerCase().replace(/^"|"$/gu, ""));
+  const streamFields = lines
+    .filter((line) => !line.startsWith('"'))
+    .map(fieldsFor);
+  const hasVideoH264 = streamFields.some(
+    (fields) => fields.includes("h264") && fields.includes("video")
+  );
+  const audioFields = streamFields.filter((fields) => fields.includes("audio"));
+  const audioIsValid = audioFields.every((fields) => fields.includes("aac"));
+  const hasMp4Format = lines
+    .some((line) => fieldsFor(line).some((field) => MP4_FORMAT_IDENTIFIERS.has(field)));
+  return { hasVideoH264, audioIsValid, hasMp4Format };
+}
+
 export class VideoNormalizerContainer extends Container {
   sleepAfter = "1m";
   enableInternet = false;
@@ -172,9 +195,7 @@ export class VideoNormalizerContainer extends Container {
         readSmallText(probe.stdout),
         probe.exitCode,
       ]);
-      const hasVideoH264 = probeText.includes("video,h264");
-      const audioIsValid = !probeText.includes("audio,") || probeText.includes("audio,aac");
-      const hasMp4Format = probeText.includes("mov,mp4");
+      const { hasVideoH264, audioIsValid, hasMp4Format } = probeValidation(probeText);
       if (probeExitCode || !hasVideoH264 || !audioIsValid || !hasMp4Format) {
         console.error(
           `[video-normalize] output validation failed exit=${probeExitCode} ` +
