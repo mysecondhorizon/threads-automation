@@ -299,6 +299,7 @@ export async function publishReviewedAutoPost(
     firstCommentTopicTag = null,
     source = "reviewed_preview",
     candidateId = null,
+    mediaSelection = null,
   }
 ) {
   const executionId =
@@ -556,6 +557,8 @@ export async function publishReviewedAutoPost(
           metadata.firstCommentTopicTag,
 
         metadata,
+
+        mediaSelection,
       }
     );
 

@@ -161,7 +161,57 @@ function normalizeRequestBody(
     Boolean(
       body
         ?.affiliateDisclosureRequired
-    );
+      );
+
+  let mediaSelection = null;
+  if (body?.mediaSelection !== undefined) {
+    if (
+      !body.mediaSelection ||
+      typeof body.mediaSelection !== "object" ||
+      Array.isArray(body.mediaSelection)
+    ) {
+      throw new AutoPostEngineError(
+        "VIDEO mediaSelection must be an object.",
+        {
+          code: "invalid_video_media_selection",
+          status: 400,
+          step: "request_validation",
+        }
+      );
+    }
+    if (body.mediaSelection.mode !== "VIDEO") {
+      throw new AutoPostEngineError(
+        "mediaSelection mode must be VIDEO.",
+        {
+          code: "invalid_video_media_selection",
+          status: 400,
+          step: "request_validation",
+        }
+      );
+    }
+    if (typeof body.mediaSelection.mediaId !== "string") {
+      throw new AutoPostEngineError(
+        "VIDEO mediaSelection mediaId is required.",
+        {
+          code: "invalid_video_media_selection",
+          status: 400,
+          step: "request_validation",
+        }
+      );
+    }
+    const mediaId = body.mediaSelection.mediaId.trim();
+    if (!mediaId) {
+      throw new AutoPostEngineError(
+        "VIDEO mediaSelection mediaId is required.",
+        {
+          code: "invalid_video_media_selection",
+          status: 400,
+          step: "request_validation",
+        }
+      );
+    }
+    mediaSelection = { mode: "VIDEO", mediaId };
+  }
 
   return {
     text,
@@ -191,6 +241,8 @@ function normalizeRequestBody(
     firstComment,
 
     candidateId,
+
+    mediaSelection,
   };
 }
 
@@ -234,10 +286,13 @@ export async function handlePublishReviewedAutoPost(
       );
 
       input =
-        prepareProductReviewPublishInput(
-          productReviewCandidate,
-          input
-        );
+        {
+          ...prepareProductReviewPublishInput(
+            productReviewCandidate,
+            input
+          ),
+          mediaSelection: input.mediaSelection,
+        };
     }
 
     const result =
