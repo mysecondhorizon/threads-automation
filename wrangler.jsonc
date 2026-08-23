@@ -12,6 +12,33 @@
   "media": {
     "binding": "MEDIA"
   },
+  "containers": [
+    {
+      "class_name": "VideoNormalizerContainer",
+      "image": "./containers/video-normalizer/Dockerfile",
+      "instance_type": "basic",
+      "max_instances": 1,
+      "ssh": {
+        "enabled": false
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "VIDEO_NORMALIZER",
+        "class_name": "VideoNormalizerContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "VideoNormalizerContainer"
+      ]
+    }
+  ],
   "kv_namespaces": [
     {
       "binding": "THREADS_KV",

@@ -14,6 +14,13 @@ import {
   readMp4DurationSeconds,
 } from "./media-video-duration.js";
 import {
+  readMp4OrientationDegrees,
+} from "./media-video-orientation.js";
+import {
+  createNormalizedVideoObjectKey,
+  normalizeVideoOrientation,
+} from "./media-video-normalization.js";
+import {
   createVideoFrameTimestamps,
   extractVideoFrames,
   transformVideoClip,
@@ -132,7 +139,7 @@ function createObjectKey(sourceType, fileName, extension) {
 function createTemporaryVideoObjectKey() {
   const id = globalThis.crypto?.randomUUID?.() ||
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  return `media/tmp/video/${id}.mp4`;
+  return `media/tmp/video/${id}-source.mp4`;
 }
 
 function validateFile(file) {
@@ -210,8 +217,8 @@ async function imageUploadData(env, file, input) {
   };
 }
 
-async function videoUploadData(env, file, input, temporaryObjectKey) {
-  await putMediaObject(env, temporaryObjectKey, file.stream(), {
+async function videoUploadData(env, file, input, sourceObjectKey, temporaryObjectKeys) {
+  await putMediaObject(env, sourceObjectKey, file.stream(), {
     httpMetadata: { contentType: VIDEO_CONTENT_TYPE },
     customMetadata: {
       originalFileName: file.name,
@@ -219,18 +226,35 @@ async function videoUploadData(env, file, input, temporaryObjectKey) {
       originalBytes: String(file.size),
     },
   });
-  const sourceDurationSeconds = await readMp4DurationSeconds(env, temporaryObjectKey);
+  temporaryObjectKeys.push(sourceObjectKey);
+  const rotationDegrees = await readMp4OrientationDegrees(env, sourceObjectKey);
+  let processingObjectKey = sourceObjectKey;
+  if (rotationDegrees !== 0) {
+    const normalizedObjectKey = createNormalizedVideoObjectKey(sourceObjectKey);
+    temporaryObjectKeys.push(normalizedObjectKey);
+    await normalizeVideoOrientation(env, {
+      sourceObjectKey,
+      normalizedObjectKey,
+      rotationDegrees,
+    });
+    const normalizedRotationDegrees = await readMp4OrientationDegrees(env, normalizedObjectKey);
+    if (normalizedRotationDegrees !== 0) {
+      throw new Error("Normalized video orientation metadata is not identity");
+    }
+    processingObjectKey = normalizedObjectKey;
+  }
+  const sourceDurationSeconds = await readMp4DurationSeconds(env, processingObjectKey);
   if (sourceDurationSeconds < 2) {
     throw new Error("Video duration must be at least 2 seconds");
   }
   const frames = await extractVideoFrames(
     env,
-    temporaryObjectKey,
+    processingObjectKey,
     createVideoFrameTimestamps(sourceDurationSeconds)
   );
   const vision = await analyzeVideoFrames(env, frames);
   const timing = validateVideoClipTiming(vision, sourceDurationSeconds);
-  const transformed = await transformVideoClip(env, temporaryObjectKey, timing);
+  const transformed = await transformVideoClip(env, processingObjectKey, timing);
   return {
     input: {
       ...input,
@@ -241,7 +265,7 @@ async function videoUploadData(env, file, input, temporaryObjectKey) {
       sourceDurationSeconds,
       clipStartSeconds: timing.startTimeSeconds,
       clipDurationSeconds: timing.durationSeconds,
-      temporaryObjectKey,
+      temporaryObjectKeys: [...temporaryObjectKeys],
     },
     body: transformed.body,
     contentType: transformed.contentType,
@@ -339,18 +363,20 @@ export async function batchUploadMedia(
     const file = fileList[index];
     let input = null;
     let objectUploaded = false;
-    let temporaryObjectKey = null;
+    let finalObjectWriteAttempted = false;
+    const temporaryObjectKeys = [];
     try {
       const mediaKind = validateFile(file);
       input = buildInput(file, manifestByName.get(file.name), defaults, mediaKind);
-      temporaryObjectKey = mediaKind === "video"
+      const sourceObjectKey = mediaKind === "video"
         ? createTemporaryVideoObjectKey()
         : null;
       const upload = mediaKind === "video"
-        ? await videoUploadData(env, file, input, temporaryObjectKey)
+        ? await videoUploadData(env, file, input, sourceObjectKey, temporaryObjectKeys)
         : await imageUploadData(env, file, input);
       input = upload.input;
 
+      finalObjectWriteAttempted = true;
       const stored = await putMediaObject(env, input.objectKey, upload.body, {
         httpMetadata: {
           contentType: upload.contentType,
@@ -368,8 +394,10 @@ export async function batchUploadMedia(
       setUploadResult(results[index], input);
     } catch (error) {
       const cleanupKeys = [
-        ...(objectUploaded && input?.objectKey ? [input.objectKey] : []),
-        ...(temporaryObjectKey ? [temporaryObjectKey] : []),
+        ...((objectUploaded || finalObjectWriteAttempted) && input?.objectKey
+          ? [input.objectKey]
+          : []),
+        ...temporaryObjectKeys,
       ];
       if (cleanupKeys.length) {
         const cleanup = await cleanupObjects(env, cleanupKeys);
@@ -415,7 +443,7 @@ export async function batchUploadMedia(
     const cleanupFailures = earlyCleanupFailures.concat(
       await cleanupObjects(env, uploaded.flatMap(({ input }) => [
         input.objectKey,
-        ...(input.temporaryObjectKey ? [input.temporaryObjectKey] : []),
+        ...(input.temporaryObjectKeys || []),
       ]))
     );
     for (const item of uploaded) {
@@ -438,7 +466,7 @@ export async function batchUploadMedia(
     if (failure) {
       cleanupKeys.push(
         upload.input.objectKey,
-        ...(upload.input.temporaryObjectKey ? [upload.input.temporaryObjectKey] : [])
+        ...(upload.input.temporaryObjectKeys || [])
       );
       Object.assign(results[upload.originalIndex], {
         status: "failed",
@@ -454,7 +482,7 @@ export async function batchUploadMedia(
   const cleanupFailures = earlyCleanupFailures.concat(await cleanupObjects(
     env,
     cleanupKeys.concat(registered.flatMap(({ input }) =>
-      input.temporaryObjectKey ? [input.temporaryObjectKey] : []
+      input.temporaryObjectKeys || []
     ))
   ));
 

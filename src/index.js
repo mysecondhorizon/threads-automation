@@ -114,6 +114,10 @@ import {
   runScheduledAutoPost,
 } from "./services/auto-post/scheduler.js";
 
+export {
+  VideoNormalizerContainer,
+} from "./containers/video-normalizer.js";
+
 export default {
   async fetch(
     request,
