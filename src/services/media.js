@@ -42,6 +42,12 @@ const SOURCE_TYPES =
     "product",
   ]);
 
+const MEDIA_KINDS =
+  new Set([
+    "image",
+    "video",
+  ]);
+
 export class MediaLibraryError extends Error {
   constructor(
     message,
@@ -113,6 +119,33 @@ function normalizeSourceType(
       "media_source_type_invalid",
       {
         sourceType:
+          normalized || null,
+      }
+    );
+  }
+
+  return normalized;
+}
+
+function normalizeMediaKind(
+  value,
+  fallback = "image"
+) {
+  const normalized =
+    normalizeText(
+      value ?? fallback
+    ).toLowerCase();
+
+  if (
+    !MEDIA_KINDS.has(
+      normalized
+    )
+  ) {
+    throw createMediaLibraryError(
+      "Media mediaKind must be image or video",
+      "media_kind_invalid",
+      {
+        mediaKind:
           normalized || null,
       }
     );
@@ -414,6 +447,25 @@ function normalizeNullableNonNegativeInteger(
   return normalized;
 }
 
+function normalizeNullableFiniteNumber(
+  value,
+  fallback,
+  field,
+  { minimum = 0, exclusiveMinimum = false } = {}
+) {
+  if (value === undefined) return fallback;
+  if (value === null || value === "") return null;
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized) ||
+    (exclusiveMinimum ? normalized <= minimum : normalized < minimum)) {
+    throw createMediaLibraryError(
+      `Media ${field} is invalid`,
+      `media_${field}_invalid`
+    );
+  }
+  return normalized;
+}
+
 function normalizeNullableDate(
   value,
   fallback = null
@@ -462,6 +514,13 @@ function normalizeMediaRecord(
         "general"
     );
 
+  const mediaKind =
+    normalizeMediaKind(
+      input?.mediaKind,
+      existingMedia?.mediaKind ||
+        "image"
+    );
+
   const requestedProductId =
     input?.productId === undefined
       ? existingMedia?.productId
@@ -471,6 +530,8 @@ function normalizeMediaRecord(
     id:
       existingMedia?.id ||
       createMediaId(),
+
+    mediaKind,
 
     sourceType,
 
@@ -576,6 +637,36 @@ function normalizeMediaRecord(
           : input.optimizedContentType
       ),
 
+    storedContentType:
+      normalizeNullableText(
+        input?.storedContentType === undefined
+          ? existingMedia?.storedContentType
+          : input.storedContentType
+      ),
+
+    sourceDurationSeconds:
+      normalizeNullableFiniteNumber(
+        input?.sourceDurationSeconds,
+        existingMedia?.sourceDurationSeconds ?? null,
+        "source_duration_seconds",
+        { exclusiveMinimum: true }
+      ),
+
+    clipStartSeconds:
+      normalizeNullableFiniteNumber(
+        input?.clipStartSeconds,
+        existingMedia?.clipStartSeconds ?? null,
+        "clip_start_seconds"
+      ),
+
+    clipDurationSeconds:
+      normalizeNullableFiniteNumber(
+        input?.clipDurationSeconds,
+        existingMedia?.clipDurationSeconds ?? null,
+        "clip_duration_seconds",
+        { exclusiveMinimum: true }
+      ),
+
     sceneType:
       normalizeNullableLimitedText(
         input?.sceneType,
@@ -640,11 +731,20 @@ function normalizeStoredMedia(
       ? input.sourceType
       : "general";
 
+  const mediaKind =
+    MEDIA_KINDS.has(
+      input?.mediaKind
+    )
+      ? input.mediaKind
+      : "image";
+
   return {
     id:
       normalizeText(
         input?.id
       ),
+
+    mediaKind,
 
     sourceType,
 
@@ -714,6 +814,26 @@ function normalizeStoredMedia(
       normalizeNullableText(
         input?.optimizedContentType
       ),
+
+    storedContentType:
+      normalizeNullableText(
+        input?.storedContentType
+      ),
+
+    sourceDurationSeconds:
+      Number.isFinite(input?.sourceDurationSeconds) && input.sourceDurationSeconds > 0
+        ? input.sourceDurationSeconds
+        : null,
+
+    clipStartSeconds:
+      Number.isFinite(input?.clipStartSeconds) && input.clipStartSeconds >= 0
+        ? input.clipStartSeconds
+        : null,
+
+    clipDurationSeconds:
+      Number.isFinite(input?.clipDurationSeconds) && input.clipDurationSeconds > 0
+        ? input.clipDurationSeconds
+        : null,
 
     sceneType:
       normalizeNullableLimitedText(

@@ -10,16 +10,31 @@ import {
 import {
   analyzeMediaImage,
 } from "./media-vision.js";
+import {
+  readMp4DurationSeconds,
+} from "./media-video-duration.js";
+import {
+  createVideoFrameTimestamps,
+  extractVideoFrames,
+  transformVideoClip,
+} from "./media-video-transformation.js";
+import {
+  analyzeVideoFrames,
+  validateVideoClipTiming,
+} from "./media-video-vision.js";
 import { createMediaBatch } from "./media.js";
 import { createContentPoolBatch } from "./content-pool.js";
 
 const MAX_BATCH_FILES = 50;
-const MAX_FILE_SIZE = 8 * 1024 * 1024;
-const ALLOWED_TYPES = new Set([
+const MAX_IMAGE_FILE_SIZE = 8 * 1024 * 1024;
+const MAX_VIDEO_FILE_SIZE = 25 * 1024 * 1024;
+const IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
 ]);
+const VIDEO_CONTENT_TYPE = "video/mp4";
+const VIDEO_EXTENSION = ".mp4";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -97,7 +112,7 @@ function sanitizeFileName(fileName) {
   return normalized || "image";
 }
 
-function createObjectKey(sourceType, fileName) {
+function createObjectKey(sourceType, fileName, extension) {
   const now = new Date();
   const year = now.getUTCFullYear();
   const month = String(now.getUTCMonth() + 1).padStart(2, "0");
@@ -111,22 +126,50 @@ function createObjectKey(sourceType, fileName) {
       ""
     ) || "image";
 
-  return `media/${sourceType}/${year}/${month}/${id}-${baseName}${OPTIMIZED_IMAGE_EXTENSION}`;
+  return `media/${sourceType}/${year}/${month}/${id}-${baseName}${extension}`;
+}
+
+function createTemporaryVideoObjectKey() {
+  const id = globalThis.crypto?.randomUUID?.() ||
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `media/tmp/video/${id}.mp4`;
 }
 
 function validateFile(file) {
-  if (!file || typeof file.arrayBuffer !== "function") {
-    throw new Error("A valid image file is required");
+  if (!file) {
+    throw new Error("A valid media file is required");
   }
-  if (!ALLOWED_TYPES.has(file.type)) {
-    throw new Error(`Unsupported image type: ${file.type || "unknown"}`);
+  if (IMAGE_TYPES.has(file.type)) {
+    if (typeof file.arrayBuffer !== "function") {
+      throw new Error("A valid image file is required");
+    }
+    if (!file.size || file.size > MAX_IMAGE_FILE_SIZE) {
+      throw new Error(`Image size must be between 1 byte and ${MAX_IMAGE_FILE_SIZE} bytes`);
+    }
+    return "image";
   }
-  if (!file.size || file.size > MAX_FILE_SIZE) {
-    throw new Error(`Image size must be between 1 byte and ${MAX_FILE_SIZE} bytes`);
+  if (file.type === VIDEO_CONTENT_TYPE) {
+    if (typeof file.stream !== "function") {
+      throw new Error("A valid video file is required");
+    }
+    if (!file.size || file.size > MAX_VIDEO_FILE_SIZE) {
+      throw new Error(`Video size must be between 1 byte and ${MAX_VIDEO_FILE_SIZE} bytes`);
+    }
+    return "video";
   }
+  if (String(file.type || "").startsWith("video/")) {
+    throw new Error(`Unsupported video type: ${file.type || "unknown"}`);
+  }
+  throw new Error(`Unsupported media type: ${file.type || "unknown"}`);
 }
 
-function buildInput(file, manifest, defaults) {
+function mediaExtension(mediaKind) {
+  return mediaKind === "video"
+    ? VIDEO_EXTENSION
+    : OPTIMIZED_IMAGE_EXTENSION;
+}
+
+function buildInput(file, manifest, defaults, mediaKind) {
   const sourceType = text(manifest?.sourceType || defaults.sourceType || "general").toLowerCase();
   if (sourceType !== "general" && sourceType !== "product") {
     throw new Error("sourceType must be general or product");
@@ -136,9 +179,10 @@ function buildInput(file, manifest, defaults) {
     : null;
   return {
     file,
+    mediaKind,
     sourceType,
     productId,
-    objectKey: createObjectKey(sourceType, file.name),
+    objectKey: createObjectKey(sourceType, file.name, mediaExtension(mediaKind)),
     imageUrl: null,
     altText: text(manifest?.altText || defaults.altText),
     description: text(manifest?.description || defaults.description),
@@ -149,6 +193,87 @@ function buildInput(file, manifest, defaults) {
     maxUses: numberValue(manifest?.maxUses ?? defaults.maxUses, 1),
     cooldownDays: numberValue(manifest?.cooldownDays ?? defaults.cooldownDays, 0),
   };
+}
+
+async function imageUploadData(env, file, input) {
+  const optimized = await optimizeUploadedImage(env.IMAGES, file);
+  const vision = await analyzeMediaImage(env, optimized.body, {
+    manualMetadata: input,
+  });
+  return {
+    input: mergeMediaMetadata(input, vision),
+    body: optimized.body,
+    contentType: optimized.contentType,
+    originalBytes: optimized.originalBytes,
+    storedBytes: optimized.storedBytes,
+    optimizedContentType: optimized.contentType,
+  };
+}
+
+async function videoUploadData(env, file, input, temporaryObjectKey) {
+  await putMediaObject(env, temporaryObjectKey, file.stream(), {
+    httpMetadata: { contentType: VIDEO_CONTENT_TYPE },
+    customMetadata: {
+      originalFileName: file.name,
+      originalContentType: file.type,
+      originalBytes: String(file.size),
+    },
+  });
+  const sourceDurationSeconds = await readMp4DurationSeconds(env, temporaryObjectKey);
+  if (sourceDurationSeconds < 2) {
+    throw new Error("Video duration must be at least 2 seconds");
+  }
+  const frames = await extractVideoFrames(
+    env,
+    temporaryObjectKey,
+    createVideoFrameTimestamps(sourceDurationSeconds)
+  );
+  const vision = await analyzeVideoFrames(env, frames);
+  const timing = validateVideoClipTiming(vision, sourceDurationSeconds);
+  const transformed = await transformVideoClip(env, temporaryObjectKey, timing);
+  return {
+    input: {
+      ...input,
+      tags: vision.tags,
+      description: vision.description,
+      sceneType: vision.sceneType,
+      usableAngles: vision.usableAngles,
+      sourceDurationSeconds,
+      clipStartSeconds: timing.startTimeSeconds,
+      clipDurationSeconds: timing.durationSeconds,
+      temporaryObjectKey,
+    },
+    body: transformed.body,
+    contentType: transformed.contentType,
+    originalBytes: Number(file.size),
+    storedContentType: transformed.contentType,
+  };
+}
+
+function r2CustomMetadata(input, upload) {
+  return {
+    sourceType: input.sourceType,
+    productId: input.productId || "",
+    originalFileName: input.file.name,
+    originalContentType: input.file.type,
+    originalBytes: String(upload.originalBytes),
+    ...(input.mediaKind === "image"
+      ? { optimizedBytes: String(upload.storedBytes) }
+      : {}),
+  };
+}
+
+function setUploadResult(result, input) {
+  result.objectKey = input.objectKey;
+  result.originalBytes = input.originalBytes;
+  result.storedBytes = input.storedBytes;
+  if (input.optimizedContentType) {
+    result.optimizedContentType = input.optimizedContentType;
+  }
+  if (input.storedContentType) {
+    result.storedContentType = input.storedContentType;
+  }
+  result.status = "uploaded";
 }
 
 export function mergeMediaMetadata(input, vision) {
@@ -214,51 +339,40 @@ export async function batchUploadMedia(
     const file = fileList[index];
     let input = null;
     let objectUploaded = false;
+    let temporaryObjectKey = null;
     try {
-      validateFile(file);
-      input = buildInput(file, manifestByName.get(file.name), defaults);
-      const optimized =
-        await optimizeUploadedImage(
-          env.IMAGES,
-          file
-        );
-      const vision =
-        await analyzeMediaImage(
-          env,
-          optimized.body,
-          {
-            manualMetadata: input,
-          }
-        );
-      input = mergeMediaMetadata(input, vision);
+      const mediaKind = validateFile(file);
+      input = buildInput(file, manifestByName.get(file.name), defaults, mediaKind);
+      temporaryObjectKey = mediaKind === "video"
+        ? createTemporaryVideoObjectKey()
+        : null;
+      const upload = mediaKind === "video"
+        ? await videoUploadData(env, file, input, temporaryObjectKey)
+        : await imageUploadData(env, file, input);
+      input = upload.input;
 
-      await putMediaObject(env, input.objectKey, optimized.body, {
+      const stored = await putMediaObject(env, input.objectKey, upload.body, {
         httpMetadata: {
-          contentType:
-            optimized.contentType,
+          contentType: upload.contentType,
         },
-        customMetadata: {
-          sourceType: input.sourceType,
-          productId: input.productId || "",
-          originalFileName: file.name,
-          originalContentType: file.type,
-          originalBytes: String(optimized.originalBytes),
-          optimizedBytes: String(optimized.storedBytes),
-        },
+        customMetadata: r2CustomMetadata(input, upload),
       });
       objectUploaded = true;
-      input.originalBytes = optimized.originalBytes;
-      input.storedBytes = optimized.storedBytes;
-      input.optimizedContentType = optimized.contentType;
+      input.originalBytes = upload.originalBytes;
+      input.storedBytes = Number.isSafeInteger(stored?.size)
+        ? stored.size
+        : upload.storedBytes;
+      input.optimizedContentType = upload.optimizedContentType;
+      input.storedContentType = upload.storedContentType;
       uploaded.push({ originalIndex: index, input });
-      results[index].objectKey = input.objectKey;
-      results[index].originalBytes = optimized.originalBytes;
-      results[index].storedBytes = optimized.storedBytes;
-      results[index].optimizedContentType = optimized.contentType;
-      results[index].status = "uploaded";
+      setUploadResult(results[index], input);
     } catch (error) {
-      if (objectUploaded && input?.objectKey) {
-        const cleanup = await cleanupObjects(env, [input.objectKey]);
+      const cleanupKeys = [
+        ...(objectUploaded && input?.objectKey ? [input.objectKey] : []),
+        ...(temporaryObjectKey ? [temporaryObjectKey] : []),
+      ];
+      if (cleanupKeys.length) {
+        const cleanup = await cleanupObjects(env, cleanupKeys);
         earlyCleanupFailures.push(...cleanup);
       }
       results[index].status = "failed";
@@ -274,6 +388,7 @@ export async function batchUploadMedia(
   let registration;
   try {
     registration = await createMediaBatch(env, uploaded.map(({ input }) => ({
+      mediaKind: input.mediaKind,
       sourceType: input.sourceType,
       productId: input.productId,
       objectKey: input.objectKey,
@@ -286,6 +401,10 @@ export async function batchUploadMedia(
       originalBytes: input.originalBytes,
       storedBytes: input.storedBytes,
       optimizedContentType: input.optimizedContentType,
+      storedContentType: input.storedContentType,
+      sourceDurationSeconds: input.sourceDurationSeconds,
+      clipStartSeconds: input.clipStartSeconds,
+      clipDurationSeconds: input.clipDurationSeconds,
       sceneType: input.sceneType,
       usableAngles: input.usableAngles,
       peoplePresent: input.peoplePresent,
@@ -294,7 +413,10 @@ export async function batchUploadMedia(
     })));
   } catch (error) {
     const cleanupFailures = earlyCleanupFailures.concat(
-      await cleanupObjects(env, uploaded.map(({ input }) => input.objectKey))
+      await cleanupObjects(env, uploaded.flatMap(({ input }) => [
+        input.objectKey,
+        ...(input.temporaryObjectKey ? [input.temporaryObjectKey] : []),
+      ]))
     );
     for (const item of uploaded) {
       Object.assign(results[item.originalIndex], {
@@ -314,7 +436,10 @@ export async function batchUploadMedia(
     const upload = uploaded[index];
     const failure = failedRegistration.get(index);
     if (failure) {
-      cleanupKeys.push(upload.input.objectKey);
+      cleanupKeys.push(
+        upload.input.objectKey,
+        ...(upload.input.temporaryObjectKey ? [upload.input.temporaryObjectKey] : [])
+      );
       Object.assign(results[upload.originalIndex], {
         status: "failed",
         stage: "media_library",
@@ -326,14 +451,20 @@ export async function batchUploadMedia(
       Object.assign(results[upload.originalIndex], { status: "success", media });
     }
   }
-  const cleanupFailures = earlyCleanupFailures.concat(
-    await cleanupObjects(env, cleanupKeys)
-  );
+  const cleanupFailures = earlyCleanupFailures.concat(await cleanupObjects(
+    env,
+    cleanupKeys.concat(registered.flatMap(({ input }) =>
+      input.temporaryObjectKey ? [input.temporaryObjectKey] : []
+    ))
+  ));
 
-  if (createPoolItems && registered.length) {
+  const poolRegistered = registered.filter(
+    ({ input }) => input.mediaKind === "image"
+  );
+  if (createPoolItems && poolRegistered.length) {
     let pool;
     try {
-      pool = await createContentPoolBatch(env, registered.map(({ input, media }) => ({
+      pool = await createContentPoolBatch(env, poolRegistered.map(({ input, media }) => ({
         type: input.sourceType,
         mediaIds: [media.id],
         productId: input.productId,
@@ -344,7 +475,7 @@ export async function batchUploadMedia(
         cooldownDays: input.cooldownDays,
       })));
     } catch (error) {
-      for (const item of registered) {
+      for (const item of poolRegistered) {
         results[item.originalIndex].status = "partial";
         results[item.originalIndex].poolError = error?.message || String(error);
       }
@@ -352,7 +483,7 @@ export async function batchUploadMedia(
     }
     const failedPool = new Map(pool.failures.map((failure) => [failure.index, failure]));
     let poolIndex = 0;
-    registered.forEach((item, index) => {
+    poolRegistered.forEach((item, index) => {
       const failure = failedPool.get(index);
       if (failure) {
         results[item.originalIndex].status = "partial";

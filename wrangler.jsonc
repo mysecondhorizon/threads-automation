@@ -9,6 +9,9 @@
   "images": {
     "binding": "IMAGES"
   },
+  "media": {
+    "binding": "MEDIA"
+  },
   "kv_namespaces": [
     {
       "binding": "THREADS_KV",

@@ -30,9 +30,9 @@ export async function handleMediaManagementPage(request, env) {
 
   <section>
     <h2>Batch Media Upload</h2>
-    <p>최대 50개, 파일당 8MB. JPEG/PNG/WebP. CSV가 있으면 파일명 기준으로 기본값을 덮어씁니다.</p>
+    <p>최대 50개. JPEG/PNG/WebP는 파일당 8MB이며 기존 이미지 최적화·분석을 사용합니다. MP4는 파일당 25MB이며 자동 분석 후 짧은 최적화 clip만 저장되고 원본은 영구 보관하지 않습니다.</p>
     <form id="upload-form">
-      <label class="wide">이미지 파일<input type="file" name="files" accept="image/jpeg,image/png,image/webp" multiple required></label>
+      <label class="wide">Media files (JPEG/PNG/WebP up to 8MB, MP4 up to 25MB)<input type="file" name="files" accept="image/jpeg,image/png,image/webp,video/mp4" multiple required></label>
       <label>CSV manifest<input type="file" name="manifest" accept=".csv,text/csv"></label>
       <label>기본 구분<select name="sourceType"><option value="general">general</option><option value="product">product</option></select></label>
       <label>기본 productId<input name="productId"></label>
