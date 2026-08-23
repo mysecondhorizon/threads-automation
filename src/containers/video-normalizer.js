@@ -5,6 +5,10 @@ import {
   findVideoTkhdMatrix,
   identityMatrixBytes,
 } from "./mp4-tkhd-matrix.js";
+import {
+  MAX_FFMPEG_ATTEMPTS,
+  shouldRetryFfmpeg,
+} from "./ffmpeg-retry.js";
 
 const ALLOWED_ROTATIONS = new Map([
   [90, "transpose=clock"],
@@ -347,85 +351,106 @@ export class VideoNormalizerContainer extends Container {
       const inputSize = await readFileSize(this.ctx.container, inputPath);
       console.log(`[video-normalize] input temp size=${inputSize === null ? "unknown" : inputSize}`);
 
-      console.log(
-        `[video-normalize] ffmpeg start filter=${filter} ` +
-        "legacy_rotate_metadata=0 autorotate=disabled"
-      );
-      const ffmpegStartedAt = Date.now();
-      const ffmpegStartedAtIso = new Date(ffmpegStartedAt).toISOString();
-      let normalize;
-      let ffmpegStderrResult = {
-        text: "",
-        closedNormally: false,
-        readError: "not started",
-      };
-      let ffmpegExitCode;
-      try {
-        normalize = await this.ctx.container.exec([
-          "ffmpeg",
-          "-hide_banner",
-          "-loglevel",
-          "error",
-          "-y",
-          "-noautorotate",
-          "-i",
-          inputPath,
-          "-map",
-          "0:v:0",
-          "-map",
-          "0:a?",
-          "-vf",
-          filter,
-          "-c:v",
-          "libx264",
-          "-c:a",
-          "aac",
-          "-metadata:s:v:0",
-          "rotate=0",
-          "-movflags",
-          "+faststart",
-          outputPath,
-        ], {
-          stdout: "ignore",
-          stderr: "pipe",
-        });
+      let outputSize = null;
+      let ffmpegExitCode = null;
+      for (let attempt = 1; attempt <= MAX_FFMPEG_ATTEMPTS; attempt += 1) {
         console.log(
-          `[video-normalize] ffmpeg exec pid=${String(normalize.pid ?? "unknown")} ` +
-          `stdoutPresent=${Boolean(normalize.stdout)} stderrPresent=${Boolean(normalize.stderr)} ` +
-          `startedAt=${ffmpegStartedAtIso}`
+          `[video-normalize] ffmpeg start attempt=${attempt} filter=${filter} ` +
+          "legacy_rotate_metadata=0 autorotate=disabled"
         );
-        [ffmpegStderrResult, ffmpegExitCode] = await Promise.all([
-          readDiagnosticTail(normalize.stderr),
-          normalize.exitCode,
-        ]);
-      } catch (error) {
-        console.error(
-          `[video-normalize] ffmpeg await failed ` +
-          `pid=${String(normalize?.pid ?? "unknown")} ` +
-          `durationMs=${Date.now() - ffmpegStartedAt} ` +
-          `message=${diagnosticMessage(error)}`
+        const ffmpegStartedAt = Date.now();
+        const ffmpegStartedAtIso = new Date(ffmpegStartedAt).toISOString();
+        let normalize;
+        let ffmpegStderrResult = {
+          text: "",
+          closedNormally: false,
+          readError: "not started",
+        };
+        try {
+          normalize = await this.ctx.container.exec([
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-noautorotate",
+            "-i",
+            inputPath,
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a?",
+            "-vf",
+            filter,
+            "-c:v",
+            "libx264",
+            "-c:a",
+            "aac",
+            "-metadata:s:v:0",
+            "rotate=0",
+            "-movflags",
+            "+faststart",
+            outputPath,
+          ], {
+            stdout: "ignore",
+            stderr: "pipe",
+          });
+          console.log(
+            `[video-normalize] ffmpeg exec attempt=${attempt} pid=${String(normalize.pid ?? "unknown")} ` +
+            `stdoutPresent=${Boolean(normalize.stdout)} stderrPresent=${Boolean(normalize.stderr)} ` +
+            `startedAt=${ffmpegStartedAtIso}`
+          );
+          [ffmpegStderrResult, ffmpegExitCode] = await Promise.all([
+            readDiagnosticTail(normalize.stderr),
+            normalize.exitCode,
+          ]);
+        } catch (error) {
+          console.error(
+            `[video-normalize] ffmpeg await failed attempt=${attempt} ` +
+            `pid=${String(normalize?.pid ?? "unknown")} ` +
+            `durationMs=${Date.now() - ffmpegStartedAt} ` +
+            `message=${diagnosticMessage(error)}`
+          );
+          throw error;
+        }
+        const ffmpegDurationMs = Date.now() - ffmpegStartedAt;
+        outputSize = await readFileSize(this.ctx.container, outputPath);
+        if (ffmpegStderrResult.readError) {
+          console.error(
+            `[video-normalize] ffmpeg stderr read error attempt=${attempt} ` +
+            `pid=${String(normalize?.pid ?? "unknown")} ` +
+            `message=${ffmpegStderrResult.readError}`
+          );
+        }
+        console.log(
+          `[video-normalize] ffmpeg exit attempt=${attempt} pid=${String(normalize?.pid ?? "unknown")} ` +
+          `exit=${ffmpegExitCode} durationMs=${ffmpegDurationMs} ` +
+          `${processTerminationDiagnostics(normalize)} ` +
+          `stderrClosed=${ffmpegStderrResult.closedNormally} ` +
+          `outputExists=${outputSize !== null} ` +
+          `outputSize=${outputSize === null ? "unknown" : outputSize} ` +
+          `stderrTail=${JSON.stringify(ffmpegStderrResult.text)}`
         );
-        throw error;
+        if (ffmpegExitCode === 0) break;
+        if (!shouldRetryFfmpeg({
+          attempt,
+          exitCode: ffmpegExitCode,
+          stderrTail: ffmpegStderrResult.text,
+          stderrReadError: ffmpegStderrResult.readError,
+        })) {
+          throw new Error("Video orientation normalization failed");
+        }
+        console.log("[video-normalize] ffmpeg retry attempt=2 reason=exit255-empty-stderr");
+        await this.removeTemporaryFiles([outputPath]);
+        if (await readFileSize(this.ctx.container, outputPath) !== null) {
+          throw new Error("Video normalization retry output cleanup failed");
+        }
+        const retryInputSize = await readFileSize(this.ctx.container, inputPath);
+        if (!Number.isSafeInteger(retryInputSize) || retryInputSize <= 0) {
+          throw new Error("Video normalization retry input is unavailable");
+        }
       }
-      const ffmpegDurationMs = Date.now() - ffmpegStartedAt;
-      const outputSize = await readFileSize(this.ctx.container, outputPath);
-      if (ffmpegStderrResult.readError) {
-        console.error(
-          `[video-normalize] ffmpeg stderr read error ` +
-          `pid=${String(normalize?.pid ?? "unknown")} ` +
-          `message=${ffmpegStderrResult.readError}`
-        );
-      }
-      console.log(
-        `[video-normalize] ffmpeg exit pid=${String(normalize?.pid ?? "unknown")} ` +
-        `exit=${ffmpegExitCode} durationMs=${ffmpegDurationMs} ` +
-        `${processTerminationDiagnostics(normalize)} ` +
-        `stderrClosed=${ffmpegStderrResult.closedNormally} ` +
-        `outputExists=${outputSize !== null} ` +
-        `outputSize=${outputSize === null ? "unknown" : outputSize} ` +
-        `stderrTail=${JSON.stringify(ffmpegStderrResult.text)}`
-      );
-      if (ffmpegExitCode) throw new Error("Video orientation normalization failed");
+      if (ffmpegExitCode !== 0) throw new Error("Video orientation normalization failed");
       if (!Number.isSafeInteger(outputSize) || outputSize <= 0) {
         throw new Error("Normalized video output size is invalid");
       }
