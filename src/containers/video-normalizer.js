@@ -10,11 +10,44 @@ const ALLOWED_ROTATIONS = new Map([
 const MAX_PROBE_OUTPUT_BYTES = 4096;
 const MAX_DIAGNOSTIC_TAIL_BYTES = 4096;
 const MAX_DIAGNOSTIC_MESSAGE_CHARS = 256;
+const TERMINATION_FIELDS = ["signal", "reason", "status", "state"];
 
 function diagnosticMessage(error) {
   return String(error?.message || error || "unknown")
     .replace(/\s+/gu, " ")
     .slice(0, MAX_DIAGNOSTIC_MESSAGE_CHARS);
+}
+
+function processField(process, field) {
+  try {
+    if (!(field in process)) return "unavailable";
+    const value = process[field];
+    if (value === null || value === undefined) return String(value);
+    if (typeof value === "function") return "function";
+    if (["string", "number", "boolean", "bigint"].includes(typeof value)) {
+      return String(value).replace(/\s+/gu, " ").slice(0, MAX_DIAGNOSTIC_MESSAGE_CHARS);
+    }
+    return Object.prototype.toString.call(value);
+  } catch (error) {
+    return `unreadable:${diagnosticMessage(error)}`;
+  }
+}
+
+function processTerminationDiagnostics(process) {
+  return TERMINATION_FIELDS
+    .map((field) => `${field}=${processField(process, field)}`)
+    .concat([
+      `killApi=${processField(process, "kill")}`,
+      `closeApi=${processField(process, "close")}`,
+    ])
+    .join(" ");
+}
+
+function contextAbortState(context) {
+  const signal = context?.signal || context?.request?.signal;
+  return signal && typeof signal.aborted === "boolean"
+    ? String(signal.aborted)
+    : "unavailable";
 }
 
 function temporaryPath(prefix) {
@@ -153,8 +186,8 @@ export class VideoNormalizerContainer extends Container {
   async normalizeVideo(inputStream, rotationDegrees) {
     const filter = ALLOWED_ROTATIONS.get(rotationDegrees);
     console.log(
-      `[video-normalize] start rotation=${String(rotationDegrees)} ` +
-      `inputStream=${Boolean(inputStream)}`
+      `[video-normalize] RPC start rotation=${String(rotationDegrees)} ` +
+      `inputStream=${Boolean(inputStream)} contextAborted=${contextAbortState(this.ctx)}`
     );
     if (!filter) throw new Error("Video rotation is invalid");
     if (!inputStream || typeof inputStream.getReader !== "function") {
@@ -251,6 +284,7 @@ export class VideoNormalizerContainer extends Container {
       console.log(
         `[video-normalize] ffmpeg exit pid=${String(normalize?.pid ?? "unknown")} ` +
         `exit=${ffmpegExitCode} durationMs=${ffmpegDurationMs} ` +
+        `${processTerminationDiagnostics(normalize)} ` +
         `stderrClosed=${ffmpegStderrResult.closedNormally} ` +
         `outputExists=${outputSize !== null} ` +
         `outputSize=${outputSize === null ? "unknown" : outputSize} ` +
@@ -304,7 +338,10 @@ export class VideoNormalizerContainer extends Container {
       throw error;
     } finally {
       this.activeNormalizations = Math.max(0, this.activeNormalizations - 1);
-      console.log(`[video-normalize] normalization active count=${this.activeNormalizations}`);
+      console.log(
+        `[video-normalize] RPC finally active count=${this.activeNormalizations} ` +
+        `contextAborted=${contextAbortState(this.ctx)}`
+      );
     }
   }
 }
