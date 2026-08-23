@@ -329,6 +329,23 @@ function normalizeNullablePositiveInteger(
   return normalized;
 }
 
+function normalizeNullableNonNegativeInteger(
+  value,
+  fallback,
+  field
+) {
+  if (value === undefined) return fallback;
+  if (value === null || value === "") return null;
+  const normalized = Number(value);
+  if (!Number.isInteger(normalized) || normalized < 0) {
+    throw createMediaLibraryError(
+      `Media ${field} must be a non-negative integer or null`,
+      `media_${field}_invalid`
+    );
+  }
+  return normalized;
+}
+
 function normalizeNullableDate(
   value,
   fallback = null
@@ -470,6 +487,27 @@ function normalizeMediaRecord(
         "cooldown_days"
       ),
 
+    originalBytes:
+      normalizeNullableNonNegativeInteger(
+        input?.originalBytes,
+        existingMedia?.originalBytes ?? null,
+        "original_bytes"
+      ),
+
+    storedBytes:
+      normalizeNullableNonNegativeInteger(
+        input?.storedBytes,
+        existingMedia?.storedBytes ?? null,
+        "stored_bytes"
+      ),
+
+    optimizedContentType:
+      normalizeNullableText(
+        input?.optimizedContentType === undefined
+          ? existingMedia?.optimizedContentType
+          : input.optimizedContentType
+      ),
+
     active:
       normalizeActive(
         input?.active,
@@ -555,6 +593,21 @@ function normalizeStoredMedia(
       Number.isInteger(input?.cooldownDays) && input.cooldownDays >= 0
         ? input.cooldownDays
         : 0,
+
+    originalBytes:
+      Number.isInteger(input?.originalBytes) && input.originalBytes >= 0
+        ? input.originalBytes
+        : null,
+
+    storedBytes:
+      Number.isInteger(input?.storedBytes) && input.storedBytes >= 0
+        ? input.storedBytes
+        : null,
+
+    optimizedContentType:
+      normalizeNullableText(
+        input?.optimizedContentType
+      ),
 
     active:
       input?.active !== false,

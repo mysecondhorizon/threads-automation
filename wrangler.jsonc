@@ -6,6 +6,9 @@
   "observability": {
     "enabled": true
   },
+  "images": {
+    "binding": "IMAGES"
+  },
   "kv_namespaces": [
     {
       "binding": "THREADS_KV",

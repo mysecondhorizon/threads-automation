@@ -2,6 +2,11 @@ import {
   putMediaObject,
   deleteMediaObject,
 } from "./media-storage.js";
+import {
+  OPTIMIZED_IMAGE_CONTENT_TYPE,
+  OPTIMIZED_IMAGE_EXTENSION,
+  optimizeUploadedImage,
+} from "./media-image-optimization.js";
 import { createMediaBatch } from "./media.js";
 import { createContentPoolBatch } from "./content-pool.js";
 
@@ -95,7 +100,15 @@ function createObjectKey(sourceType, fileName) {
   const month = String(now.getUTCMonth() + 1).padStart(2, "0");
   const id = globalThis.crypto?.randomUUID?.() ||
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  return `media/${sourceType}/${year}/${month}/${id}-${sanitizeFileName(fileName)}`;
+  const normalizedFileName =
+    sanitizeFileName(fileName);
+  const baseName =
+    normalizedFileName.replace(
+      /\.[^.]+$/u,
+      ""
+    ) || "image";
+
+  return `media/${sourceType}/${year}/${month}/${id}-${baseName}${OPTIMIZED_IMAGE_EXTENSION}`;
 }
 
 function validateFile(file) {
@@ -182,22 +195,42 @@ export async function batchUploadMedia(
   for (let index = 0; index < fileList.length; index += 1) {
     const file = fileList[index];
     let input = null;
+    let objectUploaded = false;
     try {
       validateFile(file);
       input = buildInput(file, manifestByName.get(file.name), defaults);
-      await putMediaObject(env, input.objectKey, file.stream(), {
-        httpMetadata: { contentType: file.type },
+      const optimized =
+        await optimizeUploadedImage(
+          env.IMAGES,
+          file
+        );
+
+      await putMediaObject(env, input.objectKey, optimized.body, {
+        httpMetadata: {
+          contentType:
+            optimized.contentType,
+        },
         customMetadata: {
           sourceType: input.sourceType,
           productId: input.productId || "",
           originalFileName: file.name,
+          originalContentType: file.type,
+          originalBytes: String(optimized.originalBytes),
+          optimizedBytes: String(optimized.storedBytes),
         },
       });
+      objectUploaded = true;
+      input.originalBytes = optimized.originalBytes;
+      input.storedBytes = optimized.storedBytes;
+      input.optimizedContentType = optimized.contentType;
       uploaded.push({ originalIndex: index, input });
       results[index].objectKey = input.objectKey;
+      results[index].originalBytes = optimized.originalBytes;
+      results[index].storedBytes = optimized.storedBytes;
+      results[index].optimizedContentType = optimized.contentType;
       results[index].status = "uploaded";
     } catch (error) {
-      if (input?.objectKey) {
+      if (objectUploaded && input?.objectKey) {
         const cleanup = await cleanupObjects(env, [input.objectKey]);
         earlyCleanupFailures.push(...cleanup);
       }
@@ -223,6 +256,9 @@ export async function batchUploadMedia(
       tags: input.tags,
       maxUses: input.maxUses,
       cooldownDays: input.cooldownDays,
+      originalBytes: input.originalBytes,
+      storedBytes: input.storedBytes,
+      optimizedContentType: input.optimizedContentType,
     })));
   } catch (error) {
     const cleanupFailures = earlyCleanupFailures.concat(
