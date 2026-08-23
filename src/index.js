@@ -90,6 +90,11 @@ import {
 } from "./routes/app-shell.js";
 
 import {
+  handlePostById,
+  handlePostsCollection,
+} from "./routes/api-posts.js";
+
+import {
   handleShortToken,
   handleTokenExchange,
   handleProfile,
@@ -217,6 +222,22 @@ export default {
       method === "GET"
     ) {
       return handleAppPlaceholderPage(request, env, pathname);
+    }
+
+    if (pathname === "/api/posts") {
+      return handlePostsCollection(request, env, url);
+    }
+
+    if (pathname.startsWith("/api/posts/")) {
+      const encodedPostId = pathname.slice("/api/posts/".length);
+      if (!encodedPostId || encodedPostId.includes("/")) {
+        return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      }
+      try {
+        return handlePostById(request, env, decodeURIComponent(encodedPostId));
+      } catch {
+        return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      }
     }
 
     if (
