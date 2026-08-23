@@ -27,9 +27,25 @@ function renderWritePageContent() {
     .app-write-meta { margin: 0; color: #667085; font-size: 13px; }
     .app-write-preview { margin: 12px 0 16px; color: #475467; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
     .app-write-list-feedback { margin: 0; color: #667085; }
+    .app-topic-list { display: grid; gap: 10px; margin: 16px 0; }
+    .app-topic-card { display: grid; gap: 5px; width: 100%; padding: 14px; border: 1px solid #e2e6ec; border-radius: 10px; background: #fff; color: #344054; cursor: pointer; font: inherit; text-align: left; }
+    .app-topic-card:hover, .app-topic-card.is-selected { border-color: #6a8ed8; background: #f3f6fd; }
+    .app-topic-card strong { color: #1d2433; font-size: 15px; }
+    .app-topic-card span, .app-topic-card small { color: #667085; line-height: 1.5; }
+    .app-topic-card small { font-size: 12px; }
     @media (max-width: 640px) { .app-write-panel { padding: 18px; } .app-write-fields { grid-template-columns: 1fr; } .app-write-textarea { min-height: 220px; } }
   </style>
   <div class="app-write-layout">
+    <section class="app-write-panel" aria-labelledby="topic-heading">
+      <h2 id="topic-heading">AI로 글 작성</h2>
+      <p class="app-write-list-feedback">Topic을 선택하면 AI 초안을 현재 editor에 불러옵니다. 자동 저장이나 외부 게시가 이루어지지 않습니다.</p>
+      <div class="app-write-actions" style="margin-top:16px;">
+        <button id="topic-refresh" class="app-write-button" type="button">Topic 가져오기</button>
+        <button id="topic-generate" class="app-write-button primary" type="button" disabled>선택한 Topic으로 글 작성</button>
+      </div>
+      <p id="topic-feedback" class="app-write-feedback" role="status" aria-live="polite"></p>
+      <div id="topic-list" class="app-topic-list" aria-label="현재 Topic"></div>
+    </section>
     <section class="app-write-panel" aria-labelledby="post-editor-heading">
       <h2 id="post-editor-heading">새 글</h2>
       <form id="post-editor" class="app-write-form">

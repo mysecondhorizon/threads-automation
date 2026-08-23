@@ -99,6 +99,14 @@ import {
 } from "./routes/api-posts.js";
 
 import {
+  handleTopics,
+} from "./routes/api-topics.js";
+
+import {
+  handlePostGenerate,
+} from "./routes/api-post-generate.js";
+
+import {
   handleShortToken,
   handleTokenExchange,
   handleProfile,
@@ -233,6 +241,18 @@ export default {
 
     if (pathname === "/api/posts") {
       return handlePostsCollection(request, env, url);
+    }
+
+    if (pathname === "/api/posts/generate") {
+      return handlePostGenerate(request, env);
+    }
+
+    if (pathname === "/api/topics") {
+      return handleTopics(request, env);
+    }
+
+    if (pathname === "/api/topics/refresh") {
+      return handleTopics(request, env);
     }
 
     if (pathname.startsWith("/api/posts/")) {

@@ -1,4 +1,12 @@
-export function getPostSaveRequest({ editingId, title, body, format, status }) {
+export function getPostSaveRequest({
+  editingId,
+  title,
+  body,
+  format,
+  status,
+  sourceType = "MANUAL",
+  topicId = null,
+}) {
   return {
     url: editingId ? `/api/posts/${encodeURIComponent(editingId)}` : "/api/posts",
     method: editingId ? "PATCH" : "POST",
@@ -7,7 +15,8 @@ export function getPostSaveRequest({ editingId, title, body, format, status }) {
       body,
       format,
       status,
-      sourceType: "MANUAL",
+      sourceType: sourceType === "AI" ? "AI" : "MANUAL",
+      topicId: typeof topicId === "string" && topicId.trim() ? topicId.trim() : null,
     },
   };
 }
@@ -46,8 +55,16 @@ export function buildWritePageClientScript() {
       const feedback = document.querySelector("#post-feedback");
       const list = document.querySelector("#saved-post-list");
       const listFeedback = document.querySelector("#saved-post-feedback");
+      const topicList = document.querySelector("#topic-list");
+      const topicFeedback = document.querySelector("#topic-feedback");
+      const topicRefreshButton = document.querySelector("#topic-refresh");
+      const topicGenerateButton = document.querySelector("#topic-generate");
       let editingId = null;
+      let editorSourceType = "MANUAL";
+      let editorTopicId = null;
+      let selectedTopicId = null;
       let busy = false;
+      let generating = false;
 
       function setFeedback(message, tone = "") {
         feedback.textContent = message || "";
@@ -56,6 +73,8 @@ export function buildWritePageClientScript() {
 
       function resetEditor() {
         editingId = null;
+        editorSourceType = "MANUAL";
+        editorTopicId = null;
         form.reset();
         formatInput.value = "TEXT";
         statusInput.value = "DRAFT";
@@ -68,6 +87,18 @@ export function buildWritePageClientScript() {
         busy = value;
         saveButton.disabled = value;
         saveButton.textContent = value ? "저장 중..." : "저장";
+      }
+
+      function setTopicFeedback(message, tone = "") {
+        topicFeedback.textContent = message || "";
+        topicFeedback.className = "app-write-feedback " + tone;
+      }
+
+      function setGenerating(value) {
+        generating = value;
+        topicGenerateButton.disabled = value || !selectedTopicId;
+        topicRefreshButton.disabled = value;
+        topicGenerateButton.textContent = value ? "AI 초안 생성 중..." : "선택한 Topic으로 글 작성";
       }
 
       async function requestApi(url, options = {}) {
@@ -147,6 +178,10 @@ export function buildWritePageClientScript() {
                 bodyInput.value = post.body || "";
                 formatInput.value = post.format;
                 statusInput.value = post.status;
+                editorSourceType = post.sourceType === "AI" ? "AI" : "MANUAL";
+                editorTopicId = editorSourceType === "AI" && typeof post.topicId === "string"
+                  ? post.topicId
+                  : null;
                 formHeading.textContent = "글 수정";
                 saveButton.textContent = "변경 저장";
                 setFeedback("");
@@ -193,6 +228,99 @@ export function buildWritePageClientScript() {
         }
       }
 
+      function formatTopicUpdatedAt(value) {
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("ko-KR");
+      }
+
+      function selectTopic(topicId) {
+        selectedTopicId = topicId;
+        topicGenerateButton.disabled = !selectedTopicId || generating;
+        for (const button of topicList.querySelectorAll("button")) {
+          button.classList.toggle("is-selected", button.dataset.topicId === topicId);
+        }
+      }
+
+      function renderTopics(topics) {
+        topicList.replaceChildren();
+        selectedTopicId = null;
+        topicGenerateButton.disabled = true;
+        if (!topics.length) {
+          setTopicFeedback("현재 선택할 Topic이 없습니다.");
+          return;
+        }
+        setTopicFeedback("");
+        for (const topic of topics) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "app-topic-card";
+          button.dataset.topicId = topic.id;
+          const title = document.createElement("strong");
+          title.textContent = topic.title;
+          const summary = document.createElement("span");
+          summary.textContent = topic.summary || "";
+          const updatedAt = document.createElement("small");
+          updatedAt.textContent = formatTopicUpdatedAt(topic.updatedAt);
+          button.append(title, summary, updatedAt);
+          button.addEventListener("click", () => selectTopic(topic.id));
+          topicList.append(button);
+        }
+      }
+
+      async function loadTopics() {
+        setTopicFeedback("Topic을 불러오는 중...");
+        try {
+          const data = await requestApi("/api/topics");
+          renderTopics(Array.isArray(data.topics) ? data.topics : []);
+        } catch (error) {
+          setTopicFeedback(error.message, "error");
+        }
+      }
+
+      async function refreshTopics() {
+        if (generating) return;
+        topicRefreshButton.disabled = true;
+        setTopicFeedback("Topic을 새로 가져오는 중...");
+        try {
+          const data = await requestApi("/api/topics/refresh", { method: "POST" });
+          renderTopics(Array.isArray(data.topics) ? data.topics : []);
+          setTopicFeedback("Topic을 새로 가져왔습니다.", "success");
+        } catch (error) {
+          setTopicFeedback(error.message, "error");
+        } finally {
+          topicRefreshButton.disabled = false;
+        }
+      }
+
+      async function generateDraft() {
+        if (!selectedTopicId || generating) return;
+        if ((titleInput.value.trim() || bodyInput.value.trim()) && !window.confirm("작성 중인 내용을 AI 초안으로 바꿀까요? 저장하지 않은 내용은 사라집니다.")) return;
+        setGenerating(true);
+        setTopicFeedback("");
+        try {
+          const data = await requestApi("/api/posts/generate", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ topicId: selectedTopicId, format: formatInput.value }),
+          });
+          const draft = data.draft;
+          editingId = null;
+          titleInput.value = draft.title || "";
+          bodyInput.value = draft.body || "";
+          formatInput.value = draft.format;
+          statusInput.value = "DRAFT";
+          editorSourceType = "AI";
+          editorTopicId = draft.topicId;
+          formHeading.textContent = "AI 초안";
+          saveButton.textContent = "저장";
+          setFeedback("AI 초안을 편집한 뒤 저장하세요.", "success");
+        } catch (error) {
+          setTopicFeedback(error.message, "error");
+        } finally {
+          setGenerating(false);
+        }
+      }
+
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (busy) return;
@@ -202,6 +330,8 @@ export function buildWritePageClientScript() {
           body: bodyInput.value,
           format: formatInput.value,
           status: statusInput.value,
+          sourceType: editorSourceType,
+          topicId: editorTopicId,
         });
         setBusy(true);
         setFeedback("");
@@ -222,8 +352,11 @@ export function buildWritePageClientScript() {
 
       newButton.addEventListener("click", resetEditor);
       cancelButton.addEventListener("click", resetEditor);
+      topicRefreshButton.addEventListener("click", refreshTopics);
+      topicGenerateButton.addEventListener("click", generateDraft);
       resetEditor();
       loadPosts();
+      loadTopics();
     })();
   `;
 }
