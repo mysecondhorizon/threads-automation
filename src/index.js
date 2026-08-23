@@ -90,6 +90,10 @@ import {
 } from "./routes/app-shell.js";
 
 import {
+  handleAppWritePage,
+} from "./routes/app-write-page.js";
+
+import {
   handlePostById,
   handlePostsCollection,
 } from "./routes/api-posts.js";
@@ -210,9 +214,12 @@ export default {
       return handleAppHome(request, env);
     }
 
+    if (pathname === "/app/write" && method === "GET") {
+      return handleAppWritePage(request, env);
+    }
+
     if (
       [
-        "/app/write",
         "/app/media",
         "/app/products",
         "/app/prompts",

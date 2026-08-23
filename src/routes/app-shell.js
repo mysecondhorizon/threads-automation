@@ -59,7 +59,7 @@ function renderStyles() {
   </style>`;
 }
 
-function renderAppShell({ activePath, title, description, content }) {
+export function renderAppShell({ activePath, title, description, content }) {
   return html(`<!doctype html>
 <html lang="ko">
   <head>
