@@ -115,7 +115,7 @@ export class VideoNormalizerContainer extends Container {
 
       console.log(
         `[video-normalize] ffmpeg start filter=${filter} ` +
-        "display_rotation=0 autorotate=disabled"
+        "legacy_rotate_metadata=0 autorotate=disabled"
       );
       const normalize = await this.ctx.container.exec([
         "ffmpeg",
@@ -124,8 +124,6 @@ export class VideoNormalizerContainer extends Container {
         "error",
         "-y",
         "-noautorotate",
-        "-display_rotation:v:0",
-        "0",
         "-i",
         inputPath,
         "-map",
@@ -138,6 +136,8 @@ export class VideoNormalizerContainer extends Container {
         "libx264",
         "-c:a",
         "aac",
+        "-metadata:s:v:0",
+        "rotate=0",
         "-movflags",
         "+faststart",
         outputPath,
