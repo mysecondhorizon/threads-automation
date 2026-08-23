@@ -3,6 +3,10 @@ const MEDIA_BUCKET_BINDING =
 
 const MAX_OBJECT_KEY_BYTES =
   1024;
+const MAX_DIAGNOSTIC_MESSAGE_LENGTH =
+  256;
+const MAX_DIAGNOSTIC_STACK_LENGTH =
+  512;
 
 const REQUIRED_BUCKET_METHODS = [
   "put",
@@ -66,6 +70,49 @@ function getUtf8ByteLength(
   return new TextEncoder()
     .encode(value)
     .byteLength;
+}
+
+function boundedDiagnosticValue(
+  value,
+  maxLength = MAX_DIAGNOSTIC_MESSAGE_LENGTH
+) {
+  return String(
+    value ??
+    ""
+  )
+    .replace(/\s+/gu, " ")
+    .slice(0, maxLength);
+}
+
+function describePutBody(
+  body
+) {
+  const isReadableStream = Boolean(
+    body &&
+    typeof body.getReader === "function"
+  );
+  const constructorName = body?.constructor?.name ||
+    Object.prototype.toString.call(body);
+  const knownLength = Number.isSafeInteger(body?.byteLength)
+    ? body.byteLength
+    : Number.isSafeInteger(body?.length)
+      ? body.length
+      : "unknown";
+  return {
+    type: isReadableStream
+      ? "ReadableStream"
+      : constructorName,
+    constructor: constructorName,
+    locked: isReadableStream && typeof body.locked === "boolean"
+      ? body.locked
+      : "unknown",
+    byob: typeof body?.supportsBYOB === "boolean"
+      ? body.supportsBYOB
+      : body?.type === "bytes"
+        ? true
+        : "unknown",
+    knownLength,
+  };
 }
 
 export function normalizeMediaObjectKey(
@@ -183,7 +230,8 @@ export function getMediaBucket(
 async function runMediaStorageOperation(
   operation,
   objectKey,
-  callback
+  callback,
+  diagnostics = null
 ) {
   try {
     return await callback();
@@ -193,6 +241,25 @@ async function runMediaStorageOperation(
       MediaStorageError
     ) {
       throw error;
+    }
+
+    if (operation === "put") {
+      const cause = error?.cause;
+      const bodyDescription = describePutBody(diagnostics?.body);
+      console.error(
+        `[media-storage] original put failure key=${objectKey} ` +
+        `errorName=${boundedDiagnosticValue(error?.name || "Error")} ` +
+        `message=${boundedDiagnosticValue(error?.message || error)} ` +
+        `code=${boundedDiagnosticValue(error?.code || "unknown")} ` +
+        `causeName=${boundedDiagnosticValue(cause?.name || "unknown")} ` +
+        `causeMessage=${boundedDiagnosticValue(cause?.message || "unknown")} ` +
+        `bodyType=${boundedDiagnosticValue(bodyDescription.type)} ` +
+        `constructor=${boundedDiagnosticValue(bodyDescription.constructor)} ` +
+        `locked=${String(bodyDescription.locked)} ` +
+        `byob=${String(bodyDescription.byob)} ` +
+        `knownLength=${String(bodyDescription.knownLength)} ` +
+        `stack=${boundedDiagnosticValue(error?.stack, MAX_DIAGNOSTIC_STACK_LENGTH)}`
+      );
     }
 
     throw new MediaStorageError(
@@ -243,7 +310,8 @@ export async function putMediaObject(
         body,
         options
       );
-    }
+    },
+    { body }
   );
 }
 
