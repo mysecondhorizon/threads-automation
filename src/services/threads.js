@@ -227,6 +227,37 @@ async function createImageContainer(
   return { containerId: data.id };
 }
 
+async function createVideoContainer(
+  accessToken,
+  userId,
+  text,
+  videoUrl,
+  altText = null
+) {
+  const body = new URLSearchParams({
+    media_type: "VIDEO",
+    video_url: videoUrl,
+    text,
+    access_token: accessToken,
+  });
+  if (typeof altText === "string" && altText.trim()) {
+    body.set("alt_text", altText.trim());
+  }
+  const response = await fetch(
+    `${config.threads.graphBase}/${userId}/threads`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+    }
+  );
+  const data = await readThreadsResponse(response, "create_video_container");
+  if (!data.id) {
+    throw new ThreadsApiError("create_video_container", data);
+  }
+  return { containerId: data.id };
+}
+
 function serializeTopicError(
   error
 ) {
@@ -734,6 +765,105 @@ export async function publishImagePost(
     autoPublished: false,
     mediaId: normalizedMediaId,
     imageUrl,
+  };
+}
+
+export async function publishVideoPost(
+  env,
+  accessToken,
+  userId,
+  text,
+  mediaId
+) {
+  const normalizedText = normalizeThreadsText(text);
+  const normalizedMediaId = String(mediaId || "").trim();
+
+  if (!normalizedText) {
+    throw new ThreadsApiError("validate_post_text", {
+      message: "Threads post text is empty",
+    });
+  }
+  if (!normalizedMediaId) {
+    throw new ThreadsApiError("validate_video_media", {
+      message: "Media ID is required for a VIDEO post",
+    });
+  }
+
+  let media;
+  try {
+    media = await getMedia(env, normalizedMediaId);
+  } catch (error) {
+    throw new ThreadsApiError("validate_video_media", {
+      message: "Media Library lookup failed",
+      cause: error?.message || String(error),
+    });
+  }
+  if (!media) {
+    throw new ThreadsApiError("validate_video_media", {
+      message: "Media record was not found",
+      mediaId: normalizedMediaId,
+    });
+  }
+  if (media.active === false) {
+    throw new ThreadsApiError("validate_video_media", {
+      message: "Media record is inactive",
+      mediaId: normalizedMediaId,
+    });
+  }
+  if (media.mediaKind !== "video") {
+    throw new ThreadsApiError("validate_video_media", {
+      message: "Media record is not a video",
+      mediaId: normalizedMediaId,
+      mediaKind: media.mediaKind || null,
+    });
+  }
+
+  let object;
+  try {
+    object = await getMediaObject(env, media.objectKey);
+  } catch (error) {
+    throw new ThreadsApiError("validate_video_media", {
+      message: "Media object lookup failed",
+      mediaId: normalizedMediaId,
+      cause: error?.message || String(error),
+    });
+  }
+  if (!object) {
+    throw new ThreadsApiError("validate_video_media", {
+      message: "Media object was not found",
+      mediaId: normalizedMediaId,
+    });
+  }
+  const contentType = object.httpMetadata?.contentType;
+  if (String(contentType || "").trim().toLowerCase() !== "video/mp4") {
+    throw new ThreadsApiError("validate_video_media", {
+      message: "Media object is not an MP4 video",
+      mediaId: normalizedMediaId,
+      contentType: contentType || null,
+    });
+  }
+
+  const videoUrl = `${config.app.baseUrl}/media/${encodeURIComponent(normalizedMediaId)}`;
+  let containerId;
+  ({ containerId } = await createVideoContainer(
+    accessToken,
+    userId,
+    normalizedText,
+    videoUrl,
+    media.altText
+  ));
+  const { postId } = await publishContainer(
+    accessToken,
+    userId,
+    containerId,
+    { step: "publish_video" }
+  );
+  return {
+    containerId,
+    postId,
+    autoPublished: false,
+    mediaId: normalizedMediaId,
+    videoUrl,
   };
 }
 

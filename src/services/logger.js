@@ -34,8 +34,8 @@ function normalizePostMetadata(
   metadata
 ) {
   const publishMode =
-    metadata?.publishMode === "IMAGE"
-      ? "IMAGE"
+    metadata?.publishMode === "IMAGE" || metadata?.publishMode === "VIDEO"
+      ? metadata.publishMode
       : "TEXT";
 
   return {
@@ -65,15 +65,19 @@ function normalizePostMetadata(
 
     publishMode,
 
-    ...(publishMode === "IMAGE"
+    ...(publishMode === "IMAGE" || publishMode === "VIDEO"
       ? {
         mediaId:
           metadata?.mediaId ||
           null,
 
-        contentPoolId:
-          metadata?.contentPoolId ||
-          null,
+        ...(publishMode === "IMAGE"
+          ? {
+            contentPoolId:
+              metadata?.contentPoolId ||
+              null,
+          }
+          : {}),
       }
       : {}),
 

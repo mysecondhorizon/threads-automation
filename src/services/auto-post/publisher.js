@@ -2,6 +2,7 @@ import {
   getThreadsProfile,
   publishImagePost,
   publishTextPost,
+  publishVideoPost,
 } from "../threads.js";
 
 import {
@@ -30,9 +31,8 @@ const PRODUCT_REVIEW_FIRST_COMMENT_DELAY_MS =
 function normalizeMediaSelection(
   mediaSelection
 ) {
-  if (
-    mediaSelection?.mode !== "IMAGE"
-  ) {
+  const mode = mediaSelection?.mode;
+  if (mode !== "IMAGE" && mode !== "VIDEO") {
     return {
       mode: "TEXT",
       mediaId: null,
@@ -55,17 +55,19 @@ function normalizeMediaSelection(
 
   if (
     !mediaId ||
-    !contentPoolId
+    (mode === "IMAGE" && !contentPoolId)
   ) {
     throw new Error(
-      "IMAGE media selection requires mediaId and contentPoolId"
+      mode === "IMAGE"
+        ? "IMAGE media selection requires mediaId and contentPoolId"
+        : "VIDEO media selection requires mediaId"
     );
   }
 
   return {
-    mode: "IMAGE",
+    mode,
     mediaId,
-    contentPoolId,
+    contentPoolId: mode === "IMAGE" ? contentPoolId : null,
     reason:
       mediaSelection.reason ||
       null,
@@ -236,7 +238,15 @@ export async function publishAutoPost(
         text,
         selection.mediaId
       )
-      : await publishTextPost(
+      : selection.mode === "VIDEO"
+        ? await publishVideoPost(
+          env,
+          accessToken,
+          profile.id,
+          text,
+          selection.mediaId
+        )
+        : await publishTextPost(
         accessToken,
         profile.id,
         text
@@ -278,9 +288,7 @@ export async function publishAutoPost(
     );
   }
 
-  if (
-    selection.mode === "IMAGE"
-  ) {
+  if (selection.mode === "IMAGE" || selection.mode === "VIDEO") {
     try {
       await markMediaUsed(
         env,
@@ -294,17 +302,19 @@ export async function publishAutoPost(
       );
     }
 
-    try {
-      await markContentPoolItemUsed(
-        env,
-        selection.contentPoolId
-      );
-    } catch (error) {
-      recordTrackingWarning(
-        trackingWarnings,
-        publishResult.postId,
-        "content_pool_usage_update_failed"
-      );
+    if (selection.mode === "IMAGE") {
+      try {
+        await markContentPoolItemUsed(
+          env,
+          selection.contentPoolId
+        );
+      } catch (error) {
+        recordTrackingWarning(
+          trackingWarnings,
+          publishResult.postId,
+          "content_pool_usage_update_failed"
+        );
+      }
     }
   }
 
