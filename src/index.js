@@ -85,6 +85,11 @@ import {
 } from "./routes/admin-overview.js";
 
 import {
+  handleAppHome,
+  handleAppPlaceholderPage,
+} from "./routes/app-shell.js";
+
+import {
   handleShortToken,
   handleTokenExchange,
   handleProfile,
@@ -194,6 +199,24 @@ export default {
         request,
         env
       );
+    }
+
+    if (pathname === "/app" && method === "GET") {
+      return handleAppHome(request, env);
+    }
+
+    if (
+      [
+        "/app/write",
+        "/app/media",
+        "/app/products",
+        "/app/prompts",
+        "/app/schedules",
+        "/app/apps",
+      ].includes(pathname) &&
+      method === "GET"
+    ) {
+      return handleAppPlaceholderPage(request, env, pathname);
     }
 
     if (
