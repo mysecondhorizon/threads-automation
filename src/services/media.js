@@ -27,6 +27,15 @@ const MAX_IMAGE_URL_LENGTH =
 const MAX_TAGS =
   30;
 
+const MAX_SCENE_TYPE_LENGTH =
+  60;
+
+const MAX_USABLE_ANGLES =
+  6;
+
+const MAX_USABLE_ANGLE_LENGTH =
+  100;
+
 const SOURCE_TYPES =
   new Set([
     "general",
@@ -293,6 +302,65 @@ function normalizeStringList(
   return normalized;
 }
 
+function normalizeLimitedStringList(
+  value,
+  fallback,
+  field,
+  maxItems,
+  maxLength
+) {
+  if (value === undefined) return fallback;
+  const values = Array.isArray(value) ? value : [];
+  if (values.length > maxItems) {
+    throw createMediaLibraryError(
+      `Media ${field} has too many values`,
+      `media_${field}_too_many`
+    );
+  }
+
+  const normalized = [...new Set(values.map(normalizeText).filter(Boolean))];
+  if (normalized.some((item) => item.length > maxLength)) {
+    throw createMediaLibraryError(
+      `Media ${field} contains a value that is too long`,
+      `media_${field}_too_long`
+    );
+  }
+  return normalized;
+}
+
+function normalizeNullableLimitedText(
+  value,
+  fallback,
+  field,
+  maxLength
+) {
+  if (value === undefined) return fallback;
+  const normalized = normalizeNullableText(value);
+  if (normalized && normalized.length > maxLength) {
+    throw createMediaLibraryError(
+      `Media ${field} is too long`,
+      `media_${field}_too_long`
+    );
+  }
+  return normalized;
+}
+
+function normalizeNullableBoolean(
+  value,
+  fallback,
+  field
+) {
+  if (value === undefined) return fallback;
+  if (value === null) return null;
+  if (typeof value !== "boolean") {
+    throw createMediaLibraryError(
+      `Media ${field} must be a boolean or null`,
+      `media_${field}_invalid`
+    );
+  }
+  return value;
+}
+
 function normalizeNonNegativeInteger(
   value,
   fallback,
@@ -508,6 +576,44 @@ function normalizeMediaRecord(
           : input.optimizedContentType
       ),
 
+    sceneType:
+      normalizeNullableLimitedText(
+        input?.sceneType,
+        existingMedia?.sceneType ?? null,
+        "scene_type",
+        MAX_SCENE_TYPE_LENGTH
+      ),
+
+    usableAngles:
+      normalizeLimitedStringList(
+        input?.usableAngles,
+        existingMedia?.usableAngles ?? [],
+        "usable_angles",
+        MAX_USABLE_ANGLES,
+        MAX_USABLE_ANGLE_LENGTH
+      ),
+
+    peoplePresent:
+      normalizeNullableBoolean(
+        input?.peoplePresent,
+        existingMedia?.peoplePresent ?? null,
+        "people_present"
+      ),
+
+    textPresent:
+      normalizeNullableBoolean(
+        input?.textPresent,
+        existingMedia?.textPresent ?? null,
+        "text_present"
+      ),
+
+    brandVisible:
+      normalizeNullableBoolean(
+        input?.brandVisible,
+        existingMedia?.brandVisible ?? null,
+        "brand_visible"
+      ),
+
     active:
       normalizeActive(
         input?.active,
@@ -607,6 +713,44 @@ function normalizeStoredMedia(
     optimizedContentType:
       normalizeNullableText(
         input?.optimizedContentType
+      ),
+
+    sceneType:
+      normalizeNullableLimitedText(
+        input?.sceneType,
+        null,
+        "scene_type",
+        MAX_SCENE_TYPE_LENGTH
+      ),
+
+    usableAngles:
+      normalizeLimitedStringList(
+        input?.usableAngles,
+        [],
+        "usable_angles",
+        MAX_USABLE_ANGLES,
+        MAX_USABLE_ANGLE_LENGTH
+      ),
+
+    peoplePresent:
+      normalizeNullableBoolean(
+        input?.peoplePresent,
+        null,
+        "people_present"
+      ),
+
+    textPresent:
+      normalizeNullableBoolean(
+        input?.textPresent,
+        null,
+        "text_present"
+      ),
+
+    brandVisible:
+      normalizeNullableBoolean(
+        input?.brandVisible,
+        null,
+        "brand_visible"
       ),
 
     active:

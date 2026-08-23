@@ -7,6 +7,9 @@ import {
   OPTIMIZED_IMAGE_EXTENSION,
   optimizeUploadedImage,
 } from "./media-image-optimization.js";
+import {
+  analyzeMediaImage,
+} from "./media-vision.js";
 import { createMediaBatch } from "./media.js";
 import { createContentPoolBatch } from "./content-pool.js";
 
@@ -148,6 +151,21 @@ function buildInput(file, manifest, defaults) {
   };
 }
 
+export function mergeMediaMetadata(input, vision) {
+  return {
+    ...input,
+    tags: input.tags.length ? input.tags : vision.tags,
+    topics: input.topics.length ? input.topics : vision.topics,
+    altText: input.altText || vision.altText,
+    description: input.description || vision.description,
+    sceneType: vision.sceneType,
+    usableAngles: vision.usableAngles,
+    peoplePresent: vision.peoplePresent,
+    textPresent: vision.textPresent,
+    brandVisible: vision.brandVisible,
+  };
+}
+
 async function cleanupObjects(env, objectKeys) {
   const failures = [];
   for (const objectKey of objectKeys) {
@@ -204,6 +222,15 @@ export async function batchUploadMedia(
           env.IMAGES,
           file
         );
+      const vision =
+        await analyzeMediaImage(
+          env,
+          optimized.body,
+          {
+            manualMetadata: input,
+          }
+        );
+      input = mergeMediaMetadata(input, vision);
 
       await putMediaObject(env, input.objectKey, optimized.body, {
         httpMetadata: {
@@ -259,6 +286,11 @@ export async function batchUploadMedia(
       originalBytes: input.originalBytes,
       storedBytes: input.storedBytes,
       optimizedContentType: input.optimizedContentType,
+      sceneType: input.sceneType,
+      usableAngles: input.usableAngles,
+      peoplePresent: input.peoplePresent,
+      textPresent: input.textPresent,
+      brandVisible: input.brandVisible,
     })));
   } catch (error) {
     const cleanupFailures = earlyCleanupFailures.concat(
