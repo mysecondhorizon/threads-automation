@@ -31,11 +31,25 @@ export async function normalizeVideoOrientation(
   const source = await getMediaObject(env, sourceObjectKey);
   if (!source?.body) throw new Error("Temporary source video could not be read for normalization");
   const container = getContainer(env.VIDEO_NORMALIZER, NORMALIZER_INSTANCE_NAME);
-  const normalizedBody = await container.normalizeVideo(source.body, rotationDegrees);
+  let normalizedBody;
+  try {
+    normalizedBody = await container.normalizeVideo(source.body, rotationDegrees);
+    console.log(`[video-normalize] RPC returned body=${Boolean(normalizedBody)}`);
+  } catch (error) {
+    console.error(`[video-normalize] RPC failed message=${error?.message || String(error)}`);
+    throw error;
+  }
   if (!normalizedBody || typeof normalizedBody.getReader !== "function") {
+    console.error("[video-normalize] RPC returned no readable body");
     throw new Error("Video normalizer did not return a stream");
   }
-  await putMediaObject(env, normalizedObjectKey, normalizedBody, {
-    httpMetadata: { contentType: VIDEO_CONTENT_TYPE },
-  });
+  try {
+    await putMediaObject(env, normalizedObjectKey, normalizedBody, {
+      httpMetadata: { contentType: VIDEO_CONTENT_TYPE },
+    });
+    console.log("[video-normalize] normalized temp R2 put succeeded");
+  } catch (error) {
+    console.error(`[video-normalize] normalized temp R2 put failed message=${error?.message || String(error)}`);
+    throw error;
+  }
 }

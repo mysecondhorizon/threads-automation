@@ -232,14 +232,20 @@ async function videoUploadData(env, file, input, sourceObjectKey, temporaryObjec
   if (rotationDegrees !== 0) {
     const normalizedObjectKey = createNormalizedVideoObjectKey(sourceObjectKey);
     temporaryObjectKeys.push(normalizedObjectKey);
-    await normalizeVideoOrientation(env, {
-      sourceObjectKey,
-      normalizedObjectKey,
-      rotationDegrees,
-    });
-    const normalizedRotationDegrees = await readMp4OrientationDegrees(env, normalizedObjectKey);
-    if (normalizedRotationDegrees !== 0) {
-      throw new Error("Normalized video orientation metadata is not identity");
+    try {
+      await normalizeVideoOrientation(env, {
+        sourceObjectKey,
+        normalizedObjectKey,
+        rotationDegrees,
+      });
+      const normalizedRotationDegrees = await readMp4OrientationDegrees(env, normalizedObjectKey);
+      console.log(`[video-normalize] orientation verification degrees=${normalizedRotationDegrees} expected=0`);
+      if (normalizedRotationDegrees !== 0) {
+        throw new Error("Normalized video orientation metadata is not identity");
+      }
+    } catch (error) {
+      console.error(`[video-normalize] normalization failed message=${error?.message || String(error)}`);
+      throw error;
     }
     processingObjectKey = normalizedObjectKey;
   }

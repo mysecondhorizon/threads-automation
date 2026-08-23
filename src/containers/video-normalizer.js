@@ -8,6 +8,7 @@ const ALLOWED_ROTATIONS = new Map([
   [270, "transpose=cclock"],
 ]);
 const MAX_PROBE_OUTPUT_BYTES = 4096;
+const MAX_DIAGNOSTIC_TAIL_BYTES = 4096;
 
 function temporaryPath(prefix) {
   const id = globalThis.crypto?.randomUUID?.() ||
@@ -40,6 +41,40 @@ async function readSmallText(stream) {
   return new TextDecoder().decode(bytes);
 }
 
+async function readDiagnosticTail(stream) {
+  if (!stream) return "";
+  const reader = stream.getReader();
+  let tail = new Uint8Array();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = value instanceof Uint8Array ? value : new Uint8Array(value);
+      const combined = new Uint8Array(tail.byteLength + chunk.byteLength);
+      combined.set(tail);
+      combined.set(chunk, tail.byteLength);
+      tail = combined.slice(-MAX_DIAGNOSTIC_TAIL_BYTES);
+    }
+  } catch {
+    return "[stderr unavailable]";
+  } finally {
+    reader.releaseLock();
+  }
+  return new TextDecoder().decode(tail);
+}
+
+async function readFileSize(container, path) {
+  const process = await container.exec(["stat", "-c", "%s", path], {
+    stderr: "ignore",
+  });
+  const [output, exitCode] = await Promise.all([
+    readSmallText(process.stdout),
+    process.exitCode,
+  ]);
+  const size = Number(output.trim());
+  return exitCode === 0 && Number.isSafeInteger(size) && size >= 0 ? size : null;
+}
+
 export class VideoNormalizerContainer extends Container {
   sleepAfter = "1m";
   enableInternet = false;
@@ -55,6 +90,10 @@ export class VideoNormalizerContainer extends Container {
 
   async normalizeVideo(inputStream, rotationDegrees) {
     const filter = ALLOWED_ROTATIONS.get(rotationDegrees);
+    console.log(
+      `[video-normalize] start rotation=${String(rotationDegrees)} ` +
+      `inputStream=${Boolean(inputStream)}`
+    );
     if (!filter) throw new Error("Video rotation is invalid");
     if (!inputStream || typeof inputStream.getReader !== "function") {
       throw new Error("Video normalization input stream is required");
@@ -63,6 +102,7 @@ export class VideoNormalizerContainer extends Container {
 
     const inputPath = temporaryPath("video-normalizer-input");
     const outputPath = temporaryPath("video-normalizer-output");
+    console.log("[video-normalize] input temp file created");
     try {
       const writeInput = await this.ctx.container.exec(["tee", inputPath], {
         stdin: inputStream,
@@ -70,7 +110,13 @@ export class VideoNormalizerContainer extends Container {
         stderr: "ignore",
       });
       if (await writeInput.exitCode) throw new Error("Video normalization input write failed");
+      const inputSize = await readFileSize(this.ctx.container, inputPath);
+      console.log(`[video-normalize] input temp size=${inputSize === null ? "unknown" : inputSize}`);
 
+      console.log(
+        `[video-normalize] ffmpeg start filter=${filter} ` +
+        "display_rotation=0 autorotate=disabled"
+      );
       const normalize = await this.ctx.container.exec([
         "ffmpeg",
         "-hide_banner",
@@ -97,9 +143,20 @@ export class VideoNormalizerContainer extends Container {
         outputPath,
       ], {
         stdout: "ignore",
-        stderr: "ignore",
+        stderr: "pipe",
       });
-      if (await normalize.exitCode) throw new Error("Video orientation normalization failed");
+      const [ffmpegStderr, ffmpegExitCode] = await Promise.all([
+        readDiagnosticTail(normalize.stderr),
+        normalize.exitCode,
+      ]);
+      const outputSize = await readFileSize(this.ctx.container, outputPath);
+      console.log(
+        `[video-normalize] ffmpeg exit=${ffmpegExitCode} ` +
+        `outputExists=${outputSize !== null} ` +
+        `outputSize=${outputSize === null ? "unknown" : outputSize} ` +
+        `stderrTail=${JSON.stringify(ffmpegStderr)}`
+      );
+      if (ffmpegExitCode) throw new Error("Video orientation normalization failed");
 
       const probe = await this.ctx.container.exec([
         "ffprobe",
@@ -125,6 +182,7 @@ export class VideoNormalizerContainer extends Container {
         stderr: "ignore",
       });
       if (!output.stdout) throw new Error("Normalized video output is unavailable");
+      console.log("[video-normalize] output stream returning");
       this.ctx.waitUntil(
         output.exitCode
           .catch(() => {})
