@@ -101,6 +101,23 @@ function probeValidation(probeText) {
 export class VideoNormalizerContainer extends Container {
   sleepAfter = "1m";
   enableInternet = false;
+  activeNormalizations = 0;
+
+  onActivityExpired() {
+    const active = this.activeNormalizations > 0;
+    console.log(`[video-normalize] activity expiry active=${active}`);
+    if (active) {
+      console.log("[video-normalize] activity expiry shutdown deferred");
+      return;
+    }
+    console.log("[video-normalize] activity expiry stopping container");
+    return this.stop();
+  }
+
+  onStop({ exitCode, reason }) {
+    const safeReason = String(reason ?? "unknown").replace(/\s+/gu, " ").slice(0, 128);
+    console.log(`[video-normalize] container stop exitCode=${String(exitCode)} reason=${safeReason}`);
+  }
 
   async removeTemporaryFiles(paths) {
     if (!paths.length) return;
@@ -121,12 +138,16 @@ export class VideoNormalizerContainer extends Container {
     if (!inputStream || typeof inputStream.getReader !== "function") {
       throw new Error("Video normalization input stream is required");
     }
-    if (!this.ctx.container.running) await this.start();
-
-    const inputPath = temporaryPath("video-normalizer-input");
-    const outputPath = temporaryPath("video-normalizer-output");
-    console.log("[video-normalize] input temp file created");
+    this.activeNormalizations += 1;
+    console.log(`[video-normalize] normalization active count=${this.activeNormalizations}`);
+    let inputPath = null;
+    let outputPath = null;
     try {
+      if (!this.ctx.container.running) await this.start();
+
+      inputPath = temporaryPath("video-normalizer-input");
+      outputPath = temporaryPath("video-normalizer-output");
+      console.log("[video-normalize] input temp file created");
       const writeInput = await this.ctx.container.exec(["tee", inputPath], {
         stdin: inputStream,
         stdout: "ignore",
@@ -217,8 +238,11 @@ export class VideoNormalizerContainer extends Container {
       );
       return output.stdout;
     } catch (error) {
-      await this.removeTemporaryFiles([inputPath, outputPath]).catch(() => {});
+      await this.removeTemporaryFiles([inputPath, outputPath].filter(Boolean)).catch(() => {});
       throw error;
+    } finally {
+      this.activeNormalizations = Math.max(0, this.activeNormalizations - 1);
+      console.log(`[video-normalize] normalization active count=${this.activeNormalizations}`);
     }
   }
 }
