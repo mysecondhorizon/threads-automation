@@ -121,7 +121,7 @@ function probeValidation(probeText) {
 }
 
 export class VideoNormalizerContainer extends Container {
-  sleepAfter = "1m";
+  sleepAfter = "5m";
   enableInternet = false;
   activeNormalizations = 0;
 
