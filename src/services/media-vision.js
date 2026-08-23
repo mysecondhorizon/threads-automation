@@ -28,7 +28,9 @@ const MEDIA_VISION_INSTRUCTIONS = [
   "Do not invent OCR text. Do not create news, politics, trends, or current-topic claims from the image.",
   "Use concrete nouns and situations for tags. Avoid generic tags such as image, photo, picture, daily life, or lifestyle.",
   "Only create topics and usableAngles that naturally connect to the visible image. Do not invent personal experiences, brands, or events.",
-  "Set peoplePresent, textPresent, and brandVisible to null when the image does not provide enough certainty.",
+  "Write tags, topics, altText, description, sceneType, and usableAngles primarily in natural Korean so they match Korean Threads text. Prefer natural Korean names for visibly supported Korean foods and situations. Keep an established brand, product, service, or proper name in its original or commonly used Korean form. Do not translate or infer the meaning of uncertain English text in the image.",
+  "For peoplePresent, textPresent, and brandVisible, use true only when the element is clearly visible and identifiable. Use false only when the element is clearly absent. Otherwise use null, including partial or blurry people, unreadable text-like areas, and bottles, packages, or signs whose brand cannot be identified. A bottle alone is not brandVisible=true, table traces are not peoplePresent=true, and text-like shapes are not textPresent=true.",
+  "Keep every value comfortably below its limit: tags under 40 characters, topics under 80, altText under 180, description under 300, sceneType under 60, and each usableAngle under 100. Be concise and use complete phrases or sentences; never fill the limit or end in the middle of a word, phrase, or sentence.",
 ].join("\n");
 
 const MEDIA_VISION_SCHEMA = {
