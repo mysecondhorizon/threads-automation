@@ -94,6 +94,10 @@ import {
 } from "./routes/app-write-page.js";
 
 import {
+  handleAppMediaPage,
+} from "./routes/app-media-page.js";
+
+import {
   handlePostById,
   handlePostsCollection,
 } from "./routes/api-posts.js";
@@ -105,6 +109,15 @@ import {
 import {
   handlePostGenerate,
 } from "./routes/api-post-generate.js";
+
+import {
+  handleOperatorMediaById,
+  handleOperatorMediaCollection,
+} from "./routes/api-media.js";
+
+import {
+  handleOperatorMediaUpload,
+} from "./routes/api-media-upload.js";
 
 import {
   handleShortToken,
@@ -226,9 +239,12 @@ export default {
       return handleAppWritePage(request, env);
     }
 
+    if (pathname === "/app/media" && method === "GET") {
+      return handleAppMediaPage(request, env);
+    }
+
     if (
       [
-        "/app/media",
         "/app/products",
         "/app/prompts",
         "/app/schedules",
@@ -253,6 +269,26 @@ export default {
 
     if (pathname === "/api/topics/refresh") {
       return handleTopics(request, env);
+    }
+
+    if (pathname === "/api/media") {
+      return handleOperatorMediaCollection(request, env);
+    }
+
+    if (pathname === "/api/media/upload") {
+      return handleOperatorMediaUpload(request, env);
+    }
+
+    if (pathname.startsWith("/api/media/")) {
+      const encodedMediaId = pathname.slice("/api/media/".length);
+      if (!encodedMediaId || encodedMediaId.includes("/")) {
+        return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      }
+      try {
+        return handleOperatorMediaById(request, env, decodeURIComponent(encodedMediaId));
+      } catch {
+        return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      }
     }
 
     if (pathname.startsWith("/api/posts/")) {
