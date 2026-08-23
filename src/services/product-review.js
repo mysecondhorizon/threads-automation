@@ -1,5 +1,5 @@
 import { getJson, putJson } from "./kv.js";
-import { getActiveProducts, buildProductContext } from "./products.js";
+import { getActiveProducts, buildProductContext, isValidOperatorProductLink } from "./products.js";
 import { buildThreadContext } from "./thread-context.js";
 import { generateDistinctThreadPost } from "./post-regenerator.js";
 import { validateAutoPostText, validateAutoPostPolicy } from "./auto-post-validator.js";
@@ -54,7 +54,7 @@ export function isProductReviewEligible(product) {
     product?.active === true &&
     text(product.name) &&
     product.linkEnabled === true &&
-    text(product.affiliateLink) &&
+    isValidOperatorProductLink(product.affiliateLink) &&
     text(product.affiliateDisclosure) &&
     (text(product.description) || text(product.selectionReason) || text(product.experience))
   );

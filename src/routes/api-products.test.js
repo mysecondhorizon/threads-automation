@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import { handleOperatorProductById, handleOperatorProducts } from "./api-products.js";
+
+const env = (authenticated = true) => ({ THREADS_KV: { async get(key) { return authenticated && key === "admin_session:session-1" ? "valid" : null; } } });
+const request = (url, method = "GET", body, authenticated = true) => new Request(url, { method, headers: { ...(authenticated ? { cookie: "admin_session=session-1" } : {}), ...(body === undefined ? {} : { "content-type": "application/json" }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+const linked = { id: "p1", name: "Product", category: "Office", description: "Desc", affiliateLink: "https://example.test/p", linkEnabled: true, active: true, price: 100, createdAt: "2026-01-01", updatedAt: "2026-01-02" };
+const linkless = { ...linked, id: "p2", affiliateLink: "", linkEnabled: false };
+const inactive = { ...linked, id: "p3", active: false };
+assert.equal((await handleOperatorProducts(request("https://x/api/products", "GET", undefined, false), env(false), new URL("https://x/api/products"))).status, 401);
+const list = await handleOperatorProducts(request("https://x/api/products"), env(), new URL("https://x/api/products"), { list: async () => [linked, linkless, inactive] });
+const products = (await list.json()).products;
+assert.equal(products[0].price, undefined); assert.equal(products[0].autoPostEligible, true); assert.equal(products[1].autoPostEligible, false); assert.equal(products[2].autoPostEligible, false);
+let saved = null;
+const created = await handleOperatorProducts(request("https://x/api/products", "POST", { name: "New", category: "Home", description: "", link: "", active: true }), env(), new URL("https://x/api/products"), { save: async (_env, value) => { saved = value; return { ...value, id: "new", createdAt: "now", updatedAt: "now" }; } });
+assert.equal(created.status, 200); assert.equal(saved.affiliateLink, ""); assert.equal(saved.linkEnabled, false);
+const badPrice = await handleOperatorProducts(request("https://x/api/products", "POST", { name: "New", category: "Home", description: "", price: 1 }), env(), new URL("https://x/api/products")); assert.equal(badPrice.status, 400);
+const badLink = await handleOperatorProducts(request("https://x/api/products", "POST", { name: "New", category: "Home", description: "", link: "javascript:alert(1)" }), env(), new URL("https://x/api/products")); assert.equal(badLink.status, 400);
+const patch = await handleOperatorProductById(request("https://x/api/products/p1", "PATCH", { link: null, active: false }), env(), "p1", { get: async () => linked, save: async (_env, value) => value }); assert.equal((await patch.json()).product.autoPostEligible, false);
+const missing = await handleOperatorProductById(request("https://x/api/products/no", "PATCH", { active: false }), env(), "no", { get: async () => null }); assert.equal(missing.status, 404);
+console.log("operator products API fixture passed");

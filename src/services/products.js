@@ -84,8 +84,17 @@ function validateAffiliateLink(value) {
   let url;
   try { url = new URL(link); }
   catch { throw new Error("affiliateLink must be a valid URL"); }
-  if (url.protocol !== "https:") throw new Error("affiliateLink must use https");
+  if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("affiliateLink must use http or https");
   return link;
+}
+
+export function isValidOperatorProductLink(value) {
+  try {
+    const url = new URL(normalizeText(value));
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 function createProductId() {

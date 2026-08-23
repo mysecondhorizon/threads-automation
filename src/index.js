@@ -97,6 +97,10 @@ import {
   handleAppMediaPage,
 } from "./routes/app-media-page.js";
 
+import { handleAppProductsPage } from "./routes/app-products-page.js";
+import { handleOperatorProductAnalyze } from "./routes/api-product-analyze.js";
+import { handleOperatorProductById, handleOperatorProducts } from "./routes/api-products.js";
+
 import {
   handlePostById,
   handlePostsCollection,
@@ -243,9 +247,12 @@ export default {
       return handleAppMediaPage(request, env);
     }
 
+    if (pathname === "/app/products" && method === "GET") {
+      return handleAppProductsPage(request, env);
+    }
+
     if (
       [
-        "/app/products",
         "/app/prompts",
         "/app/schedules",
         "/app/apps",
@@ -273,6 +280,20 @@ export default {
 
     if (pathname === "/api/media") {
       return handleOperatorMediaCollection(request, env);
+    }
+
+    if (pathname === "/api/products") {
+      return handleOperatorProducts(request, env, url);
+    }
+
+    if (pathname === "/api/products/analyze") {
+      return handleOperatorProductAnalyze(request, env);
+    }
+
+    if (pathname.startsWith("/api/products/")) {
+      const productId = pathname.slice("/api/products/".length);
+      if (!productId || productId.includes("/")) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      return handleOperatorProductById(request, env, decodeURIComponent(productId));
     }
 
     if (pathname === "/api/media/upload") {
