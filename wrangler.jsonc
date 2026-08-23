@@ -16,7 +16,7 @@
     {
       "class_name": "VideoNormalizerContainer",
       "image": "./containers/video-normalizer/Dockerfile",
-      "instance_type": "basic",
+      "instance_type": "standard-2",
       "max_instances": 1,
       "ssh": {
         "enabled": false

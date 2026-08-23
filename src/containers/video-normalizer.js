@@ -192,7 +192,20 @@ export class VideoNormalizerContainer extends Container {
         readError: "not started",
       };
       let ffmpegExitCode;
+      let ffmpegActivityRenewal = null;
+      const renewFfmpegActivity = () => {
+        try {
+          this.renewActivityTimeout();
+          console.log("[video-normalize] ffmpeg activity renewed");
+        } catch (error) {
+          console.error(
+            `[video-normalize] ffmpeg activity renewal failed message=${diagnosticMessage(error)}`
+          );
+        }
+      };
       try {
+        renewFfmpegActivity();
+        ffmpegActivityRenewal = setInterval(renewFfmpegActivity, 20_000);
         normalize = await this.ctx.container.exec([
           "ffmpeg",
           "-hide_banner",
@@ -238,6 +251,11 @@ export class VideoNormalizerContainer extends Container {
           `message=${diagnosticMessage(error)}`
         );
         throw error;
+      } finally {
+        if (ffmpegActivityRenewal !== null) {
+          clearInterval(ffmpegActivityRenewal);
+          ffmpegActivityRenewal = null;
+        }
       }
       const ffmpegDurationMs = Date.now() - ffmpegStartedAt;
       const outputSize = await readFileSize(this.ctx.container, outputPath);
