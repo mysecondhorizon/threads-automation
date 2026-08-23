@@ -9,6 +9,13 @@ const ALLOWED_ROTATIONS = new Map([
 ]);
 const MAX_PROBE_OUTPUT_BYTES = 4096;
 const MAX_DIAGNOSTIC_TAIL_BYTES = 4096;
+const MAX_DIAGNOSTIC_MESSAGE_CHARS = 256;
+
+function diagnosticMessage(error) {
+  return String(error?.message || error || "unknown")
+    .replace(/\s+/gu, " ")
+    .slice(0, MAX_DIAGNOSTIC_MESSAGE_CHARS);
+}
 
 function temporaryPath(prefix) {
   const id = globalThis.crypto?.randomUUID?.() ||
@@ -42,25 +49,40 @@ async function readSmallText(stream) {
 }
 
 async function readDiagnosticTail(stream) {
-  if (!stream) return "";
+  if (!stream) {
+    return { text: "", closedNormally: false, readError: "stderr stream unavailable" };
+  }
   const reader = stream.getReader();
   let tail = new Uint8Array();
+  let readError = null;
+  let closedNormally = false;
   try {
     for (;;) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        closedNormally = true;
+        break;
+      }
       const chunk = value instanceof Uint8Array ? value : new Uint8Array(value);
       const combined = new Uint8Array(tail.byteLength + chunk.byteLength);
       combined.set(tail);
       combined.set(chunk, tail.byteLength);
       tail = combined.slice(-MAX_DIAGNOSTIC_TAIL_BYTES);
     }
-  } catch {
-    return "[stderr unavailable]";
+  } catch (error) {
+    readError = diagnosticMessage(error);
   } finally {
-    reader.releaseLock();
+    try {
+      reader.releaseLock();
+    } catch (error) {
+      readError ||= diagnosticMessage(error);
+    }
   }
-  return new TextDecoder().decode(tail);
+  return {
+    text: new TextDecoder().decode(tail),
+    closedNormally,
+    readError,
+  };
 }
 
 async function readFileSize(container, path) {
@@ -161,44 +183,78 @@ export class VideoNormalizerContainer extends Container {
         `[video-normalize] ffmpeg start filter=${filter} ` +
         "legacy_rotate_metadata=0 autorotate=disabled"
       );
-      const normalize = await this.ctx.container.exec([
-        "ffmpeg",
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-y",
-        "-noautorotate",
-        "-i",
-        inputPath,
-        "-map",
-        "0:v:0",
-        "-map",
-        "0:a?",
-        "-vf",
-        filter,
-        "-c:v",
-        "libx264",
-        "-c:a",
-        "aac",
-        "-metadata:s:v:0",
-        "rotate=0",
-        "-movflags",
-        "+faststart",
-        outputPath,
-      ], {
-        stdout: "ignore",
-        stderr: "pipe",
-      });
-      const [ffmpegStderr, ffmpegExitCode] = await Promise.all([
-        readDiagnosticTail(normalize.stderr),
-        normalize.exitCode,
-      ]);
+      const ffmpegStartedAt = Date.now();
+      const ffmpegStartedAtIso = new Date(ffmpegStartedAt).toISOString();
+      let normalize;
+      let ffmpegStderrResult = {
+        text: "",
+        closedNormally: false,
+        readError: "not started",
+      };
+      let ffmpegExitCode;
+      try {
+        normalize = await this.ctx.container.exec([
+          "ffmpeg",
+          "-hide_banner",
+          "-loglevel",
+          "error",
+          "-y",
+          "-noautorotate",
+          "-i",
+          inputPath,
+          "-map",
+          "0:v:0",
+          "-map",
+          "0:a?",
+          "-vf",
+          filter,
+          "-c:v",
+          "libx264",
+          "-c:a",
+          "aac",
+          "-metadata:s:v:0",
+          "rotate=0",
+          "-movflags",
+          "+faststart",
+          outputPath,
+        ], {
+          stdout: "ignore",
+          stderr: "pipe",
+        });
+        console.log(
+          `[video-normalize] ffmpeg exec pid=${String(normalize.pid ?? "unknown")} ` +
+          `stdoutPresent=${Boolean(normalize.stdout)} stderrPresent=${Boolean(normalize.stderr)} ` +
+          `startedAt=${ffmpegStartedAtIso}`
+        );
+        [ffmpegStderrResult, ffmpegExitCode] = await Promise.all([
+          readDiagnosticTail(normalize.stderr),
+          normalize.exitCode,
+        ]);
+      } catch (error) {
+        console.error(
+          `[video-normalize] ffmpeg await failed ` +
+          `pid=${String(normalize?.pid ?? "unknown")} ` +
+          `durationMs=${Date.now() - ffmpegStartedAt} ` +
+          `message=${diagnosticMessage(error)}`
+        );
+        throw error;
+      }
+      const ffmpegDurationMs = Date.now() - ffmpegStartedAt;
       const outputSize = await readFileSize(this.ctx.container, outputPath);
+      if (ffmpegStderrResult.readError) {
+        console.error(
+          `[video-normalize] ffmpeg stderr read error ` +
+          `pid=${String(normalize?.pid ?? "unknown")} ` +
+          `message=${ffmpegStderrResult.readError}`
+        );
+      }
       console.log(
-        `[video-normalize] ffmpeg exit=${ffmpegExitCode} ` +
+        `[video-normalize] ffmpeg exit pid=${String(normalize?.pid ?? "unknown")} ` +
+        `exit=${ffmpegExitCode} durationMs=${ffmpegDurationMs} ` +
+        `stderrClosed=${ffmpegStderrResult.closedNormally} ` +
         `outputExists=${outputSize !== null} ` +
         `outputSize=${outputSize === null ? "unknown" : outputSize} ` +
-        `stderrTail=${JSON.stringify(ffmpegStderr)}`
+        `stderrTail=${JSON.stringify(ffmpegStderrResult.text)}`
       );
       if (ffmpegExitCode) throw new Error("Video orientation normalization failed");
 
