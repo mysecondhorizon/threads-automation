@@ -1,6 +1,10 @@
 import {
   Container,
 } from "@cloudflare/containers";
+import {
+  findVideoTkhdMatrix,
+  identityMatrixBytes,
+} from "./mp4-tkhd-matrix.js";
 
 const ALLOWED_ROTATIONS = new Map([
   [90, "transpose=clock"],
@@ -10,6 +14,8 @@ const ALLOWED_ROTATIONS = new Map([
 const MAX_PROBE_OUTPUT_BYTES = 4096;
 const MAX_DIAGNOSTIC_TAIL_BYTES = 4096;
 const MAX_DIAGNOSTIC_MESSAGE_CHARS = 256;
+const HEAD_VIDEO_METADATA_BYTES = 512 * 1024;
+const TAIL_VIDEO_METADATA_BYTES = 2 * 1024 * 1024;
 const TERMINATION_FIELDS = ["signal", "reason", "status", "state"];
 
 function diagnosticMessage(error) {
@@ -128,6 +134,135 @@ async function readFileSize(container, path) {
   ]);
   const size = Number(output.trim());
   return exitCode === 0 && Number.isSafeInteger(size) && size >= 0 ? size : null;
+}
+
+async function readBoundedBytes(stream, maxBytes) {
+  if (!stream) throw new Error("Container file read stream is unavailable");
+  const reader = stream.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = value instanceof Uint8Array ? value : new Uint8Array(value);
+      total += chunk.byteLength;
+      if (total > maxBytes) throw new Error("Container metadata read exceeded its bound");
+      chunks.push(chunk);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+function byteStream(bytes) {
+  return new ReadableStream({
+    type: "bytes",
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    },
+  });
+}
+
+async function readFileRange(container, path, offset, length) {
+  const process = await container.exec([
+    "dd",
+    `if=${path}`,
+    "bs=1",
+    `skip=${offset}`,
+    `count=${length}`,
+    "status=none",
+  ], { stderr: "pipe" });
+  const [bytes, stderr, exitCode] = await Promise.all([
+    readBoundedBytes(process.stdout, length),
+    readDiagnosticTail(process.stderr),
+    process.exitCode,
+  ]);
+  if (exitCode !== 0 || bytes.byteLength !== length) {
+    throw new Error(
+      `Container metadata read failed exit=${String(exitCode)} bytes=${bytes.byteLength} ` +
+      `stderr=${JSON.stringify(stderr.text)}`
+    );
+  }
+  return bytes;
+}
+
+async function writeFileRange(container, path, offset, bytes) {
+  const process = await container.exec([
+    "dd",
+    `of=${path}`,
+    "bs=1",
+    `seek=${offset}`,
+    "conv=notrunc",
+    "status=none",
+  ], {
+    stdin: byteStream(bytes),
+    stdout: "ignore",
+    stderr: "pipe",
+  });
+  const [stderr, exitCode] = await Promise.all([
+    readDiagnosticTail(process.stderr),
+    process.exitCode,
+  ]);
+  if (exitCode !== 0) {
+    throw new Error(
+      `Container metadata write failed exit=${String(exitCode)} stderr=${JSON.stringify(stderr.text)}`
+    );
+  }
+}
+
+async function locateVideoTkhdMatrix(container, path, size) {
+  const headLength = Math.min(HEAD_VIDEO_METADATA_BYTES, size);
+  const head = await readFileRange(container, path, 0, headLength);
+  const headDescriptor = findVideoTkhdMatrix(head);
+  if (headDescriptor) {
+    return { ...headDescriptor, source: "head", fileMatrixOffset: headDescriptor.matrixOffset };
+  }
+  if (size <= headLength) return null;
+  const tailOffset = Math.max(0, size - TAIL_VIDEO_METADATA_BYTES);
+  const tail = await readFileRange(container, path, tailOffset, size - tailOffset);
+  const tailDescriptor = findVideoTkhdMatrix(tail, { tail: true });
+  return tailDescriptor
+    ? {
+        ...tailDescriptor,
+        source: "tail",
+        fileMatrixOffset: tailOffset + tailDescriptor.matrixOffset,
+      }
+    : null;
+}
+
+async function rewriteVideoTkhdMatrixToIdentity(container, path, size) {
+  const before = await locateVideoTkhdMatrix(container, path, size);
+  if (!before || before.rotation === null) {
+    throw new Error("Normalized video tkhd matrix is missing or unsupported");
+  }
+  console.log(
+    `[video-normalize] tkhd patch target track=${before.trackIndex} version=${before.version} ` +
+    `source=${before.source} offset=${before.fileMatrixOffset} matrixBefore=[${before.matrix.join(",")}] ` +
+    `width=${before.width} height=${before.height}`
+  );
+  const identity = identityMatrixBytes();
+  await writeFileRange(container, path, before.fileMatrixOffset, identity);
+  const after = await locateVideoTkhdMatrix(container, path, size);
+  if (!after || after.rotation !== 0) {
+    console.error(
+      `[video-normalize] tkhd patch verification failed rotation=${String(after?.rotation ?? "unknown")} ` +
+      `matrixAfter=[${after?.matrix?.join(",") || "unknown"}]`
+    );
+    throw new Error("Normalized video tkhd matrix is not identity after patch");
+  }
+  console.log(
+    `[video-normalize] tkhd patch complete track=${after.trackIndex} version=${after.version} ` +
+    `matrixAfter=[${after.matrix.join(",")}] verificationRotation=${after.rotation}`
+  );
 }
 
 const MP4_FORMAT_IDENTIFIERS = new Set(["mov", "mp4", "m4a", "3gp", "3g2", "mj2"]);
@@ -294,6 +429,7 @@ export class VideoNormalizerContainer extends Container {
       if (!Number.isSafeInteger(outputSize) || outputSize <= 0) {
         throw new Error("Normalized video output size is invalid");
       }
+      await rewriteVideoTkhdMatrixToIdentity(this.ctx.container, outputPath, outputSize);
 
       const probe = await this.ctx.container.exec([
         "ffprobe",
