@@ -1046,6 +1046,7 @@ export async function generateThreadsDrafts(
     tone =
       "30대 중후반 직장인의 담백하고 현실적인 말투",
     context = null,
+    systemPrompt = THREADS_SYSTEM_PROMPT,
   }
 ) {
   if (
@@ -1093,7 +1094,7 @@ export async function generateThreadsDrafts(
             },
 
             instructions:
-              THREADS_SYSTEM_PROMPT,
+              systemPrompt,
 
             input,
 
@@ -1319,7 +1320,8 @@ export async function generateThreadsDrafts(
 
 export async function generateThreadPost(
   env,
-  context
+  context,
+  { systemPrompt = THREADS_SYSTEM_PROMPT } = {}
 ) {
   const topic =
     context?.publishing
@@ -1338,6 +1340,7 @@ export async function generateThreadPost(
         topic,
         tone,
         context,
+        systemPrompt,
       }
     );
 

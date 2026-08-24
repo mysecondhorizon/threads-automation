@@ -1,0 +1,3 @@
+import assert from "node:assert/strict";
+import { handleOperatorPrompts } from "./api-prompts.js";
+const env={THREADS_KV:{async get(k){return k==='admin_session:session-1'?'valid':null},async put(){}}};const req=(method,body,auth=true)=>new Request('https://x/api/prompts',{method,headers:{...(auth?{cookie:'admin_session=session-1'}:{}),...(body?{'content-type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});assert.equal((await handleOperatorPrompts(req('GET',null,false),env)).status,401);assert.equal((await handleOperatorPrompts(req('PATCH',{}),env)).status,400);console.log('api prompts fixture passed');

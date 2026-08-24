@@ -5,6 +5,7 @@ import {
 } from "../services/current-topic-inventory.js";
 import { generateThreadPost, AiServiceError } from "../services/ai.js";
 import { buildThreadContext } from "../services/thread-context.js";
+import { composeEffectiveThreadsPrompt, getEffectivePromptProfile } from "../services/prompt-profile.js";
 import { fail, ok } from "../utils/response.js";
 
 const FORMATS = new Set(["TEXT", "HTML"]);
@@ -48,6 +49,7 @@ export async function handlePostGenerate(request, env, {
   buildContext = buildThreadContext,
   buildTopicContext = buildCurrentTopicGenerationContext,
   generatePost = generateThreadPost,
+  getProfile = getEffectivePromptProfile,
 } = {}) {
   const unauthorized = await authorize(request, env);
   if (unauthorized) return unauthorized;
@@ -74,7 +76,8 @@ export async function handlePostGenerate(request, env, {
       goal: buildOperatorGenerationGoal(topic, options.format),
     };
     context.currentTopic = currentTopic;
-    const generated = await generatePost(env, context);
+    const effectiveProfile = await getProfile(env);
+    const generated = await generatePost(env, context, { systemPrompt: composeEffectiveThreadsPrompt(effectiveProfile.profile) });
     const body = String(generated?.body || "").trim();
     if (!body) {
       throw new AiServiceError("AI generated an empty draft");
