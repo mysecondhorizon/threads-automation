@@ -100,6 +100,7 @@ import {
 import { handleAppProductsPage } from "./routes/app-products-page.js";
 import { handleOperatorProductAnalyze } from "./routes/api-product-analyze.js";
 import { handleOperatorProductById, handleOperatorProducts } from "./routes/api-products.js";
+import { handleOperatorProductMedia } from "./routes/api-product-media.js";
 
 import {
   handlePostById,
@@ -293,6 +294,10 @@ export default {
 
     if (pathname === "/api/products/analyze") {
       return handleOperatorProductAnalyze(request, env);
+    }
+
+    if (pathname === "/api/products/media") {
+      return handleOperatorProductMedia(request, env);
     }
 
     if (pathname.startsWith("/api/products/")) {
