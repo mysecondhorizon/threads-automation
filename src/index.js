@@ -103,6 +103,7 @@ import { handleOperatorProductById, handleOperatorProducts } from "./routes/api-
 
 import {
   handlePostById,
+  handlePostPublish,
   handlePostsCollection,
 } from "./routes/api-posts.js";
 
@@ -311,6 +312,18 @@ export default {
       }
       try {
         return handleOperatorMediaById(request, env, decodeURIComponent(encodedMediaId));
+      } catch {
+        return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      }
+    }
+
+    if (pathname.startsWith("/api/posts/") && pathname.endsWith("/publish")) {
+      const encodedPostId = pathname.slice("/api/posts/".length, -"/publish".length);
+      if (!encodedPostId || encodedPostId.includes("/")) {
+        return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      }
+      try {
+        return handlePostPublish(request, env, decodeURIComponent(encodedPostId));
       } catch {
         return Response.json({ ok: false, error: "Not found" }, { status: 404 });
       }

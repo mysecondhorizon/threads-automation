@@ -36,11 +36,19 @@ export function getPostDeleteRequest(postId) {
   };
 }
 
+export function getPostPublishRequest(postId) {
+  return {
+    url: `/api/posts/${encodeURIComponent(postId)}/publish`,
+    method: "POST",
+  };
+}
+
 export function buildWritePageClientScript() {
   return `
     const getPostSaveRequest = ${getPostSaveRequest.toString()};
     const getPostStatusRequest = ${getPostStatusRequest.toString()};
     const getPostDeleteRequest = ${getPostDeleteRequest.toString()};
+    const getPostPublishRequest = ${getPostPublishRequest.toString()};
 
     (() => {
       const form = document.querySelector("#post-editor");
@@ -65,6 +73,7 @@ export function buildWritePageClientScript() {
       let selectedTopicId = null;
       let busy = false;
       let generating = false;
+      let publishingPostId = null;
 
       function setFeedback(message, tone = "") {
         feedback.textContent = message || "";
@@ -168,6 +177,12 @@ export function buildWritePageClientScript() {
           preview.className = "app-write-preview";
           preview.textContent = String(post.body || "").replace(/\\s+/g, " ").slice(0, 220);
           card.append(heading, metadata, preview);
+          if (post.status === "PUBLISHED") {
+            const published = document.createElement("p");
+            published.className = "app-write-meta";
+            published.textContent = "게시 완료" + (post.publishedAt ? " · " + formatUpdatedAt(post.publishedAt) : "");
+            card.append(published);
+          }
           if (post.status !== "PUBLISHED") {
             const actions = document.createElement("div");
             actions.className = "app-write-actions";
@@ -211,6 +226,27 @@ export function buildWritePageClientScript() {
                 }
               })
             );
+            if (post.status === "READY") {
+              const publishButton = makeButton("게시", "publish", async () => {
+                if (publishingPostId || !window.confirm("이 글을 Threads에 게시할까요?")) return;
+                publishingPostId = post.id;
+                publishButton.disabled = true;
+                publishButton.textContent = "게시 중...";
+                try {
+                  const descriptor = getPostPublishRequest(post.id);
+                  await requestApi(descriptor.url, requestOptions(descriptor));
+                  setFeedback("Threads에 게시했습니다.", "success");
+                  await loadPosts();
+                } catch (error) {
+                  setFeedback(error.message, "error");
+                } finally {
+                  publishingPostId = null;
+                  publishButton.disabled = false;
+                  publishButton.textContent = "게시";
+                }
+              });
+              actions.append(publishButton);
+            }
             card.append(actions);
           }
           list.append(card);

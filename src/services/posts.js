@@ -239,6 +239,12 @@ export async function updatePost(env, postId, input, { now = new Date().toISOStr
   if (index < 0) return null;
 
   const existing = store.records[index];
+  if (existing.status === "PUBLISHED") {
+    throw new PostsError("Published posts cannot be changed", {
+      code: "published_post_update_forbidden",
+      status: 400,
+    });
+  }
   const updated = {
     ...existing,
     ...(Object.hasOwn(input, "title") ? { title: normalizeOptionalTitle(input.title) } : {}),
@@ -254,6 +260,36 @@ export async function updatePost(env, postId, input, { now = new Date().toISOStr
   records[index] = updated;
   await writeStore(env, records, now);
   return updated;
+}
+
+// This transition is separate from ordinary CRUD. Only the publishing path
+// may set server-managed publication fields.
+export async function markPostPublished(env, postId, publishedPostId, { now = new Date().toISOString() } = {}) {
+  if (typeof postId !== "string" || !postId.trim()) invalid("postId is required");
+  if (typeof publishedPostId !== "string" || !publishedPostId.trim()) {
+    throw new PostsError("Published post id is required", { code: "invalid_published_post_id" });
+  }
+  const store = await readStore(env);
+  const index = store.records.findIndex((post) => post.id === postId);
+  if (index < 0) return null;
+  const existing = store.records[index];
+  if (existing.status !== "READY") {
+    throw new PostsError("Only READY posts can be published", {
+      code: "post_not_ready_for_publish",
+      status: 409,
+    });
+  }
+  const published = {
+    ...existing,
+    status: "PUBLISHED",
+    publishedAt: now,
+    publishedPostId: publishedPostId.trim(),
+    updatedAt: now,
+  };
+  const records = [...store.records];
+  records[index] = published;
+  await writeStore(env, records, now);
+  return published;
 }
 
 export async function deletePost(env, postId, { now = new Date().toISOString() } = {}) {

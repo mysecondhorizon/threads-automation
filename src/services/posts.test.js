@@ -6,6 +6,7 @@ import {
   deletePost,
   getPost,
   listPosts,
+  markPostPublished,
   updatePost,
 } from "./posts.js";
 
@@ -65,6 +66,21 @@ assert.equal(updated.createdAt, "2026-08-01T00:00:00.000Z");
 assert.equal(updated.updatedAt, "2026-08-03T00:00:00.000Z");
 assert.equal((await listPosts(env))[0].id, "post-1");
 
+const published = await markPostPublished(env, "post-1", "threads-post-1", {
+  now: "2026-08-03T01:00:00.000Z",
+});
+assert.equal(published.status, "PUBLISHED");
+assert.equal(published.publishedPostId, "threads-post-1");
+assert.equal(published.publishedAt, "2026-08-03T01:00:00.000Z");
+await assert.rejects(
+  markPostPublished(env, "post-1", "threads-post-2"),
+  (error) => error instanceof PostsError && error.code === "post_not_ready_for_publish"
+);
+await assert.rejects(
+  updatePost(env, "post-1", { status: "DRAFT" }),
+  (error) => error instanceof PostsError && error.code === "published_post_update_forbidden"
+);
+
 await assert.rejects(
   createPost(env, { body: "   " }),
   (error) => error instanceof PostsError && error.code === "invalid_post"
@@ -92,6 +108,7 @@ await assert.rejects(
   (error) => error instanceof PostsError && error.code === "published_post_delete_forbidden"
 );
 
-assert.equal(await deletePost(env, "post-1", { now: "2026-08-05T00:00:00.000Z" }), true);
-assert.equal(await getPost(env, "post-1"), null);
+const deletable = await createPost(env, { body: "deletable" }, { idFactory: () => "post-3" });
+assert.equal(await deletePost(env, deletable.id, { now: "2026-08-05T00:00:00.000Z" }), true);
+assert.equal(await getPost(env, deletable.id), null);
 console.log("posts service fixture passed");

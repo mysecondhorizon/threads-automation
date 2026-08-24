@@ -3,6 +3,7 @@ import {
   getPostDeleteRequest,
   getPostSaveRequest,
   getPostStatusRequest,
+  getPostPublishRequest,
 } from "./app-write-client.js";
 import { handleAppWritePage } from "./app-write-page.js";
 
@@ -30,6 +31,11 @@ assert.match(page, /id="saved-post-list"/u);
 assert.match(page, /id="topic-refresh"/u);
 assert.match(page, /id="topic-list"/u);
 assert.match(page, /id="topic-generate"/u);
+assert.match(page, /getPostPublishRequest/u);
+assert.match(page, /Threads에 게시했습니다\./u);
+assert.match(page, /이 글을 Threads에 게시할까요\?/u);
+assert.match(page, /post\.status === "READY"/u);
+assert.match(page, /post\.status === "PUBLISHED"/u);
 assert.match(page, /textContent = String\(post\.body/u);
 assert.match(page, /editingId = post\.id/u);
 assert.match(page, /bodyInput\.value = post\.body/u);
@@ -85,6 +91,10 @@ assert.deepEqual(getPostStatusRequest("post-1", "READY"), {
 assert.deepEqual(getPostDeleteRequest("post-1"), {
   url: "/api/posts/post-1",
   method: "DELETE",
+});
+assert.deepEqual(getPostPublishRequest("post-1"), {
+  url: "/api/posts/post-1/publish",
+  method: "POST",
 });
 
 const unauthenticated = await handleAppWritePage(new Request("https://example.test/app/write"), createEnv());

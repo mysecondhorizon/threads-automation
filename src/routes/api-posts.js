@@ -5,16 +5,89 @@ import {
   deletePost,
   getPost,
   listPosts,
+  markPostPublished,
   updatePost,
 } from "../services/posts.js";
+import { OperatorPublishError, publishOperatorPost } from "../services/publish-service.js";
+import { deleteKey, getJson, putJson } from "../services/kv.js";
 import { fail, ok } from "../utils/response.js";
 
 function apiError(error) {
   if (error instanceof PostsError) {
     return fail(error.message, error.status, { code: error.code });
   }
+  if (error instanceof OperatorPublishError) {
+    return fail(error.message, error.status, { code: error.code });
+  }
   console.error(error);
   return fail("Posts API Error", 400);
+}
+
+const activeOperatorPublishes = new Set();
+const OPERATOR_POST_PUBLISH_LOCK_PREFIX = "operator_post_publish_lock:";
+const OPERATOR_POST_PUBLISH_LOCK_TTL_SECONDS = 300;
+
+function getPublishLockKey(postId) {
+  return `${OPERATOR_POST_PUBLISH_LOCK_PREFIX}${encodeURIComponent(postId)}`;
+}
+
+async function acquirePublishLock(env, postId) {
+  const key = getPublishLockKey(postId);
+  if (await getJson(env, key)) return null;
+  const token = crypto.randomUUID();
+  await putJson(env, key, { token }, { expirationTtl: OPERATOR_POST_PUBLISH_LOCK_TTL_SECONDS });
+  const stored = await getJson(env, key);
+  return stored?.token === token ? { key, token } : null;
+}
+
+async function releasePublishLock(env, lock) {
+  if (!lock) return;
+  const stored = await getJson(env, lock.key);
+  if (stored?.token === lock.token) await deleteKey(env, lock.key);
+}
+
+export async function handlePostPublish(request, env, postId, { publish = publishOperatorPost } = {}) {
+  const unauthorized = await authorize(request, env);
+  if (unauthorized) return unauthorized;
+  if (request.method !== "POST") return fail("Method Not Allowed", 405);
+  if (activeOperatorPublishes.has(postId)) {
+    return fail("This post is already being published", 409, { code: "post_publish_in_progress" });
+  }
+
+  activeOperatorPublishes.add(postId);
+  let lock = null;
+  try {
+    lock = await acquirePublishLock(env, postId);
+    if (!lock) {
+      return fail("This post is already being published", 409, { code: "post_publish_in_progress" });
+    }
+    const post = await getPost(env, postId);
+    if (!post) return fail("Post not found", 404, { code: "post_not_found" });
+    // Recheck immediately before the side effect. The publish service repeats
+    // format/content checks, while this route owns the state boundary.
+    if (post.status !== "READY") {
+      throw new PostsError("Only READY posts can be published", {
+        code: "post_not_ready_for_publish",
+        status: 409,
+      });
+    }
+    const published = await publish({ env, post });
+    const updatedPost = await markPostPublished(env, postId, published.postId);
+    if (!updatedPost) return fail("Post not found", 404, { code: "post_not_found" });
+    return ok({
+      post: updatedPost,
+      published: { app: published.app, postId: published.postId },
+    });
+  } catch (error) {
+    return apiError(error);
+  } finally {
+    try {
+      await releasePublishLock(env, lock);
+    } catch (error) {
+      console.warn("Operator post publish lock release failed", { postId });
+    }
+    activeOperatorPublishes.delete(postId);
+  }
 }
 
 async function authorize(request, env) {
