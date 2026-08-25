@@ -1,3 +1,4 @@
+import { DurableObject } from "cloudflare:workers";
 import { runRuntimeSchedule } from "../services/runtime-schedule-dispatcher.js";
 
 export const RUNTIME_SCHEDULER_EXECUTION_ENABLED = false;
@@ -133,20 +134,19 @@ function publicSchedule(schedule, lastRun, now) {
   };
 }
 
-export class ScheduleCoordinator {
+export class ScheduleCoordinator extends DurableObject {
   constructor(ctx, env) {
-    this.ctx = ctx;
-    this.env = env;
+    super(ctx, env);
   }
 
   async ensureSeeded() {
     if (await this.ctx.storage.get(SEEDED_KEY)) return;
     const timestamp = nowIso();
-    const entries = new Map(DEFAULT_SCHEDULES.map(([id, name, type, time]) => [
+    const entries = Object.fromEntries(DEFAULT_SCHEDULES.map(([id, name, type, time]) => [
       scheduleKey(id),
       { id, name, type, enabled: false, timezone: RUNTIME_SCHEDULE_TIME_ZONE, cadence: { kind: "daily", time }, createdAt: timestamp, updatedAt: timestamp },
     ]));
-    entries.set(SEEDED_KEY, { seededAt: timestamp });
+    entries[SEEDED_KEY] = { seededAt: timestamp };
     await this.ctx.storage.put(entries);
   }
 

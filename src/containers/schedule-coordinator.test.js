@@ -1,15 +1,37 @@
 import assert from "node:assert/strict";
-import {
+import { readFile } from "node:fs/promises";
+const sourceUrl = new URL("./schedule-coordinator.js", import.meta.url);
+const source = await readFile(sourceUrl, "utf8");
+assert.match(source, /import\s*\{\s*DurableObject\s*\}\s*from\s*["']cloudflare:workers["']/u);
+assert.match(source, /class\s+ScheduleCoordinator\s+extends\s+DurableObject/u);
+assert.match(source, /constructor\(ctx, env\)\s*\{\s*super\(ctx, env\);/u);
+
+// Node cannot load the Workers-only cloudflare:workers module. For this
+// fixture, execute the exact coordinator source with only platform imports
+// replaced by minimal contract-compatible stand-ins.
+const testableSource = source
+  .replace('import { DurableObject } from "cloudflare:workers";', 'class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }')
+  .replace('import { runRuntimeSchedule } from "../services/runtime-schedule-dispatcher.js";', 'const runRuntimeSchedule = async () => ({ ok: true });');
+const {
   ScheduleCoordinator,
   getNextRunAt,
   getMostRecentScheduledFor,
   RUNTIME_SCHEDULER_EXECUTION_ENABLED,
-} from "./schedule-coordinator.js";
+} = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(testableSource)}`);
 
 class Storage {
   constructor() { this.values = new Map(); this.alarm = null; }
   async get(key) { return this.values.get(key); }
-  async put(key, value) { if (key instanceof Map) for (const [entryKey, entryValue] of key) this.values.set(entryKey, entryValue); else this.values.set(key, value); }
+  async put(key, value) {
+    if (typeof key === "string") {
+      this.values.set(key, value);
+      return;
+    }
+    if (!key || typeof key !== "object" || Array.isArray(key) || key instanceof Map) {
+      throw new TypeError("Durable Object multi-put requires a plain object record");
+    }
+    for (const [entryKey, entryValue] of Object.entries(key)) this.values.set(entryKey, entryValue);
+  }
   async list({ prefix }) { return new Map([...this.values].filter(([key]) => key.startsWith(prefix))); }
   async setAlarm(value) { this.alarm = value; }
   async deleteAlarm() { this.alarm = null; }
