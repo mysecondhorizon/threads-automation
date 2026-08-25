@@ -9,12 +9,14 @@ export function getRuntimeScheduleOperation(type) {
   return OPERATION_BY_TYPE[type] || null;
 }
 
-export async function runRuntimeSchedule({ env, schedule, scheduledFor }) {
+export async function runRuntimeSchedule({ env, schedule, scheduledFor, run = runScheduledAutoPost }) {
   const operation = getRuntimeScheduleOperation(schedule?.type);
   if (!operation) throw new Error("Unsupported runtime schedule type");
 
-  return runScheduledAutoPost(env, {
+  return run(env, {
     operation,
     scheduledTime: new Date(scheduledFor),
+    source: "runtime_scheduler",
+    scheduleId: schedule.id,
   });
 }

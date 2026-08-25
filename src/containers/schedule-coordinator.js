@@ -1,7 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
 import { runRuntimeSchedule } from "../services/runtime-schedule-dispatcher.js";
+import { isRuntimeSchedulerActive } from "../services/scheduler-ownership.js";
 
-export const RUNTIME_SCHEDULER_EXECUTION_ENABLED = false;
+export const RUNTIME_SCHEDULER_EXECUTION_ENABLED = isRuntimeSchedulerActive();
 export const RUNTIME_SCHEDULE_TIME_ZONE = "Asia/Seoul";
 export const RUNTIME_SCHEDULE_GRACE_MS = 15 * 60 * 1000;
 
@@ -215,6 +216,7 @@ export class ScheduleCoordinator extends DurableObject {
   }
 
   async processDueSchedule(schedule, scheduledFor, now) {
+    if (!schedule?.enabled) return null;
     const key = slotKey(schedule.id, scheduledFor);
     const existing = await this.ctx.storage.get(key);
     if (existing) return existing;

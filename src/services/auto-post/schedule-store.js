@@ -143,6 +143,7 @@ export async function saveScheduleRun(
       createScheduleRunId(),
 
     source:
+      input?.source ||
       "cron",
 
     operation:
@@ -151,6 +152,10 @@ export async function saveScheduleRun(
 
     cron:
       input?.cron ||
+      null,
+
+    scheduleId:
+      input?.scheduleId ||
       null,
 
     scheduledTime:

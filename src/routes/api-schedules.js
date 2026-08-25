@@ -1,7 +1,7 @@
 import { requireAdminApiSession } from "../middleware/auth.js";
 import { createRuntimeSchedule, listRuntimeSchedules, updateRuntimeSchedule } from "../services/runtime-schedules.js";
 import { getScheduleRuns } from "../services/auto-post/schedule-store.js";
-import { SCHEDULER_MODE, enrichScheduleOperations, getNextActualProductionRun, normalizeScheduleHistory } from "../services/schedule-operations.js";
+import { SCHEDULER_MODE, enrichScheduleOperations, getNextActualProductionRun, getProductionScheduleReadiness, normalizeScheduleHistory } from "../services/schedule-operations.js";
 import { fail, ok } from "../utils/response.js";
 
 async function authorize(request, env) {
@@ -41,8 +41,9 @@ export async function handleSchedulesCollection(request, env, {
       return ok({
         ...runtime,
         schedulerMode: SCHEDULER_MODE,
-        runtimeExecutionEnabled: false,
-        nextActualProductionRun: getNextActualProductionRun(timestamp),
+        runtimeExecutionEnabled: runtime?.runtimeExecutionEnabled === true,
+        nextActualProductionRun: getNextActualProductionRun(runtime?.schedules, timestamp),
+        scheduleReadiness: getProductionScheduleReadiness(runtime?.schedules),
         schedules: enrichScheduleOperations(runtime?.schedules, runs, timestamp),
         history: normalizeScheduleHistory(runs),
       });

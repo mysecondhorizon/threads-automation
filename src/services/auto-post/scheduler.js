@@ -305,6 +305,8 @@ export async function runScheduledAutoPost(
     cron = null,
     scheduledTime = null,
     operation: requestedOperation = null,
+    source = "cron",
+    scheduleId = null,
     services = {},
   } = {}
 ) {
@@ -358,6 +360,8 @@ export async function runScheduledAutoPost(
         env,
         {
           operation,
+          source,
+          scheduleId,
           cron,
           scheduledTime,
           startedAt,
@@ -499,6 +503,9 @@ export async function runScheduledAutoPost(
       {
         operation,
 
+        source,
+        scheduleId,
+
         cron,
 
         scheduledTime,
@@ -634,6 +641,8 @@ export async function runScheduledAutoPost(
         env,
         {
           operation,
+          source,
+          scheduleId,
 
           cron,
 
@@ -720,7 +729,9 @@ export async function runScheduledAutoPost(
     await safeSaveScheduleRun(
       env,
       {
-        operation,
+          operation,
+          source,
+          scheduleId,
 
         cron,
 

@@ -162,9 +162,7 @@ import {
   handleCronAutoGeneralDiagnostic,
 } from "./routes/cron-auto-general-diagnostic.js";
 
-import {
-  runScheduledAutoPost,
-} from "./services/auto-post/scheduler.js";
+import { handleLegacyScheduledExecution } from "./services/legacy-scheduled-execution.js";
 
 export {
   VideoNormalizerContainer,
@@ -719,16 +717,7 @@ export default {
     ctx
   ) {
     ctx.waitUntil(
-      runScheduledAutoPost(
-        env,
-        {
-          cron:
-            controller.cron,
-
-          scheduledTime:
-            controller.scheduledTime,
-        }
-      )
+      handleLegacyScheduledExecution(env, controller)
     );
   },
 };
