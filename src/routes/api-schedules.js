@@ -1,5 +1,7 @@
 import { requireAdminApiSession } from "../middleware/auth.js";
 import { createRuntimeSchedule, listRuntimeSchedules, updateRuntimeSchedule } from "../services/runtime-schedules.js";
+import { getScheduleRuns } from "../services/auto-post/schedule-store.js";
+import { SCHEDULER_MODE, enrichScheduleOperations, getNextActualProductionRun, normalizeScheduleHistory } from "../services/schedule-operations.js";
 import { fail, ok } from "../utils/response.js";
 
 async function authorize(request, env) {
@@ -27,11 +29,24 @@ function coordinatorError(error, fallback) {
 export async function handleSchedulesCollection(request, env, {
   list = listRuntimeSchedules,
   create = createRuntimeSchedule,
+  history = getScheduleRuns,
+  now = () => Date.now(),
 } = {}) {
   const unauthorized = await authorize(request, env);
   if (unauthorized) return unauthorized;
   try {
-    if (request.method === "GET") return ok(await list(env));
+    if (request.method === "GET") {
+      const [runtime, runs] = await Promise.all([list(env), history(env)]);
+      const timestamp = now();
+      return ok({
+        ...runtime,
+        schedulerMode: SCHEDULER_MODE,
+        runtimeExecutionEnabled: false,
+        nextActualProductionRun: getNextActualProductionRun(timestamp),
+        schedules: enrichScheduleOperations(runtime?.schedules, runs, timestamp),
+        history: normalizeScheduleHistory(runs),
+      });
+    }
     if (request.method === "POST") return ok({ schedule: await create(env, await json(request)) }, 201);
     return fail("Method Not Allowed", 405);
   } catch (error) {
