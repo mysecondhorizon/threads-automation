@@ -90,6 +90,15 @@ import {
 } from "./routes/app-shell.js";
 
 import {
+  handleAppSchedulesPage,
+} from "./routes/app-schedules-page.js";
+
+import {
+  handleScheduleById,
+  handleSchedulesCollection,
+} from "./routes/api-schedules.js";
+
+import {
   handleAppWritePage,
 } from "./routes/app-write-page.js";
 
@@ -160,6 +169,10 @@ import {
 export {
   VideoNormalizerContainer,
 } from "./containers/video-normalizer.js";
+
+export {
+  ScheduleCoordinator,
+} from "./containers/schedule-coordinator.js";
 
 export default {
   async fetch(
@@ -256,14 +269,24 @@ export default {
     }
     if (pathname === "/app/prompts" && method === "GET") return handleAppPromptsPage(request, env);
 
-    if (
-      [
-        "/app/schedules",
-        "/app/apps",
-      ].includes(pathname) &&
-      method === "GET"
-    ) {
+    if (pathname === "/app/schedules" && method === "GET") {
+      return handleAppSchedulesPage(request, env);
+    }
+
+    if (["/app/apps"].includes(pathname) && method === "GET") {
       return handleAppPlaceholderPage(request, env, pathname);
+    }
+
+    if (pathname === "/api/schedules") {
+      return handleSchedulesCollection(request, env);
+    }
+
+    if (pathname.startsWith("/api/schedules/")) {
+      const scheduleId = pathname.slice("/api/schedules/".length);
+      if (!scheduleId || scheduleId.includes("/")) {
+        return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      }
+      return handleScheduleById(request, env, decodeURIComponent(scheduleId));
     }
 
     if (pathname === "/api/posts") {

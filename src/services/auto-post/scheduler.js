@@ -304,10 +304,12 @@ export async function runScheduledAutoPost(
   {
     cron = null,
     scheduledTime = null,
+    operation: requestedOperation = null,
     services = {},
   } = {}
 ) {
   const operation =
+    requestedOperation ||
     getScheduledOperation(cron);
 
   const generateProductReview =

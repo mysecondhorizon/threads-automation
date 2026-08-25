@@ -28,6 +28,10 @@
       {
         "name": "VIDEO_NORMALIZER",
         "class_name": "VideoNormalizerContainer"
+      },
+      {
+        "name": "SCHEDULE_COORDINATOR",
+        "class_name": "ScheduleCoordinator"
       }
     ]
   },
@@ -36,6 +40,12 @@
       "tag": "v1",
       "new_sqlite_classes": [
         "VideoNormalizerContainer"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "ScheduleCoordinator"
       ]
     }
   ],
