@@ -92,12 +92,14 @@ export function enrichScheduleOperations(schedules, history, now = Date.now(), m
     const matchingRun = runtimeActive
       ? safeHistory.find((run) => run?.source === "runtime_scheduler" && run?.scheduleId === schedule.id)
       : safeHistory.find((run) => run?.cron === legacySchedule?.cron);
-    const actuallyOperating = runtimeActive ? schedule.enabled === true : Boolean(legacySchedule);
+    const actuallyOperating = runtimeActive && schedule.enabled === true;
     return {
       ...schedule,
       runtimeNextRunAt: schedule.nextRunAt || null,
-      actualProductionNextRunAt: actuallyOperating && validRuntimeSchedule(schedule) ? getActualProductionNextRunAt(schedule.cadence.time, now) : null,
-      actualProductionStatus: actuallyOperating ? "CURRENTLY_OPERATING" : (runtimeActive ? "STOPPED" : "RUNTIME_PREPARING"),
+      actualProductionNextRunAt: runtimeActive
+        ? (actuallyOperating && validRuntimeSchedule(schedule) ? getActualProductionNextRunAt(schedule.cadence.time, now) : null)
+        : (legacySchedule ? getActualProductionNextRunAt(legacySchedule.time, now) : null),
+      actualProductionStatus: runtimeActive ? (actuallyOperating ? "CURRENTLY_OPERATING" : "STOPPED") : "RUNTIME_PREPARING",
       actualProductionLastRun: matchingRun ? normalizeScheduleHistory([matchingRun])[0] : null,
     };
   });

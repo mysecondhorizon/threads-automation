@@ -7,7 +7,7 @@ assert.match(source, /constructor\(ctx, env\)\s*\{\s*super\(ctx, env\);/u);
 const testableSource = source
   .replace('import { DurableObject } from "cloudflare:workers";', 'class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }')
   .replace('import { runRuntimeSchedule } from "../services/runtime-schedule-dispatcher.js";', 'const runtimeCalls = []; const runRuntimeSchedule = async (input) => { runtimeCalls.push(input); return { ok: true }; };')
-  .replace('import { isRuntimeSchedulerActive } from "../services/scheduler-ownership.js";', 'const isRuntimeSchedulerActive = () => true;')
+  .replace('import { isRuntimeSchedulerActive } from "../services/scheduler-ownership.js";', 'const isRuntimeSchedulerActive = () => false;')
   .concat('\nexport { runtimeCalls };');
 const { ScheduleCoordinator, getNextRunAt, getMostRecentScheduledFor, RUNTIME_SCHEDULER_EXECUTION_ENABLED, runtimeCalls } = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(testableSource)}`);
 
@@ -28,25 +28,25 @@ assert.equal(getMostRecentScheduledFor(enabled0810, fixedNow), Date.parse("2026-
 const storage = new Storage();
 const coordinator = new ScheduleCoordinator({ storage }, {});
 assert.equal((await coordinator.listSchedules()).schedules.length, 5);
-assert.equal(RUNTIME_SCHEDULER_EXECUTION_ENABLED, true);
+assert.equal(RUNTIME_SCHEDULER_EXECUTION_ENABLED, false);
 
 const due = { id: "due", name: "due", type: "GENERAL_AUTO", enabled: true, cadence: { kind: "daily", time: "09:00" } };
-const successful = await coordinator.processDueSchedule(due, fixedNow, fixedNow);
-assert.equal(successful.status, "SUCCESS");
-assert.equal(runtimeCalls.length, 1);
-assert.equal(runtimeCalls[0].schedule.type, "GENERAL_AUTO");
-assert.equal((await coordinator.processDueSchedule(due, fixedNow, fixedNow)).status, "SUCCESS");
-assert.equal(runtimeCalls.length, 1);
+const suppressed = await coordinator.processDueSchedule(due, fixedNow, fixedNow);
+assert.equal(suppressed.status, "SUPPRESSED");
+assert.equal((await coordinator.processDueSchedule(due, fixedNow, fixedNow)).status, "SUPPRESSED");
+assert.equal(runtimeCalls.length, 0);
 await storage.put(`slot:uncertain:${fixedNow}`, { scheduleId: "uncertain", scheduledFor: fixedNow, status: "UNCERTAIN" });
 assert.equal((await coordinator.processDueSchedule({ ...due, id: "uncertain" }, fixedNow, fixedNow)).status, "UNCERTAIN");
 assert.equal((await coordinator.processDueSchedule({ ...due, id: "missed" }, fixedNow - (16 * 60 * 1000), fixedNow)).status, "MISSED");
-assert.equal(runtimeCalls.length, 1);
+assert.equal(runtimeCalls.length, 0);
 
 await storage.put(`slot:prior-suppressed:${fixedNow}`, { scheduleId: "prior-suppressed", scheduledFor: fixedNow, status: "SUPPRESSED" });
 assert.equal((await coordinator.processDueSchedule({ ...due, id: "prior-suppressed" }, fixedNow, fixedNow)).status, "SUPPRESSED");
 const future = fixedNow + (24 * 60 * 60 * 1000);
-assert.equal((await coordinator.processDueSchedule({ ...due, id: "prior-suppressed" }, future, future)).status, "SUCCESS");
-assert.equal(runtimeCalls.length, 2);
+assert.equal((await coordinator.processDueSchedule({ ...due, id: "prior-suppressed" }, future, future)).status, "SUPPRESSED");
+assert.equal(runtimeCalls.length, 0);
 assert.equal(await coordinator.processDueSchedule({ ...due, id: "disabled", enabled: false }, fixedNow, fixedNow), null);
-assert.equal(runtimeCalls.length, 2);
+const configured = await coordinator.createSchedule({ name: "보존 일정", type: "GENERAL_AUTO", cadence: { kind: "daily", time: "09:30" }, enabled: true });
+assert.equal((await coordinator.listSchedules()).schedules.find((schedule) => schedule.id === configured.id)?.enabled, true);
+assert.equal(runtimeCalls.length, 0);
 console.log("schedule coordinator fixture passed");
