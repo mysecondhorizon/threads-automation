@@ -12,12 +12,13 @@ const testableSource = source
 const { ScheduleCoordinator, getNextRunAt, getMostRecentScheduledFor, RUNTIME_SCHEDULER_EXECUTION_ENABLED, runtimeCalls } = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(testableSource)}`);
 
 class Storage {
-  constructor() { this.values = new Map(); this.alarm = null; }
+  constructor() { this.values = new Map(); this.alarm = null; this.setAlarmCalls = []; this.deleteAlarmCalls = 0; }
   async get(key) { return this.values.get(key); }
   async put(key, value) { if (typeof key === "string") { this.values.set(key, value); return; } for (const [entryKey, entryValue] of Object.entries(key)) this.values.set(entryKey, entryValue); }
   async list({ prefix }) { return new Map([...this.values].filter(([key]) => key.startsWith(prefix))); }
-  async setAlarm(value) { this.alarm = value; }
-  async deleteAlarm() { this.alarm = null; }
+  async getAlarm() { return this.alarm; }
+  async setAlarm(value) { this.alarm = value; this.setAlarmCalls.push(value); }
+  async deleteAlarm() { this.alarm = null; this.deleteAlarmCalls += 1; }
 }
 
 const fixedNow = Date.parse("2026-08-24T00:00:00.000Z");
@@ -27,26 +28,70 @@ assert.equal(getMostRecentScheduledFor(enabled0810, fixedNow), Date.parse("2026-
 
 const storage = new Storage();
 const coordinator = new ScheduleCoordinator({ storage }, {});
-assert.equal((await coordinator.listSchedules()).schedules.length, 5);
+const seeded = await coordinator.listSchedules();
+assert.equal(seeded.schedules.length, 5);
+assert.equal(seeded.schedules.every((schedule) => schedule.enabled === false), true);
 assert.equal(RUNTIME_SCHEDULER_EXECUTION_ENABLED, false);
 
-const due = { id: "due", name: "due", type: "GENERAL_AUTO", enabled: true, cadence: { kind: "daily", time: "09:00" } };
-const suppressed = await coordinator.processDueSchedule(due, fixedNow, fixedNow);
-assert.equal(suppressed.status, "SUPPRESSED");
-assert.equal((await coordinator.processDueSchedule(due, fixedNow, fixedNow)).status, "SUPPRESSED");
-assert.equal(runtimeCalls.length, 0);
-await storage.put(`slot:uncertain:${fixedNow}`, { scheduleId: "uncertain", scheduledFor: fixedNow, status: "UNCERTAIN" });
-assert.equal((await coordinator.processDueSchedule({ ...due, id: "uncertain" }, fixedNow, fixedNow)).status, "UNCERTAIN");
-assert.equal((await coordinator.processDueSchedule({ ...due, id: "missed" }, fixedNow - (16 * 60 * 1000), fixedNow)).status, "MISSED");
-assert.equal(runtimeCalls.length, 0);
+const originalDateNow = Date.now;
+Date.now = () => fixedNow;
+try {
+  const scheduleId = seeded.schedules[0].id;
+  const enabled = await coordinator.updateSchedule(scheduleId, { enabled: true, cadence: { time: "09:00" } });
+  const expectedAlarm = Date.parse(enabled.nextRunAt);
+  assert.equal(storage.alarm, expectedAlarm);
+  assert.equal(storage.setAlarmCalls.at(-1), expectedAlarm);
 
-await storage.put(`slot:prior-suppressed:${fixedNow}`, { scheduleId: "prior-suppressed", scheduledFor: fixedNow, status: "SUPPRESSED" });
-assert.equal((await coordinator.processDueSchedule({ ...due, id: "prior-suppressed" }, fixedNow, fixedNow)).status, "SUPPRESSED");
-const future = fixedNow + (24 * 60 * 60 * 1000);
-assert.equal((await coordinator.processDueSchedule({ ...due, id: "prior-suppressed" }, future, future)).status, "SUPPRESSED");
-assert.equal(runtimeCalls.length, 0);
-assert.equal(await coordinator.processDueSchedule({ ...due, id: "disabled", enabled: false }, fixedNow, fixedNow), null);
-const configured = await coordinator.createSchedule({ name: "보존 일정", type: "GENERAL_AUTO", cadence: { kind: "daily", time: "09:30" }, enabled: true });
-assert.equal((await coordinator.listSchedules()).schedules.find((schedule) => schedule.id === configured.id)?.enabled, true);
+  const initialStatus = await coordinator.getCoordinatorStatus();
+  assert.equal(initialStatus.alarmScheduled, true);
+  assert.equal(initialStatus.alarmAt, enabled.nextRunAt);
+  assert.equal(initialStatus.earliestEnabledNextRunAt, enabled.nextRunAt);
+  assert.equal(initialStatus.enabledScheduleCount, 1);
+  assert.equal(initialStatus.lastReceipt, null);
+
+  storage.alarm = null;
+  storage.setAlarmCalls.length = 0;
+  const missing = await coordinator.reconcileAlarm();
+  assert.equal(missing.reconciled, true);
+  assert.equal(missing.before.alarmScheduled, false);
+  assert.equal(missing.after.alarmAt, enabled.nextRunAt);
+  assert.deepEqual(storage.setAlarmCalls, [expectedAlarm]);
+
+  storage.alarm = expectedAlarm + 60_000;
+  storage.setAlarmCalls.length = 0;
+  const wrong = await coordinator.reconcileAlarm();
+  assert.equal(wrong.reconciled, true);
+  assert.deepEqual(storage.setAlarmCalls, [expectedAlarm]);
+
+  storage.alarm = expectedAlarm;
+  storage.setAlarmCalls.length = 0;
+  const correct = await coordinator.reconcileAlarm();
+  assert.equal(correct.reconciled, false);
+  assert.deepEqual(storage.setAlarmCalls, []);
+
+  storage.alarm = fixedNow;
+  await coordinator.alarm();
+  assert.equal(runtimeCalls.length, 0);
+  assert.equal(storage.alarm, expectedAlarm);
+  const afterAlarm = await coordinator.listSchedules();
+  const receipt = afterAlarm.schedules.find((schedule) => schedule.id === scheduleId).runtimeLastReceipt;
+  assert.equal(receipt.status, "SUPPRESSED");
+  assert.equal(receipt.scheduledFor, new Date(fixedNow).toISOString());
+  assert.equal(afterAlarm.schedules.find((schedule) => schedule.id === scheduleId).enabled, true);
+  const statusWithReceipt = await coordinator.getCoordinatorStatus();
+  assert.equal(statusWithReceipt.lastReceipt.scheduleId, scheduleId);
+  assert.equal(statusWithReceipt.lastReceipt.status, "SUPPRESSED");
+
+  await coordinator.updateSchedule(scheduleId, { enabled: false });
+  storage.alarm = expectedAlarm;
+  const deleteCallsBefore = storage.deleteAlarmCalls;
+  const inactive = await coordinator.reconcileAlarm();
+  assert.equal(inactive.reconciled, true);
+  assert.equal(inactive.after.alarmScheduled, false);
+  assert.equal(inactive.after.enabledScheduleCount, 0);
+  assert.equal(storage.deleteAlarmCalls, deleteCallsBefore + 1);
+} finally {
+  Date.now = originalDateNow;
+}
 assert.equal(runtimeCalls.length, 0);
 console.log("schedule coordinator fixture passed");

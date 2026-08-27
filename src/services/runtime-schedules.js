@@ -11,6 +11,14 @@ export async function listRuntimeSchedules(env) {
   return getScheduleCoordinator(env).listSchedules();
 }
 
+export async function getRuntimeScheduleCoordinatorStatus(env) {
+  return getScheduleCoordinator(env).getCoordinatorStatus();
+}
+
+export async function reconcileRuntimeScheduleAlarm(env) {
+  return getScheduleCoordinator(env).reconcileAlarm();
+}
+
 export async function createRuntimeSchedule(env, input) {
   return getScheduleCoordinator(env).createSchedule(input);
 }

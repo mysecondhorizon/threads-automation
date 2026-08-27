@@ -5,11 +5,13 @@ import { isRuntimeSchedulerActive } from "../services/scheduler-ownership.js";
 export const RUNTIME_SCHEDULER_EXECUTION_ENABLED = isRuntimeSchedulerActive();
 export const RUNTIME_SCHEDULE_TIME_ZONE = "Asia/Seoul";
 export const RUNTIME_SCHEDULE_GRACE_MS = 15 * 60 * 1000;
+export const RUNTIME_ALARM_MATCH_TOLERANCE_MS = 1000;
 
 const SCHEDULE_PREFIX = "schedule:";
 const SLOT_PREFIX = "slot:";
 const SEEDED_KEY = "runtime-schedules:seeded:v1";
 const SCHEDULE_TYPES = new Set(["GENERAL_AUTO", "PRODUCT_REVIEW"]);
+const RECEIPT_STATUSES = new Set(["SUPPRESSED", "MISSED", "RUNNING", "SUCCESS", "FAILED", "UNCERTAIN"]);
 const DEFAULT_SCHEDULES = [
   ["general-auto-0810", "General AUTO 08:10", "GENERAL_AUTO", "08:10"],
   ["general-auto-1130", "General AUTO 11:30", "GENERAL_AUTO", "11:30"],
@@ -28,6 +30,30 @@ function scheduleKey(id) {
 
 function slotKey(id, scheduledFor) {
   return `${SLOT_PREFIX}${id}:${scheduledFor}`;
+}
+
+function asIso(value) {
+  const timestamp = typeof value === "number" ? value : Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+}
+
+function asEpoch(value) {
+  const timestamp = typeof value === "number" ? value : Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function publicReceipt(receipt, includeScheduleId = false) {
+  if (!receipt || !RECEIPT_STATUSES.has(receipt.status)) return null;
+  const scheduledFor = asIso(receipt.scheduledFor);
+  const startedAt = asIso(receipt.startedAt);
+  if (!scheduledFor || !startedAt) return null;
+  return {
+    ...(includeScheduleId && typeof receipt.scheduleId === "string" ? { scheduleId: receipt.scheduleId } : {}),
+    status: receipt.status,
+    scheduledFor,
+    startedAt,
+    completedAt: asIso(receipt.completedAt),
+  };
 }
 
 function isValidTime(value) {
@@ -117,6 +143,7 @@ export function validateSchedulePatch(input) {
 }
 
 function publicSchedule(schedule, lastRun, now) {
+  const runtimeLastReceipt = publicReceipt(lastRun);
   return {
     id: schedule.id,
     name: schedule.name,
@@ -125,11 +152,12 @@ function publicSchedule(schedule, lastRun, now) {
     timezone: RUNTIME_SCHEDULE_TIME_ZONE,
     cadence: { ...schedule.cadence },
     nextRunAt: getNextRunAt(schedule, now),
-    lastRun: lastRun ? {
-      status: lastRun.status,
-      scheduledFor: new Date(lastRun.scheduledFor).toISOString(),
-      completedAt: lastRun.completedAt || null,
+    lastRun: runtimeLastReceipt ? {
+      status: runtimeLastReceipt.status,
+      scheduledFor: runtimeLastReceipt.scheduledFor,
+      completedAt: runtimeLastReceipt.completedAt,
     } : null,
+    runtimeLastReceipt,
     createdAt: schedule.createdAt,
     updatedAt: schedule.updatedAt,
   };
@@ -162,11 +190,69 @@ export class ScheduleCoordinator extends DurableObject {
     return [...entries.values()].sort((left, right) => right.scheduledFor - left.scheduledFor)[0] || null;
   }
 
+  async getLastReceipt() {
+    const entries = await this.ctx.storage.list({ prefix: SLOT_PREFIX });
+    return [...entries.values()].sort((left, right) => asEpoch(right?.scheduledFor) - asEpoch(left?.scheduledFor))[0] || null;
+  }
+
+  earliestEnabledNextRunAt(schedules, now) {
+    const nextTimes = schedules
+      .map((schedule) => getNextRunAt(schedule, now))
+      .filter(Boolean)
+      .map((value) => Date.parse(value))
+      .filter(Number.isFinite);
+    return nextTimes.length ? Math.min(...nextTimes) : null;
+  }
+
+  async buildCoordinatorStatus(schedules, now, alarm) {
+    const enabledScheduleCount = schedules.filter((schedule) => schedule.enabled === true).length;
+    const earliestEnabledNextRun = this.earliestEnabledNextRunAt(schedules, now);
+    return {
+      alarmScheduled: Number.isFinite(alarm),
+      alarmAt: asIso(alarm),
+      coordinatorTime: new Date(now).toISOString(),
+      earliestEnabledNextRunAt: asIso(earliestEnabledNextRun),
+      enabledScheduleCount,
+      lastReceipt: publicReceipt(await this.getLastReceipt(), true),
+    };
+  }
+
   async listSchedules() {
     const now = Date.now();
     const schedules = await this.readSchedules();
     const records = await Promise.all(schedules.map(async (schedule) => publicSchedule(schedule, await this.getLastRun(schedule.id), now)));
     return { schedules: records, runtimeExecutionEnabled: RUNTIME_SCHEDULER_EXECUTION_ENABLED };
+  }
+
+  async getCoordinatorStatus() {
+    const now = Date.now();
+    const schedules = await this.readSchedules();
+    const alarm = await this.ctx.storage.getAlarm();
+    return this.buildCoordinatorStatus(schedules, now, alarm);
+  }
+
+  async reconcileAlarm() {
+    const now = Date.now();
+    const schedules = await this.readSchedules();
+    const expected = this.earliestEnabledNextRunAt(schedules, now);
+    const current = await this.ctx.storage.getAlarm();
+    const before = await this.buildCoordinatorStatus(schedules, now, current);
+    let reconciled = false;
+    if (expected === null) {
+      if (Number.isFinite(current)) {
+        await this.ctx.storage.deleteAlarm();
+        reconciled = true;
+      }
+    } else if (!Number.isFinite(current) || Math.abs(current - expected) > RUNTIME_ALARM_MATCH_TOLERANCE_MS) {
+      await this.ctx.storage.setAlarm(expected);
+      reconciled = true;
+    }
+    const afterAlarm = await this.ctx.storage.getAlarm();
+    return {
+      before,
+      after: await this.buildCoordinatorStatus(schedules, now, afterAlarm),
+      reconciled,
+    };
   }
 
   async createSchedule(input) {
@@ -191,15 +277,11 @@ export class ScheduleCoordinator extends DurableObject {
   }
 
   async rescheduleAlarm(now = Date.now()) {
-    const nextTimes = (await this.readSchedules())
-      .map((schedule) => getNextRunAt(schedule, now))
-      .filter(Boolean)
-      .map((value) => Date.parse(value));
-    if (!nextTimes.length) {
+    const next = this.earliestEnabledNextRunAt(await this.readSchedules(), now);
+    if (next === null) {
       await this.ctx.storage.deleteAlarm();
       return null;
     }
-    const next = Math.min(...nextTimes);
     await this.ctx.storage.setAlarm(next);
     return next;
   }

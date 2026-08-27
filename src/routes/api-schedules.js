@@ -1,5 +1,5 @@
 import { requireAdminApiSession } from "../middleware/auth.js";
-import { createRuntimeSchedule, listRuntimeSchedules, updateRuntimeSchedule } from "../services/runtime-schedules.js";
+import { createRuntimeSchedule, getRuntimeScheduleCoordinatorStatus, listRuntimeSchedules, reconcileRuntimeScheduleAlarm, updateRuntimeSchedule } from "../services/runtime-schedules.js";
 import { getScheduleRuns } from "../services/auto-post/schedule-store.js";
 import { SCHEDULER_MODE, enrichScheduleOperations, getNextActualProductionRun, getProductionScheduleReadiness, normalizeScheduleHistory } from "../services/schedule-operations.js";
 import { isRuntimeSchedulerActive } from "../services/scheduler-ownership.js";
@@ -27,8 +27,48 @@ function coordinatorError(error, fallback) {
   return fail(fallback, 500, { code: "schedule_request_failed" });
 }
 
+const RECEIPT_STATUSES = new Set(["SUPPRESSED", "MISSED", "RUNNING", "SUCCESS", "FAILED", "UNCERTAIN"]);
+const ALARM_MATCH_TOLERANCE_MS = 1000;
+
+function isoOrNull(value) {
+  const timestamp = typeof value === "number" ? value : Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+}
+
+function normalizeReceipt(receipt, includeScheduleId = false) {
+  if (!receipt || !RECEIPT_STATUSES.has(receipt.status)) return null;
+  const scheduledFor = isoOrNull(receipt.scheduledFor);
+  const startedAt = isoOrNull(receipt.startedAt);
+  if (!scheduledFor || !startedAt) return null;
+  return {
+    ...(includeScheduleId && typeof receipt.scheduleId === "string" ? { scheduleId: receipt.scheduleId } : {}),
+    status: receipt.status,
+    scheduledFor,
+    startedAt,
+    completedAt: isoOrNull(receipt.completedAt),
+  };
+}
+
+function normalizeCoordinatorStatus(status) {
+  const alarmAt = isoOrNull(status?.alarmAt);
+  const earliestEnabledNextRunAt = isoOrNull(status?.earliestEnabledNextRunAt);
+  const enabledScheduleCount = Number.isSafeInteger(status?.enabledScheduleCount) && status.enabledScheduleCount >= 0 ? status.enabledScheduleCount : 0;
+  const alarmScheduled = Boolean(status?.alarmScheduled && alarmAt);
+  const alarmMatchesExpected = Boolean(alarmScheduled && earliestEnabledNextRunAt && Math.abs(Date.parse(alarmAt) - Date.parse(earliestEnabledNextRunAt)) <= ALARM_MATCH_TOLERANCE_MS);
+  return {
+    alarmScheduled,
+    alarmAt,
+    coordinatorTime: isoOrNull(status?.coordinatorTime),
+    earliestEnabledNextRunAt,
+    enabledScheduleCount,
+    lastReceipt: normalizeReceipt(status?.lastReceipt, true),
+    health: enabledScheduleCount === 0 ? "INACTIVE" : (alarmMatchesExpected ? "HEALTHY" : "WARNING"),
+  };
+}
+
 export async function handleSchedulesCollection(request, env, {
   list = listRuntimeSchedules,
+  status = getRuntimeScheduleCoordinatorStatus,
   create = createRuntimeSchedule,
   history = getScheduleRuns,
   now = () => Date.now(),
@@ -37,15 +77,20 @@ export async function handleSchedulesCollection(request, env, {
   if (unauthorized) return unauthorized;
   try {
     if (request.method === "GET") {
-      const [runtime, runs] = await Promise.all([list(env), history(env)]);
+      const [runtime, coordinatorStatus, runs] = await Promise.all([list(env), status(env), history(env)]);
       const timestamp = now();
+      const schedules = (Array.isArray(runtime?.schedules) ? runtime.schedules : []).map((schedule) => ({
+        ...schedule,
+        runtimeLastReceipt: normalizeReceipt(schedule?.runtimeLastReceipt),
+      }));
       return ok({
         ...runtime,
         schedulerMode: SCHEDULER_MODE,
         runtimeExecutionEnabled: isRuntimeSchedulerActive(),
-        nextActualProductionRun: getNextActualProductionRun(runtime?.schedules, timestamp),
-        scheduleReadiness: getProductionScheduleReadiness(runtime?.schedules),
-        schedules: enrichScheduleOperations(runtime?.schedules, runs, timestamp),
+        coordinatorStatus: normalizeCoordinatorStatus(coordinatorStatus),
+        nextActualProductionRun: getNextActualProductionRun(schedules, timestamp),
+        scheduleReadiness: getProductionScheduleReadiness(schedules),
+        schedules: enrichScheduleOperations(schedules, runs, timestamp),
         history: normalizeScheduleHistory(runs),
       });
     }
@@ -53,6 +98,25 @@ export async function handleSchedulesCollection(request, env, {
     return fail("Method Not Allowed", 405);
   } catch (error) {
     return coordinatorError(error, "Schedule request failed");
+  }
+}
+
+export async function handleScheduleReconcile(request, env, {
+  reconcile = reconcileRuntimeScheduleAlarm,
+} = {}) {
+  const unauthorized = await authorize(request, env);
+  if (unauthorized) return unauthorized;
+  if (request.method !== "POST") return fail("Method Not Allowed", 405);
+  try {
+    const result = await reconcile(env);
+    return ok({
+      status: {
+        ...normalizeCoordinatorStatus(result?.after),
+        reconciled: result?.reconciled === true,
+      },
+    });
+  } catch (error) {
+    return coordinatorError(error, "Schedule alarm reconcile failed");
   }
 }
 

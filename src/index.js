@@ -96,6 +96,7 @@ import {
 import {
   handleScheduleById,
   handleSchedulesCollection,
+  handleScheduleReconcile,
 } from "./routes/api-schedules.js";
 
 import {
@@ -277,6 +278,10 @@ export default {
 
     if (pathname === "/api/schedules") {
       return handleSchedulesCollection(request, env);
+    }
+
+    if (pathname === "/api/schedules/reconcile") {
+      return handleScheduleReconcile(request, env);
     }
 
     if (pathname.startsWith("/api/schedules/")) {
