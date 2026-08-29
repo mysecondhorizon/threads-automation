@@ -32,11 +32,11 @@ Do not run:
 
 Latest confirmed shared main:
 
-`5ca5511fe4d12beae988f01c42826ec115674bec`
+`393940ae2b3f9aee8b701428ad9c9b147833c72b`
 
 Latest completed milestone:
 
-**R11D — Target App Selection UI Foundation**
+**UI-02 — Products UI/UX Cleanup**
 
 Before any new task, always verify:
 
@@ -213,6 +213,23 @@ Complete.
 - Explicit invalid targets do not silently fall back to Threads.
 - Published post targets are read-only.
 
+### R11D-V — Target App Selection Integration Verification
+Complete.
+
+- Verified `targetApp` save, edit, and publish boundaries.
+- Verified null compatibility and explicit invalid-target no-fallback behavior.
+- Verified built-in fallback when the app registry is unavailable or empty.
+- No code changes were required.
+
+### UI-02 — Products UI/UX Cleanup
+Complete.
+
+- Improved `/app/products` operator layout and information hierarchy.
+- Reorganized product create/edit and product media areas for clearer operation.
+- Added clearer state badges, feedback, responsive layout, and product-media presentation.
+- Product API/storage semantics were not changed.
+- Product Media remains `sourceType: product` and is not directly associated with an individual Product record.
+
 ---
 
 ## 6. Current Publishing Architecture
@@ -328,11 +345,11 @@ while preserving code-owned constraints.
 
 ### Codex B
 
-**COMPLETED — R11D — Target App Selection UI Foundation**
+**COMPLETED — UI-02 — Products UI/UX Cleanup**
 
 Merged to `main`:
 
-`5ca5511fe4d12beae988f01c42826ec115674bec`
+`393940ae2b3f9aee8b701428ad9c9b147833c72b`
 
 ---
 
@@ -383,6 +400,15 @@ Unless a task explicitly changes them, preserve:
 Major remaining work includes:
 
 - R13A shared operator prompt scope
+- UI-01 `/app/prompts` UI/UX cleanup
+  - broken/awkward alignment
+  - page hierarchy/layout cleanup
+  - responsive cleanup
+  - functional prompt semantics must remain unchanged
+- PRODUCT-01 Product ↔ Product Media relationship decision
+  - current product media uses `sourceType: product`
+  - media is not directly tied to an individual Product record
+  - decide whether direct per-product association is needed before implementation
 - additional production verification of General AUTO
 - Runtime Scheduler final production ownership cutover
 - WordPress publisher

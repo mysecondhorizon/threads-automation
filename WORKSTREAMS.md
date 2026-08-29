@@ -28,7 +28,7 @@ PM / coordination account plus parallel worker:
 
 Current parallel workstream:
 
-**R11D — Target App Selection UI Foundation — COMPLETED**
+**UI-02 — Products UI/UX Cleanup — COMPLETED / MERGED TO MAIN**
 
 The two ChatGPT accounts do not share conversation memory.
 
@@ -240,11 +240,17 @@ Status:
 
 Task:
 
-**R11D — Target App Selection UI Foundation**
+**UI-02 — Products UI/UX Cleanup — COMPLETED / MERGED TO MAIN**
 
 Merged commit:
 
-`5ca5511fe4d12beae988f01c42826ec115674bec`
+`393940ae2b3f9aee8b701428ad9c9b147833c72b`
+
+### Completed verification checkpoint
+
+**R11D-V — Target App Selection Integration Verification**
+
+Completed with no code changes required. Verified target-app save/edit/publish boundaries, null compatibility, explicit invalid-target no-fallback behavior, and empty/unavailable registry fallback.
 
 ### Objective
 
@@ -485,7 +491,7 @@ Then continue only the workstream assigned to that account.
 
 Latest confirmed main:
 
-`5ca5511fe4d12beae988f01c42826ec115674bec`
+`393940ae2b3f9aee8b701428ad9c9b147833c72b`
 
 Before relying on this hash, verify `origin/main`.
 
@@ -499,12 +505,27 @@ Current intended parallel execution:
 
 ### Codex A
 
-Fetch/pull latest `origin/main`, incorporate the R11D checkpoint, then continue R13A.
+Fetch/pull latest `origin/main`, incorporate the UI-02 checkpoint, then continue R13A.
 
 Prefer small checkpoints.
 
 ### Codex B
 
-R11D complete. Await the next PM assignment.
+AWAITING PM ASSIGNMENT.
 
 The PM account should review both completion reports and decide merge order.
+
+---
+
+## 20. Pending PM Action Items
+
+- **UI-01 — `/app/prompts` UI/UX cleanup**
+  - fix broken/awkward alignment
+  - clean up page hierarchy/layout and responsive behavior
+  - preserve functional prompt semantics
+- **PRODUCT-01 — Product ↔ Product Media relationship decision**
+  - product media currently uses `sourceType: product`
+  - media is not directly tied to an individual Product record
+  - decide whether direct per-product association is needed before implementation
+
+These are pending PM decisions and are not assigned to Codex B.
