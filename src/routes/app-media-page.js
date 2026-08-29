@@ -10,6 +10,11 @@ function renderMediaPageContent() {
     .app-media-copy, .app-media-feedback, .app-media-list-feedback { color:#667085; line-height:1.6; }
     .app-media-upload-form { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:18px; }
     .app-media-file { max-width:100%; }
+    .app-media-hints { display:grid; gap:10px; margin-top:14px; max-width:680px; }
+    .app-media-hints label { display:grid; gap:6px; color:#344054; font-size:14px; font-weight:700; }
+    .app-media-hints input, .app-media-hints textarea { width:100%; box-sizing:border-box; border:1px solid #cfd6e2; border-radius:8px; font:inherit; padding:9px; }
+    .app-media-hints textarea { min-height:76px; resize:vertical; }
+    .app-media-hints p { margin:0; color:#667085; font-size:13px; line-height:1.5; }
     .app-media-button { border:1px solid #cfd6e2; border-radius:8px; background:#fff; color:#344054; cursor:pointer; font:inherit; font-weight:700; padding:9px 13px; }
     .app-media-button:hover { background:#f7f8fa; }
     .app-media-button:disabled { cursor:wait; opacity:.65; }
@@ -38,6 +43,11 @@ function renderMediaPageContent() {
         <input id="media-files" class="app-media-file" name="files" type="file" accept="image/jpeg,image/png,image/webp,video/mp4" multiple required>
         <button id="media-upload-button" class="app-media-button primary" type="submit">&#50629;&#47196;&#46300;</button>
       </form>
+      <div class="app-media-hints">
+        <label>&#52404;&#54744; &#53468;&#44536; <input id="media-experience-tags" name="experienceTags" form="media-upload-form" type="text" placeholder="&#52636;&#44540;&#44592;, &#48708; &#50724;&#45716; &#45216;, &#50724;&#47000; &#44152;&#51020;"></label>
+        <label>&#52404;&#54744; &#47700;&#47784; <textarea id="media-experience-note" name="experienceNote" form="media-upload-form" placeholder="&#48708; &#50724;&#45716; &#45216; &#52636;&#53748;&#44540;&#54624; &#46412; &#49324;&#50857;. &#49373;&#44033;&#48372;&#45796; &#44032;&#48317;&#44256; &#48120;&#45144;&#47101;&#51648; &#50506;&#50520;&#51020."></textarea></label>
+        <p>&#46160; &#54637;&#47785;&#51008; &#49440;&#53469; &#51077;&#47141;&#51077;&#45768;&#45796;. &#49324;&#50857;&#51088;&#44032; &#51228;&#44277;&#54620; &#52404;&#54744; &#51221;&#48372;&#47196;&#47564; &#51200;&#51109;&#46121;&#47728;, &#49440;&#53469;&#54620; &#47784;&#46304; &#54028;&#51068;&#50640; &#46041;&#51068;&#54616;&#44172; &#51201;&#50857;&#46121;&#45768;&#45796;.</p>
+      </div>
       <p id="media-upload-feedback" class="app-media-feedback" role="status" aria-live="polite"></p>
       <ul id="media-upload-results" class="app-media-upload-results"></ul>
     </section>

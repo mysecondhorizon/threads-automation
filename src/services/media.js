@@ -21,6 +21,9 @@ const MAX_ALT_TEXT_LENGTH =
 const MAX_DESCRIPTION_LENGTH =
   4000;
 
+const MAX_EXPERIENCE_NOTE_LENGTH =
+  1000;
+
 const MAX_IMAGE_URL_LENGTH =
   8192;
 
@@ -589,6 +592,21 @@ function normalizeMediaRecord(
           : input.tags
       ),
 
+    experienceTags:
+      normalizeStringList(
+        input?.experienceTags === undefined
+          ? existingMedia?.experienceTags
+          : input.experienceTags
+      ),
+
+    experienceNote:
+      normalizeNullableLimitedText(
+        input?.experienceNote,
+        existingMedia?.experienceNote ?? null,
+        "experience_note",
+        MAX_EXPERIENCE_NOTE_LENGTH
+      ),
+
     maxUses:
       normalizeNullablePositiveInteger(
         input?.maxUses,
@@ -778,6 +796,19 @@ function normalizeStoredMedia(
     tags:
       normalizeStringList(
         input?.tags
+      ),
+
+    experienceTags:
+      normalizeStringList(
+        input?.experienceTags
+      ),
+
+    experienceNote:
+      normalizeNullableLimitedText(
+        input?.experienceNote,
+        null,
+        "experience_note",
+        MAX_EXPERIENCE_NOTE_LENGTH
       ),
 
     maxUses:

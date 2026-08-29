@@ -70,9 +70,55 @@ const upload = await handleOperatorMediaUpload(uploadRequest, env(), {
   },
 });
 assert.equal(upload.status, 200);
-assert.equal(uploadInput.defaults.sourceType, "general");
+assert.deepEqual(uploadInput.defaults, {
+  sourceType: "general",
+  experienceTags: "",
+  experienceNote: "",
+});
 assert.equal(uploadInput.createPoolItems, true);
 assert.equal((await upload.json()).results[0].media.previewUrl, "/media/image-1");
+
+const hintedUploadForm = new FormData();
+hintedUploadForm.append("files", new Blob(["image-a"], { type: "image/jpeg" }), "photo-a.jpg");
+hintedUploadForm.append("files", new Blob(["image-b"], { type: "image/jpeg" }), "photo-b.jpg");
+hintedUploadForm.append("experienceTags", "출근길, 비 오는 날");
+hintedUploadForm.append("experienceNote", "비 오는 날 출퇴근할 때 사용.");
+let hintedUploadInput = null;
+await handleOperatorMediaUpload(
+  new Request("https://example.test/api/media/upload", { method: "POST", headers: { cookie: "admin_session=session-1" }, body: hintedUploadForm }),
+  env(),
+  {
+    batchUpload: async (_env, input) => {
+      hintedUploadInput = input;
+      return { results: [
+        { fileName: "photo-a.jpg", status: "success", media: image },
+        { fileName: "photo-b.jpg", status: "success", media: image },
+      ] };
+    },
+  }
+);
+assert.equal(hintedUploadInput.files.length, 2);
+assert.deepEqual(hintedUploadInput.defaults, {
+  sourceType: "general",
+  experienceTags: "출근길, 비 오는 날",
+  experienceNote: "비 오는 날 출퇴근할 때 사용.",
+});
+
+for (const [field, value, expected] of [
+  ["experienceTags", "주말", { experienceTags: "주말", experienceNote: "" }],
+  ["experienceNote", "오래 걸어도 편했음.", { experienceTags: "", experienceNote: "오래 걸어도 편했음." }],
+]) {
+  const form = new FormData();
+  form.append("files", new Blob(["image"], { type: "image/jpeg" }), "optional.jpg");
+  form.append(field, value);
+  let optionalInput = null;
+  await handleOperatorMediaUpload(
+    new Request("https://example.test/api/media/upload", { method: "POST", headers: { cookie: "admin_session=session-1" }, body: form }),
+    env(),
+    { batchUpload: async (_env, input) => { optionalInput = input; return { results: [] }; } }
+  );
+  assert.deepEqual(optionalInput.defaults, { sourceType: "general", ...expected });
+}
 
 const videoUploadForm = new FormData();
 videoUploadForm.append("files", new Blob(["video"], { type: "video/mp4" }), "clip.mp4");
@@ -89,7 +135,11 @@ const videoUpload = await handleOperatorMediaUpload(
 );
 assert.equal(videoUpload.status, 200);
 assert.equal(videoUploadInput.files[0].type, "video/mp4");
-assert.equal(videoUploadInput.defaults.sourceType, "general");
+assert.deepEqual(videoUploadInput.defaults, {
+  sourceType: "general",
+  experienceTags: "",
+  experienceNote: "",
+});
 assert.equal((await videoUpload.json()).results[0].media.kind, "video");
 
 const unauthenticatedUpload = await handleOperatorMediaUpload(

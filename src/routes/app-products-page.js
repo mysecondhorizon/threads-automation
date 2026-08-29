@@ -34,6 +34,11 @@ function renderProductsPageContent() {
     .app-products-media-preview { display:block; width:100%; aspect-ratio:4 / 3; background:#eef1f5; object-fit:cover; }
     .app-products-media-content { display:grid; gap:10px; padding:12px; }
     .app-products-media-description { display:-webkit-box; overflow:hidden; margin:0; color:#475467; font-size:13px; line-height:1.5; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+    .app-products-media-hints { display:grid; gap:10px; margin-top:12px; }
+    .app-products-media-hints label { display:grid; gap:6px; color:#344054; font-size:14px; font-weight:700; }
+    .app-products-media-hints input, .app-products-media-hints textarea { width:100%; box-sizing:border-box; border:1px solid #cfd6e2; border-radius:8px; font:inherit; padding:9px; }
+    .app-products-media-hints textarea { min-height:76px; resize:vertical; }
+    .app-products-media-hints p { margin:0; color:#667085; font-size:13px; line-height:1.5; }
     .app-products-list { display:grid; gap:12px; }
     .app-products-card { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:18px; padding:18px; border:1px solid #e2e6ec; border-radius:12px; background:#fff; }
     .app-products-card.is-inactive { background:#fcfcfd; }
@@ -77,6 +82,11 @@ function renderProductsPageContent() {
       <h2 id="product-media-heading">제품 이미지</h2>
       <p class="app-products-copy">여기서 업로드한 이미지는 제품용 미디어로 관리됩니다. 현재는 개별 제품과 이미지를 직접 연결하지 않습니다.</p>
       <form id="operator-product-media-upload-form" class="app-products-upload-form" style="margin-top:16px;"><input id="product-media-files" class="app-products-file" name="files" type="file" accept="image/jpeg,image/png,image/webp" multiple required><button id="operator-product-media-upload" class="app-products-button primary" type="submit">이미지 업로드</button></form>
+      <div class="app-products-media-hints">
+        <label>&#52404;&#54744; &#53468;&#44536; <input id="product-media-experience-tags" name="experienceTags" form="operator-product-media-upload-form" type="text" placeholder="&#52636;&#44540;&#44592;, &#48708; &#50724;&#45716; &#45216;, &#50724;&#47000; &#44152;&#51020;"></label>
+        <label>&#52404;&#54744; &#47700;&#47784; <textarea id="product-media-experience-note" name="experienceNote" form="operator-product-media-upload-form" placeholder="&#49324;&#50857; &#49345;&#54889;&#44284; &#51665;&#51217; &#44221;&#54744;&#51012; &#44036;&#45800;&#55176; &#51201;&#50612; &#51452;&#49464;&#50836."></textarea></label>
+        <p>&#46160; &#54637;&#47785;&#51008; &#49440;&#53469; &#51077;&#47141;&#51077;&#45768;&#45796;. &#49440;&#53469;&#54620; &#47784;&#46304; &#51060;&#48120;&#51648;&#50640; &#46041;&#51068;&#54616;&#44172; &#51201;&#50857;&#46121;&#45768;&#45796;.</p>
+      </div>
       <p id="operator-product-media-status" class="app-products-feedback" role="status" aria-live="polite"></p>
       <div id="operator-product-media-list" class="app-products-media-grid"></div>
     </section>

@@ -51,9 +51,15 @@ export async function handleOperatorProductMedia(request, env, {
     if (files.some((file) => !file || !PRODUCT_IMAGE_TYPES.has(file.type))) {
       return fail("Only JPEG, PNG, and WebP product images are supported", 400, { code: "product_image_type_invalid" });
     }
+    const experienceTags = String(form.get("experienceTags") || "");
+    const experienceNote = String(form.get("experienceNote") || "");
     const result = await batchUpload(env, {
       files,
-      defaults: { sourceType: "product" },
+      defaults: {
+        sourceType: "product",
+        experienceTags,
+        experienceNote,
+      },
       // Preserve Product Content Pool behavior. Product type remains isolated
       // from the GENERAL AUTO media candidate path.
       createPoolItems: true,

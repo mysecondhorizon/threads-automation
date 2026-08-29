@@ -201,6 +201,8 @@ function buildInput(file, manifest, defaults, mediaKind) {
     altText: text(manifest?.altText || defaults.altText),
     description: text(manifest?.description || defaults.description),
     tags: splitList(manifest?.tags || defaults.tags),
+    experienceTags: splitList(manifest?.experienceTags || defaults.experienceTags),
+    experienceNote: text(manifest?.experienceNote || defaults.experienceNote),
     topics: splitList(manifest?.topics || defaults.topics),
     allowedContentTypes: splitList(manifest?.allowedContentTypes || defaults.allowedContentTypes),
     priority: numberValue(manifest?.priority ?? defaults.priority, 0),
@@ -281,17 +283,12 @@ async function videoUploadData(env, file, input, sourceObjectKey, temporaryObjec
   const timing = validateVideoClipTiming(vision, sourceDurationSeconds);
   const transformed = await transformVideoClip(env, processingObjectKey, timing);
   return {
-    input: {
-      ...input,
-      tags: vision.tags,
-      description: vision.description,
-      sceneType: vision.sceneType,
-      usableAngles: vision.usableAngles,
+    input: mergeVideoMediaMetadata(input, vision, {
       sourceDurationSeconds,
       clipStartSeconds: timing.startTimeSeconds,
       clipDurationSeconds: timing.durationSeconds,
       temporaryObjectKeys: [...temporaryObjectKeys],
-    },
+    }),
     body: transformed.body,
     contentType: transformed.contentType,
     originalBytes: Number(file.size),
@@ -337,6 +334,17 @@ export function mergeMediaMetadata(input, vision) {
     peoplePresent: vision.peoplePresent,
     textPresent: vision.textPresent,
     brandVisible: vision.brandVisible,
+  };
+}
+
+export function mergeVideoMediaMetadata(input, vision, videoMetadata = {}) {
+  return {
+    ...input,
+    tags: vision.tags,
+    description: vision.description,
+    sceneType: vision.sceneType,
+    usableAngles: vision.usableAngles,
+    ...videoMetadata,
   };
 }
 
@@ -449,6 +457,8 @@ export async function batchUploadMedia(
       altText: input.altText,
       description: input.description,
       tags: input.tags,
+      experienceTags: input.experienceTags,
+      experienceNote: input.experienceNote,
       maxUses: input.maxUses,
       cooldownDays: input.cooldownDays,
       originalBytes: input.originalBytes,

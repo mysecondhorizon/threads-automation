@@ -39,9 +39,15 @@ export async function handleOperatorMediaUpload(request, env, { batchUpload = ru
     const form = await request.formData();
     const files = form.getAll("files");
     if (!files.length) return fail("Upload at least one file", 400, { code: "media_files_required" });
+    const experienceTags = String(form.get("experienceTags") || "");
+    const experienceNote = String(form.get("experienceNote") || "");
     const result = await batchUpload(env, {
       files,
-      defaults: { sourceType: "general" },
+      defaults: {
+        sourceType: "general",
+        experienceTags,
+        experienceNote,
+      },
       createPoolItems: true,
     });
     return ok({ results: (Array.isArray(result?.results) ? result.results : []).map(toOperatorResult) });

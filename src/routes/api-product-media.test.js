@@ -41,11 +41,37 @@ const uploaded = await handleOperatorProductMedia(request("POST", form), env(), 
   },
 });
 assert.equal(uploaded.status, 200);
-assert.equal(uploadInput.defaults.sourceType, "product");
+assert.deepEqual(uploadInput.defaults, {
+  sourceType: "product",
+  experienceTags: "",
+  experienceNote: "",
+});
 assert.equal(uploadInput.createPoolItems, true);
 assert.deepEqual((await uploaded.json()).media[0], {
   id: "product-image-1", kind: "image", description: "제품 이미지", tags: ["제품"], active: true,
   createdAt: "2026-08-01", updatedAt: "2026-08-02", previewUrl: "/media/product-image-1",
+});
+
+const hintedForm = new FormData();
+hintedForm.append("files", new Blob(["image-a"], { type: "image/jpeg" }), "product-a.jpg");
+hintedForm.append("files", new Blob(["image-b"], { type: "image/jpeg" }), "product-b.jpg");
+hintedForm.append("experienceTags", "주말, 아이와");
+hintedForm.append("experienceNote", "가볍게 들고 오래 걸음.");
+let hintedInput = null;
+await handleOperatorProductMedia(request("POST", hintedForm), env(), {
+  batchUpload: async (_env, input) => {
+    hintedInput = input;
+    return { results: [
+      { status: "success", media: productImage },
+      { status: "success", media: productImage },
+    ] };
+  },
+});
+assert.equal(hintedInput.files.length, 2);
+assert.deepEqual(hintedInput.defaults, {
+  sourceType: "product",
+  experienceTags: "주말, 아이와",
+  experienceNote: "가볍게 들고 오래 걸음.",
 });
 
 const videoForm = new FormData();
