@@ -6,6 +6,7 @@ export function getPostSaveRequest({
   status,
   sourceType = "MANUAL",
   topicId = null,
+  targetApp = null,
 }) {
   return {
     url: editingId ? `/api/posts/${encodeURIComponent(editingId)}` : "/api/posts",
@@ -17,8 +18,53 @@ export function getPostSaveRequest({
       status,
       sourceType: sourceType === "AI" ? "AI" : "MANUAL",
       topicId: typeof topicId === "string" && topicId.trim() ? topicId.trim() : null,
+      targetApp: typeof targetApp === "string" && targetApp.trim() ? targetApp.trim() : null,
     },
   };
+}
+
+export function isFunctionalTargetApp(targetApp, apps) {
+  const appId = targetApp === null || targetApp === undefined ? "threads-primary" : targetApp;
+  const records = Array.isArray(apps) ? apps : [];
+  const app = records.find((item) => item?.id === appId)
+    || (appId === "threads-primary"
+      ? { id: "threads-primary", name: "Second Horizon Threads", type: "THREADS" }
+      : null);
+  return app?.type === "THREADS";
+}
+
+export function getTargetAppOptions(apps) {
+  const records = Array.isArray(apps) ? apps : [];
+  const optionRecords = records.some((app) => app?.id === "threads-primary")
+    ? [...records]
+    : [{ id: "threads-primary", name: "Second Horizon Threads", type: "THREADS" }, ...records];
+  if (!records.some((app) => app?.type === "WORDPRESS")) {
+    optionRecords.push({ id: "wordpress-coming-soon", name: "WordPress", type: "WORDPRESS" });
+  }
+  if (!records.some((app) => app?.type === "CUSTOM_API")) {
+    optionRecords.push({ id: "custom-api-coming-soon", name: "Custom API", type: "CUSTOM_API" });
+  }
+
+  const options = [];
+  const seenIds = new Set();
+  for (const app of optionRecords) {
+    if (!app || typeof app.id !== "string" || !app.id.trim() || seenIds.has(app.id.trim())) continue;
+    const id = app.id.trim();
+    seenIds.add(id);
+    const name = typeof app.name === "string" && app.name.trim() ? app.name.trim() : app.id.trim();
+    const functional = isFunctionalTargetApp(id, optionRecords);
+    const suffix = functional ? "" : app.type === "WORDPRESS" || app.type === "CUSTOM_API"
+      ? " — 준비 중"
+      : " — 사용 불가";
+    options.push({ id, label: name + suffix, disabled: !functional });
+  }
+  return options;
+}
+
+export function getTargetAppLabel(targetApp, apps) {
+  const appId = targetApp === null || targetApp === undefined ? "threads-primary" : targetApp;
+  const option = getTargetAppOptions(apps).find((item) => item.id === appId);
+  return option?.label || String(appId) + " — 사용 불가";
 }
 
 export function getPostStatusRequest(postId, status) {
@@ -46,6 +92,9 @@ export function getPostPublishRequest(postId) {
 export function buildWritePageClientScript() {
   return `
     const getPostSaveRequest = ${getPostSaveRequest.toString()};
+    const isFunctionalTargetApp = ${isFunctionalTargetApp.toString()};
+    const getTargetAppOptions = ${getTargetAppOptions.toString()};
+    const getTargetAppLabel = ${getTargetAppLabel.toString()};
     const getPostStatusRequest = ${getPostStatusRequest.toString()};
     const getPostDeleteRequest = ${getPostDeleteRequest.toString()};
     const getPostPublishRequest = ${getPostPublishRequest.toString()};
@@ -56,6 +105,7 @@ export function buildWritePageClientScript() {
       const bodyInput = document.querySelector("#post-body");
       const formatInput = document.querySelector("#post-format");
       const statusInput = document.querySelector("#post-status");
+      const targetAppInput = document.querySelector("#post-target-app");
       const saveButton = document.querySelector("#post-save");
       const newButton = document.querySelector("#post-new");
       const cancelButton = document.querySelector("#post-cancel");
@@ -70,6 +120,8 @@ export function buildWritePageClientScript() {
       let editingId = null;
       let editorSourceType = "MANUAL";
       let editorTopicId = null;
+      let editorTargetApp = null;
+      let targetApps = [];
       let selectedTopicId = null;
       let busy = false;
       let generating = false;
@@ -84,12 +136,33 @@ export function buildWritePageClientScript() {
         editingId = null;
         editorSourceType = "MANUAL";
         editorTopicId = null;
+        editorTargetApp = null;
         form.reset();
         formatInput.value = "TEXT";
         statusInput.value = "DRAFT";
+        renderTargetAppOptions(null);
         formHeading.textContent = "새 글";
         saveButton.textContent = "저장";
         setFeedback("");
+      }
+
+      function renderTargetAppOptions(selectedTargetApp) {
+        const selectedId = selectedTargetApp === null || selectedTargetApp === undefined
+          ? "threads-primary"
+          : selectedTargetApp;
+        const options = getTargetAppOptions(targetApps);
+        if (!options.some((option) => option.id === selectedId)) {
+          options.push({ id: selectedId, label: String(selectedId) + " — 사용 불가", disabled: true });
+        }
+        targetAppInput.replaceChildren();
+        for (const item of options) {
+          const option = document.createElement("option");
+          option.value = item.id;
+          option.textContent = item.label;
+          option.disabled = item.disabled;
+          option.selected = item.id === selectedId;
+          targetAppInput.append(option);
+        }
       }
 
       function setBusy(value) {
@@ -176,7 +249,10 @@ export function buildWritePageClientScript() {
           const preview = document.createElement("p");
           preview.className = "app-write-preview";
           preview.textContent = String(post.body || "").replace(/\\s+/g, " ").slice(0, 220);
-          card.append(heading, metadata, preview);
+          const target = document.createElement("p");
+          target.className = "app-write-meta";
+          target.textContent = "게시 대상: " + getTargetAppLabel(post.targetApp, targetApps);
+          card.append(heading, metadata, target, preview);
           if (post.status === "PUBLISHED") {
             const published = document.createElement("p");
             published.className = "app-write-meta";
@@ -197,6 +273,8 @@ export function buildWritePageClientScript() {
                 editorTopicId = editorSourceType === "AI" && typeof post.topicId === "string"
                   ? post.topicId
                   : null;
+                editorTargetApp = post.targetApp;
+                renderTargetAppOptions(editorTargetApp);
                 formHeading.textContent = "글 수정";
                 saveButton.textContent = "변경 저장";
                 setFeedback("");
@@ -228,7 +306,8 @@ export function buildWritePageClientScript() {
             );
             if (post.status === "READY") {
               const publishButton = makeButton("게시", "publish", async () => {
-                if (publishingPostId || !window.confirm("이 글을 Threads에 게시할까요?")) return;
+                const targetLabel = getTargetAppLabel(post.targetApp, targetApps);
+                if (publishingPostId || !window.confirm("이 글을 " + targetLabel + "에 게시할까요?")) return;
                 publishingPostId = post.id;
                 publishButton.disabled = true;
                 publishButton.textContent = "게시 중...";
@@ -245,6 +324,10 @@ export function buildWritePageClientScript() {
                   publishButton.textContent = "게시";
                 }
               });
+              if (!isFunctionalTargetApp(post.targetApp, targetApps)) {
+                publishButton.disabled = true;
+                publishButton.title = "이 게시 대상은 아직 사용할 수 없습니다.";
+              }
               actions.append(publishButton);
             }
             card.append(actions);
@@ -262,6 +345,16 @@ export function buildWritePageClientScript() {
         } catch (error) {
           listFeedback.textContent = error.message;
         }
+      }
+
+      async function loadApps() {
+        try {
+          const data = await requestApi("/api/apps");
+          targetApps = Array.isArray(data.apps) ? data.apps : [];
+        } catch {
+          targetApps = [];
+        }
+        renderTargetAppOptions(editorTargetApp);
       }
 
       function formatTopicUpdatedAt(value) {
@@ -368,12 +461,14 @@ export function buildWritePageClientScript() {
           status: statusInput.value,
           sourceType: editorSourceType,
           topicId: editorTopicId,
+          targetApp: targetAppInput.value,
         });
         setBusy(true);
         setFeedback("");
         try {
           const data = await requestApi(descriptor.url, requestOptions(descriptor));
           editingId = data.post.id;
+          editorTargetApp = data.post.targetApp;
           formHeading.textContent = "글 수정";
           saveButton.textContent = "변경 저장";
           setFeedback("저장했습니다.", "success");
@@ -391,7 +486,7 @@ export function buildWritePageClientScript() {
       topicRefreshButton.addEventListener("click", refreshTopics);
       topicGenerateButton.addEventListener("click", generateDraft);
       resetEditor();
-      loadPosts();
+      loadApps().then(() => loadPosts());
       loadTopics();
     })();
   `;

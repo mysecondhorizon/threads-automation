@@ -21,6 +21,7 @@ function renderWritePageContent() {
     .app-write-feedback { min-height: 22px; margin: 0; color: #667085; font-size: 14px; }
     .app-write-feedback.success { color: #067647; }
     .app-write-feedback.error { color: #b42318; }
+    .app-write-help { margin: -10px 0 0; color: #667085; font-size: 13px; line-height: 1.5; }
     .app-write-post-list { display: grid; gap: 12px; }
     .app-write-post { padding: 18px; border: 1px solid #e2e6ec; border-radius: 12px; background: #fff; }
     .app-write-post h3 { margin: 0 0 8px; font-size: 16px; }
@@ -60,6 +61,14 @@ function renderWritePageContent() {
             <select id="post-status" class="app-write-select"><option value="DRAFT">DRAFT</option><option value="READY">READY</option></select>
           </label>
         </div>
+        <label class="app-write-label" for="post-target-app">게시 대상
+          <select id="post-target-app" class="app-write-select">
+            <option value="threads-primary">Second Horizon Threads</option>
+            <option value="wordpress-coming-soon" disabled>WordPress — 준비 중</option>
+            <option value="custom-api-coming-soon" disabled>Custom API — 준비 중</option>
+          </select>
+        </label>
+        <p class="app-write-help">현재는 Second Horizon Threads에만 게시할 수 있습니다.</p>
         <label class="app-write-label" for="post-body">본문
           <textarea id="post-body" class="app-write-textarea" required placeholder="게시글 본문을 작성하세요."></textarea>
         </label>
