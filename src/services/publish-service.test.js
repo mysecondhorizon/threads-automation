@@ -4,6 +4,9 @@ import { OperatorPublishError, publishOperatorPost } from "./publish-service.js"
 const post = { id: "post-1", status: "READY", format: "TEXT", body: " saved body " };
 const calls = [];
 const dependencies = {
+  async getApp(_env, id) {
+    return id === "threads-primary" ? { id: "threads-primary", type: "THREADS", active: true } : null;
+  },
   async getJson(_env, key) {
     assert.equal(key, "threads_auth");
     return { access_token: "token" };
@@ -27,6 +30,15 @@ assert.deepEqual(await publishOperatorPost({ env: {}, post, dependencies }), {
 });
 assert.deepEqual(calls[0], { token: "token", userId: "user-1", text: "saved body" });
 assert.equal(calls[1].metadata.source, "OPERATOR");
+
+await assert.rejects(
+  publishOperatorPost({ env: {}, post: { ...post, targetApp: "missing" }, dependencies }),
+  (error) => error instanceof OperatorPublishError && error.code === "APP_NOT_FOUND"
+);
+await assert.rejects(
+  publishOperatorPost({ env: {}, post: { ...post, format: "HTML" }, dependencies }),
+  (error) => error instanceof OperatorPublishError && error.code === "html_threads_publish_unsupported"
+);
 
 for (const invalidPost of [
   { ...post, status: "DRAFT" },

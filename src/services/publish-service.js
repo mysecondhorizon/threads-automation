@@ -1,6 +1,6 @@
-import { getJson } from "./kv.js";
 import { logPostSuccess } from "./logger.js";
-import { getThreadsProfile, publishTextPost } from "./threads.js";
+import { PublisherResolutionError, resolvePublisher } from "./publisher-resolver.js";
+import { ThreadsPublisherError } from "./publishers/threads-publisher.js";
 
 export class OperatorPublishError extends Error {
   constructor(message, { code = "operator_publish_failed", status = 400 } = {}) {
@@ -21,13 +21,7 @@ function assertPublishableOperatorPost(post) {
       status: 409,
     });
   }
-  if (post.format === "HTML") {
-    throw new OperatorPublishError("HTML posts cannot be published to Threads yet", {
-      code: "html_threads_publish_unsupported",
-      status: 400,
-    });
-  }
-  if (post.format !== "TEXT" || typeof post.body !== "string" || !post.body.trim()) {
+  if ((post.format !== "TEXT" && post.format !== "HTML") || typeof post.body !== "string" || !post.body.trim()) {
     throw new OperatorPublishError("Post is not eligible for Threads publishing", {
       code: "invalid_operator_post_for_publish",
       status: 400,
@@ -35,32 +29,41 @@ function assertPublishableOperatorPost(post) {
   }
 }
 
-// R8 is intentionally a thin one-target service boundary. The route does not
-// couple directly to low-level Threads container/publish calls.
 export async function publishOperatorPost({ env, post, dependencies = {} }) {
   assertPublishableOperatorPost(post);
-  const readJson = dependencies.getJson || getJson;
-  const loadProfile = dependencies.getThreadsProfile || getThreadsProfile;
-  const publishText = dependencies.publishTextPost || publishTextPost;
   const logSuccess = dependencies.logPostSuccess || logPostSuccess;
-  const threadsAuth = await readJson(env, "threads_auth");
-  if (!threadsAuth?.access_token) {
-    throw new OperatorPublishError("Threads account is not connected", {
-      code: "threads_auth_missing",
-      status: 400,
-    });
-  }
-
-  let profile;
+  const resolve = dependencies.resolvePublisher || resolvePublisher;
+  let resolved;
   let publishResult;
   try {
-    profile = await loadProfile(threadsAuth.access_token);
-    publishResult = await publishText(threadsAuth.access_token, profile.id, post.body.trim());
-  } catch (error) {
-    console.error("Operator Threads publish failed", {
-      postId: post.id,
-      step: error?.step || "threads_publish",
+    resolved = await resolve({
+      env,
+      targetApp: post.targetApp,
+      format: post.format,
+      dependencies,
     });
+    publishResult = await resolved.publisher.publish({
+      env,
+      content: post.body.trim(),
+      format: post.format,
+      app: resolved.app,
+      context: { source: "OPERATOR", postId: post.id },
+      dependencies,
+    });
+  } catch (error) {
+    if (error instanceof PublisherResolutionError) {
+      if (error.code === "FORMAT_NOT_SUPPORTED" && post.format === "HTML") {
+        throw new OperatorPublishError("HTML posts cannot be published to Threads yet", {
+          code: "html_threads_publish_unsupported",
+          status: 400,
+        });
+      }
+      throw new OperatorPublishError(error.message, { code: error.code, status: error.status });
+    }
+    if (error instanceof ThreadsPublisherError && error.code === "threads_auth_missing") {
+      throw new OperatorPublishError(error.message, { code: "threads_auth_missing", status: 400 });
+    }
+    console.error("Operator publisher adapter failed", { postId: post.id, code: error?.code || "PUBLISH_FAILED" });
     throw new OperatorPublishError("Threads publishing failed. Please try again later.", {
       code: "threads_publish_failed",
       status: 400,
@@ -70,7 +73,7 @@ export async function publishOperatorPost({ env, post, dependencies = {} }) {
   // This uses the existing post-log format; a tracking write failure must not
   // turn an already-successful external post into a caller-visible failure.
   try {
-    await logSuccess(env, profile.username, publishResult.postId, post.body.trim(), {
+    await logSuccess(env, publishResult.logUsername, publishResult.externalPostId, post.body.trim(), {
       source: "OPERATOR",
       contentMode: "operator_post",
     });
@@ -81,5 +84,5 @@ export async function publishOperatorPost({ env, post, dependencies = {} }) {
     });
   }
 
-  return { app: "THREADS", postId: publishResult.postId };
+  return { app: publishResult.provider, postId: publishResult.externalPostId };
 }
