@@ -18,6 +18,16 @@ assert.equal(listBody.runtimeExecutionEnabled, false);
 assert.equal(listBody.nextActualProductionRun.id, "general-auto-0810");
 assert.equal(listBody.nextActualProductionRun.nextRunAt, "2026-08-25T23:10:00.000Z");
 assert.equal(listBody.scheduleReadiness.ready, true);
+const productionOverviewSource = listBody.schedules
+  .filter((schedule) => schedule.actualProductionStatus === "RUNTIME_PREPARING" && schedule.actualProductionNextRunAt)
+  .map((schedule) => [schedule.type, schedule.cadence.time]);
+assert.deepEqual(productionOverviewSource, [
+  ["GENERAL_AUTO", "08:10"],
+  ["GENERAL_AUTO", "11:30"],
+  ["GENERAL_AUTO", "14:30"],
+  ["GENERAL_AUTO", "18:40"],
+  ["PRODUCT_REVIEW", "20:30"],
+]);
 assert.deepEqual(listBody.coordinatorStatus, {
   alarmScheduled: true,
   alarmAt: "2026-08-25T23:10:00.000Z",
