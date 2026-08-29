@@ -1,8 +1,24 @@
 import assert from "node:assert/strict";
+import {
+  THREADS_OUTPUT_PROMPT,
+  THREADS_VALIDATION_PROMPT,
+} from "../prompts/threads/index.js";
 import { handlePostGenerate } from "./api-post-generate.js";
 
 function env() {
-  const values = new Map([["admin_session:session-1", "valid"]]);
+  const values = new Map([
+    ["admin_session:session-1", "valid"],
+    [
+      "operator_prompt_profile:v1",
+      {
+        version: 1,
+        updatedAt: "2026-08-29T00:00:00.000Z",
+        profile: {
+          generalWritingPolicy: "CUSTOM_MANUAL_WRITING_GUIDANCE",
+        },
+      },
+    ],
+  ]);
   return {
     values,
     THREADS_KV: {
@@ -37,12 +53,14 @@ function request(body, authenticated = true) {
 }
 
 let receivedContext = null;
+let receivedGenerationOptions = null;
 const services = {
   readInventory: async () => ({ topics: [topic] }),
   buildTopicContext: () => ({ topicId: "topic-1" }),
   buildContext: async () => ({ publishing: {} }),
-  generatePost: async (_env, context) => {
+  generatePost: async (_env, context, options) => {
     receivedContext = context;
+    receivedGenerationOptions = options;
     return { body: "AI가 만든 초안" };
   },
 };
@@ -60,6 +78,21 @@ assert.deepEqual((await generated.json()).draft, {
   topicId: "topic-1",
 });
 assert.match(receivedContext.publishing.goal, /HTML/u);
+assert.ok(
+  receivedGenerationOptions.systemPrompt.includes(
+    "CUSTOM_MANUAL_WRITING_GUIDANCE"
+  )
+);
+assert.ok(
+  receivedGenerationOptions.systemPrompt.includes(
+    THREADS_VALIDATION_PROMPT
+  )
+);
+assert.ok(
+  receivedGenerationOptions.systemPrompt.includes(
+    THREADS_OUTPUT_PROMPT
+  )
+);
 
 const unknown = await handlePostGenerate(request({ topicId: "missing" }), env(), services);
 assert.equal(unknown.status, 404);
