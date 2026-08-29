@@ -1,27 +1,57 @@
 import { getCookieValue } from "../utils/cookie.js";
 import { fail } from "../utils/response.js";
+import {
+  LEGACY_USER_ID,
+  getParsedAdminSession,
+  getUserById,
+} from "../services/login-foundation.js";
 
-export async function requireAdminSession(request, env) {
-  const sessionId = getCookieValue(
-    request,
-    "admin_session"
-  );
+const LEGACY_CURRENT_USER = Object.freeze({
+  id: LEGACY_USER_ID,
+  displayName: "Legacy Operator",
+  active: true,
+});
 
-  if (!sessionId) {
+async function resolveAuthenticatedSession(request, env) {
+  let sessionId;
+  try {
+    sessionId = getCookieValue(request, "admin_session");
+  } catch {
+    return null;
+  }
+  if (!sessionId) return null;
+
+  const session = await getParsedAdminSession(env, sessionId);
+  if (!session) return null;
+
+  if (session.legacy) {
     return {
-      ok: false,
-      response: Response.redirect(
-        new URL("/admin/login", request.url).toString(),
-        302
-      ),
+      sessionId,
+      user: { ...LEGACY_CURRENT_USER },
     };
   }
 
-  const sessionValid = await env.THREADS_KV.get(
-    `admin_session:${sessionId}`
-  );
+  const user = await getUserById(env, session.userId);
+  if (!user || !user.active) return null;
 
-  if (sessionValid !== "valid") {
+  return {
+    sessionId,
+    user: {
+      id: user.id,
+      displayName: user.displayName,
+      active: true,
+    },
+  };
+}
+
+export async function resolveCurrentUser(request, env) {
+  const resolved = await resolveAuthenticatedSession(request, env);
+  return resolved?.user ?? null;
+}
+
+export async function requireAdminSession(request, env) {
+  const resolved = await resolveAuthenticatedSession(request, env);
+  if (!resolved) {
     return {
       ok: false,
       response: Response.redirect(
@@ -33,7 +63,8 @@ export async function requireAdminSession(request, env) {
 
   return {
     ok: true,
-    sessionId,
+    sessionId: resolved.sessionId,
+    user: resolved.user,
   };
 }
 

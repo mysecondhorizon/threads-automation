@@ -75,6 +75,7 @@ import {
 import {
   handleAdminLoginPage,
   handleAdminLogin,
+  handleAdminLogout,
   handleAdminPostPage,
   handleAdminPost,
 } from "./routes/admin.js";
@@ -252,6 +253,13 @@ export default {
         request,
         env
       );
+    }
+
+    if (
+      pathname === "/admin/logout" &&
+      method === "POST"
+    ) {
+      return handleAdminLogout(request, env);
     }
 
     if (pathname === "/app" && method === "GET") {

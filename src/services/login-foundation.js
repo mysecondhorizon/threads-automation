@@ -489,6 +489,42 @@ export function parseAdminSessionValue(value, { now = Date.now() } = {}) {
   });
 }
 
+export function createStructuredAdminSessionValue(
+  userId,
+  selectedWorkspaceId,
+  { now = Date.now(), ttlSeconds } = {},
+) {
+  let normalizedUserId;
+  try {
+    normalizedUserId = normalizeId(userId, "User id");
+  } catch {
+    fail("Session user id is invalid", "session_user_id_invalid");
+  }
+
+  let normalizedWorkspaceId = null;
+  if (selectedWorkspaceId !== null && selectedWorkspaceId !== undefined) {
+    try {
+      normalizedWorkspaceId = normalizeId(selectedWorkspaceId, "Workspace id");
+    } catch {
+      fail("Session Workspace id is invalid", "session_workspace_id_invalid");
+    }
+  }
+
+  if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
+    fail("Session lifetime is invalid", "session_ttl_invalid");
+  }
+
+  const createdAt = timestampNow(now);
+  const expiresAt = timestampNow(Date.parse(createdAt) + ttlSeconds * 1000);
+  return {
+    version: STORE_VERSION,
+    userId: normalizedUserId,
+    selectedWorkspaceId: normalizedWorkspaceId,
+    createdAt,
+    expiresAt,
+  };
+}
+
 export async function getParsedAdminSession(env, sessionId, options = {}) {
   let normalizedSessionId;
   try {

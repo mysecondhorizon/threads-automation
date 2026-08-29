@@ -8,6 +8,7 @@ import {
   USER_AUTH_KEY_PREFIX,
   WORKSPACES_KEY,
   LoginFoundationError,
+  createStructuredAdminSessionValue,
   createUser,
   createWorkspace,
   getParsedAdminSession,
@@ -263,4 +264,20 @@ test("only a validated active owned Workspace resolves from a structured session
     expiresAt: FUTURE,
   }), { now: Date.parse(NOW) });
   assert.equal(await resolveSelectedWorkspaceForSession(env, crossOwnerSession), null);
+});
+
+test("structured session creation preserves nullable Workspace selection and expiry", () => {
+  assert.deepEqual(
+    createStructuredAdminSessionValue("user-a", null, {
+      now: NOW,
+      ttlSeconds: 60 * 60 * 8,
+    }),
+    {
+      version: 1,
+      userId: "user-a",
+      selectedWorkspaceId: null,
+      createdAt: NOW,
+      expiresAt: "2026-08-30T08:00:00.000Z",
+    },
+  );
 });

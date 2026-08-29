@@ -4,9 +4,16 @@ import {
   requireAdminApiSession,
 } from "../middleware/auth.js";
 import {
+  deleteKey,
   getJson,
   putText,
 } from "../services/kv.js";
+import {
+  createStructuredAdminSessionValue,
+  getUserByLoginId,
+  listWorkspacesForOwner,
+  verifyUserPassword,
+} from "../services/login-foundation.js";
 import {
   getThreadsProfile,
   publishTextPost,
@@ -44,7 +51,28 @@ export function handleAdminLoginPage() {
       type="password"
       name="admin_key"
       placeholder="ADMIN_KEY"
-      required
+      style="width:100%;padding:12px;box-sizing:border-box;"
+    >
+
+    <br><br>
+
+    <label for="login_id">Registered user login</label>
+    <input
+      id="login_id"
+      type="text"
+      name="login_id"
+      autocomplete="username"
+      style="width:100%;padding:12px;box-sizing:border-box;"
+    >
+
+    <br><br>
+
+    <label for="password">Password</label>
+    <input
+      id="password"
+      type="password"
+      name="password"
+      autocomplete="current-password"
       style="width:100%;padding:12px;box-sizing:border-box;"
     >
 
@@ -72,42 +100,119 @@ export async function handleAdminLogin(
     formData.get("admin_key") || ""
   );
 
-  if (adminKey !== env.ADMIN_KEY) {
-    return new Response(
-      "관리자 키가 올바르지 않습니다.",
+  if (adminKey && adminKey === env.ADMIN_KEY) {
+    const sessionId = crypto.randomUUID();
+
+    await putText(
+      env,
+      `admin_session:${sessionId}`,
+      "valid",
       {
-        status: 401,
+        expirationTtl: config.admin.sessionTtl,
       }
     );
+
+    return createLoginRedirectResponse(sessionId);
   }
 
-  const sessionId =
-    crypto.randomUUID();
+  if (adminKey) {
+    return new Response("Authentication failed.", {
+      status: 401,
+      headers: { "cache-control": "no-store" },
+    });
+  }
+
+  const loginId = formData.get("loginId") ?? formData.get("login_id");
+  const password = formData.get("password");
+  const loginFailed = () => new Response("Authentication failed.", {
+    status: 401,
+    headers: { "cache-control": "no-store" },
+  });
+
+  let user;
+  try {
+    user = await getUserByLoginId(env, String(loginId || ""));
+  } catch {
+    return loginFailed();
+  }
+
+  if (!user || !user.active || !await verifyUserPassword(env, user.id, String(password || ""))) {
+    return loginFailed();
+  }
+
+  const activeWorkspaces = await listWorkspacesForOwner(env, user.id, {
+    activeOnly: true,
+  });
+  const selectedWorkspaceId = activeWorkspaces.length === 1
+    ? activeWorkspaces[0].id
+    : null;
+  const sessionId = crypto.randomUUID();
+  const session = createStructuredAdminSessionValue(
+    user.id,
+    selectedWorkspaceId,
+    { ttlSeconds: config.admin.sessionTtl },
+  );
 
   await putText(
     env,
     `admin_session:${sessionId}`,
-    "valid",
+    JSON.stringify(session),
     {
-      expirationTtl:
-        config.admin.sessionTtl,
+      expirationTtl: config.admin.sessionTtl,
     }
   );
 
+  return createLoginRedirectResponse(sessionId);
+}
+
+function createLoginRedirectResponse(sessionId) {
   return new Response(null, {
     status: 302,
-
     headers: {
       location: "/admin/post",
-
+      "cache-control": "no-store",
       "set-cookie": createCookie(
         "admin_session",
         sessionId,
         {
-          maxAge:
-            config.admin.sessionTtl,
+          maxAge: config.admin.sessionTtl,
         }
       ),
+    },
+  });
+}
+
+export async function handleAdminLogout(request, env) {
+  if (request.method !== "POST") {
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: { allow: "POST" },
+    });
+  }
+
+  const cookie = request.headers.get("cookie") || "";
+  const encodedSessionId = cookie
+    .split(";")
+    .map((value) => value.trim())
+    .find((value) => value.startsWith("admin_session="))
+    ?.slice("admin_session=".length);
+
+  let sessionId = null;
+  try {
+    sessionId = encodedSessionId ? decodeURIComponent(encodedSessionId) : null;
+  } catch {
+    sessionId = null;
+  }
+  if (sessionId && /^[A-Za-z0-9_-]{1,120}$/u.test(sessionId)) {
+    await deleteKey(env, `admin_session:${sessionId}`);
+  }
+
+  return new Response(null, {
+    status: 302,
+    headers: {
+      location: "/admin/login",
+      "cache-control": "no-store",
+      "set-cookie": createCookie("admin_session", "", { maxAge: 0 }),
     },
   });
 }
