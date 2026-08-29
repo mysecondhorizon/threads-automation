@@ -28,13 +28,19 @@ Do not run:
 
 ---
 
-## 2. Current Main
+## 2. Repository and Application Checkpoints
 
-Latest confirmed shared main:
+Latest shared repository checkpoint before this documentation commit:
 
-`7d6eea3`
+`84509f055ef4e49549c163e762cbcb5819ca3836`
 
-Latest completed milestone:
+Latest application implementation checkpoint:
+
+`84509f055ef4e49549c163e762cbcb5819ca3836`
+
+**R13A — Shared Operator Prompt Scope complete**
+
+Historical milestone reference:
 
 **R11D — Target App Selection UI Foundation**
 
@@ -164,13 +170,38 @@ Complete first version.
 Complete first version.
 
 ### R7 — `/app/prompts`
-Complete first version.
+Complete.
 
-Known gap:
+Prompt Profile scope is complete across Manual AI generation, General AUTO, General AUTO preview, and Product Review candidate generation.
 
-Operator prompt overrides currently need consistent scope across Manual / General AUTO / Product Review.
+### ARCH-01-I2A — Workspace-Aware Prompt Profile Storage
+**COMPLETE / MERGED**
 
-This is being addressed by R13A.
+- Omitted or null `workspaceId` resolves to `DEFAULT_WORKSPACE_ID`.
+- The Default Workspace retains the legacy `operator_prompt_profile:v1` profile.
+- Non-default Workspaces use deterministic isolated prompt-profile storage.
+- A missing non-default profile receives built-in R7 defaults and never inherits customized Default Workspace data.
+- No bulk migration was performed.
+
+### R13A — Shared Operator Prompt Scope
+**COMPLETE / MERGED**
+
+Prompt Profile now applies to:
+
+- `/app/write` Manual AI generation
+- General AUTO
+- General AUTO preview
+- Product Review candidate generation
+
+Code-owned validation, safety/factual constraints, output/schema rules, post-format diversity/repetition protection, and Product Review disclosure/link rules remain protected. Legacy `/admin/ai/draft` remains outside R13A scope.
+
+### ADMIN-01-D — Legacy `/admin` Retirement Inventory
+**ANALYSIS COMPLETE**
+
+- Auth/OAuth/token lifecycle remains required.
+- `/app` does not yet replace Product Review, Content Pool, AUTO preview/review-publish, or logs/dashboard/insights.
+- Low-risk future retirement candidates were identified; no legacy route was removed.
+- Actual retirement is deferred for a separately approved follow-up after prompt-scope completion.
 
 ### R8 — Controlled Threads Publish
 Complete.
@@ -330,6 +361,12 @@ KV:
 
 `operator_prompt_profile:v1`
 
+Workspace storage compatibility:
+
+- Omitted/null workspace ID and `DEFAULT_WORKSPACE_ID` use the legacy key above.
+- Non-default Workspaces use isolated deterministic scoped keys.
+- Existing Default Workspace customization remains readable without migration.
+
 Operator-editable sections:
 
 - `identityWriting`
@@ -362,15 +399,15 @@ Current workstream status:
 
 ### Codex A
 
-**WAITING FOR NEXT NON-CONFLICTING TASK**
+**WAITING FOR NEXT TASK**
 
-R13A is deferred until ARCH-01-I2A is merged because both affect Prompt Profile behavior.
+R13A is complete and merged in `84509f055ef4e49549c163e762cbcb5819ca3836`.
 
 ### Codex B
 
-**ACTIVE — ARCH-01-I2A — Workspace-Aware Prompt Profile Storage**
+**WAITING FOR NEXT TASK**
 
-Chat B / Codex B owns this tranche. It adds only the Prompt Profile storage boundary; no Workspace UI or runtime propagation is included.
+ARCH-01-I2A is complete and merged in `c81e037a138ef454b50be74f330153413f637bf7`.
 
 ---
 
@@ -420,7 +457,6 @@ Unless a task explicitly changes them, preserve:
 
 Major remaining work includes:
 
-- R13A shared operator prompt scope (deferred until ARCH-01-I2A is merged)
 - UI-01 `/app/prompts` UI/UX cleanup
   - broken/awkward alignment
   - page hierarchy/layout cleanup

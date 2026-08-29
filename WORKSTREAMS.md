@@ -18,7 +18,7 @@ Primary worker:
 
 Current workstream:
 
-**WAITING FOR NEXT NON-CONFLICTING TASK**
+**WAITING FOR NEXT TASK**
 
 ### Account B
 
@@ -28,7 +28,7 @@ PM / coordination account plus parallel worker:
 
 Current parallel workstream:
 
-**ARCH-01-I2A — Workspace-Aware Prompt Profile Storage**
+**WAITING FOR NEXT TASK**
 
 The two ChatGPT accounts do not share conversation memory.
 
@@ -96,13 +96,13 @@ Never include:
 
 Status:
 
-**WAITING FOR NEXT NON-CONFLICTING TASK**
+**WAITING FOR NEXT TASK**
 
-Task:
+Last completed task:
 
-**R13A — Shared Operator Prompt Scope — DEFERRED**
+**R13A — Shared Operator Prompt Scope — COMPLETE / MERGED**
 
-Do not resume R13A until Chat B merges ARCH-01-I2A and shares the new checkpoint. Do not assign ARCH-01-I2A to Codex A.
+Merged application checkpoint: `84509f055ef4e49549c163e762cbcb5819ca3836`
 
 ### Objective
 
@@ -139,60 +139,33 @@ Must remain authoritative:
 
 ---
 
-## 6. Suggested R13A Tranches
+## 6. Completed R13A Checkpoints
 
-To reduce Codex session-limit risk, split work if needed.
+R13A is complete. The entries below are retained as implementation history.
 
 ### R13A-1
 
-Shared effective prompt loader.
+Shared effective prompt injection — **COMPLETE**.
 
-Goal:
-
-one normalized loader with exact R7 fallback semantics.
-
-Suggested ownership:
-
-- prompt profile service/helper
-- focused prompt service tests
-
-Checkpoint after completion.
+ARCH-01-I2A established the workspace-aware loader; R13A-1 injects it once at the shared regenerated-generation boundary.
 
 ### R13A-2
 
-General AUTO integration.
+Manual and General AUTO integration — **COMPLETE**.
 
-Goal:
-
-General AUTO uses the shared effective profile.
-
-Do not change publisher, media, format, scheduler behavior.
-
-Checkpoint after completion.
+Manual `/app/write`, General AUTO, and General AUTO preview receive the effective profile while publisher, media, format, and scheduler behavior remain unchanged.
 
 ### R13A-3
 
-Product Review integration.
+Product Review integration — **COMPLETE**.
 
-Goal:
-
-Product Review uses shared profile for writing style while code-owned link/disclosure rules remain authoritative.
-
-Checkpoint after completion.
+Product Review candidate generation receives the shared profile while code-owned link/disclosure rules remain authoritative.
 
 ### R13A-4
 
-Prompt UI/API scope note + full regression.
+Prompt UI scope note and regression — **COMPLETE**.
 
-Goal:
-
-Operator sees that prompt settings apply to:
-
-- direct AI writing
-- auto posting
-- product review
-
-No heavy UI redesign.
+`/app/prompts` explains the scope and protected rules; focused Manual, General AUTO, Product Review, and prompt-profile regressions passed.
 
 ---
 
@@ -234,15 +207,15 @@ Merge one workstream first, sync the other, then continue.
 
 Status:
 
-**ACTIVE / OWNED BY CODEX B**
+**WAITING FOR NEXT TASK**
 
-Task:
+Last completed task:
 
-**ARCH-01-I2A — Workspace-Aware Prompt Profile Storage**
+**ARCH-01-I2A — Workspace-Aware Prompt Profile Storage — COMPLETE / MERGED**
 
-Current shared checkpoint before this tranche:
+Merged application checkpoint:
 
-`7d6eea3`
+`c81e037a138ef454b50be74f330153413f637bf7`
 
 ### Completed checkpoints
 
@@ -251,8 +224,9 @@ Current shared checkpoint before this tranche:
 - AUTO-PV1 read-only verification complete: **NOT VERIFIABLE**.
 - MEDIA-02-D design verification complete.
 - MEDIA-02-I merged: optional `experienceTags` / `experienceNote` upload hints.
+- ADMIN-01-D legacy `/admin` retirement inventory analysis complete; no route was removed.
 
-Codex B owns ARCH-01-I2A. R13A remains deferred until this prompt-profile storage tranche is merged.
+ARCH-01-I2A is complete. It preserves the Default Workspace legacy profile key and isolates non-default Workspace prompt profiles without migration.
 
 ### R11D completion
 
@@ -390,15 +364,9 @@ R11D is merged in commit:
 
 `7d6eea3`
 
-Codex A remains deferred from R13A until ARCH-01-I2A is merged.
+ARCH-01-I2A merged in `c81e037a138ef454b50be74f330153413f637bf7` before R13A resumed. R13A then merged in `4840261f3b3343cf1055bdc652e50b0df6a3e2d4` and `84509f055ef4e49549c163e762cbcb5819ca3836`.
 
-Before R13A commit approval, rerun relevant regression tests after incorporating this checkpoint.
-
-At minimum verify:
-
-- latest `origin/main` incorporated;
-- no unexpected conflict;
-- relevant regression still passes.
+Both workstreams are complete. Future work must still use the shared working-tree collision checks and rerun relevant regression before commit approval.
 
 ---
 
@@ -506,9 +474,13 @@ Then continue only the workstream assigned to that account.
 
 ## 18. Current Shared Checkpoint
 
-Latest confirmed main:
+Latest shared repository checkpoint before this documentation commit:
 
-`7d6eea3`
+`84509f055ef4e49549c163e762cbcb5819ca3836`
+
+Latest application implementation checkpoint:
+
+`84509f055ef4e49549c163e762cbcb5819ca3836` — R13A shared prompt scope complete.
 
 Before relying on this hash, use the default local switch check; verify `origin/main` only when remote synchronization is required.
 
@@ -518,17 +490,15 @@ Update this section after each approved merged checkpoint.
 
 ## 19. Next Handoff
 
-Current intended parallel execution:
+Current handoff status:
 
 ### Codex A
 
-WAITING FOR NEXT NON-CONFLICTING TASK. R13A remains deferred until Chat B merges ARCH-01-I2A and shares the new checkpoint.
+WAITING FOR NEXT TASK. R13A is complete.
 
 ### Codex B
 
-Continue **ARCH-01-I2A — Workspace-Aware Prompt Profile Storage**.
-
-The PM account should review the completion report before any R13A resumption.
+WAITING FOR NEXT TASK. ARCH-01-I2A is complete.
 
 ---
 
