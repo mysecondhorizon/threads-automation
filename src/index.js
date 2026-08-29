@@ -86,8 +86,9 @@ import {
 
 import {
   handleAppHome,
-  handleAppPlaceholderPage,
 } from "./routes/app-shell.js";
+import { handleAppAppsPage } from "./routes/app-apps-page.js";
+import { handleAppById, handleAppsCollection } from "./routes/api-apps.js";
 
 import {
   handleAppSchedulesPage,
@@ -272,8 +273,24 @@ export default {
       return handleAppSchedulesPage(request, env);
     }
 
-    if (["/app/apps"].includes(pathname) && method === "GET") {
-      return handleAppPlaceholderPage(request, env, pathname);
+    if (pathname === "/app/apps" && method === "GET") {
+      return handleAppAppsPage(request, env);
+    }
+
+    if (pathname === "/api/apps") {
+      return handleAppsCollection(request, env);
+    }
+
+    if (pathname.startsWith("/api/apps/")) {
+      const appId = pathname.slice("/api/apps/".length);
+      if (!appId || appId.includes("/")) {
+        return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      }
+      try {
+        return handleAppById(request, env, decodeURIComponent(appId));
+      } catch {
+        return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      }
     }
 
     if (pathname === "/api/schedules") {
