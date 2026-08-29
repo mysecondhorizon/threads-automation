@@ -32,13 +32,13 @@ Do not run:
 
 Latest shared repository checkpoint before this documentation commit:
 
-`84509f055ef4e49549c163e762cbcb5819ca3836`
+`d3282b085cfca1a7221cc7c0dc0b31d820c1d247`
 
 Latest application implementation checkpoint:
 
-`84509f055ef4e49549c163e762cbcb5819ca3836`
+`d3282b085cfca1a7221cc7c0dc0b31d820c1d247`
 
-**R13A — Shared Operator Prompt Scope complete**
+**ARCH-01-I2B — Workspace-Aware Products Storage Foundation complete**
 
 Historical milestone reference:
 
@@ -182,6 +182,17 @@ Prompt Profile scope is complete across Manual AI generation, General AUTO, Gene
 - Non-default Workspaces use deterministic isolated prompt-profile storage.
 - A missing non-default profile receives built-in R7 defaults and never inherits customized Default Workspace data.
 - No bulk migration was performed.
+
+### ARCH-01-I2B — Workspace-Aware Products Storage Foundation
+**COMPLETE / MERGED**
+
+- The physical KV store remains `content_products`.
+- Product records now support service-owned `workspaceId`; omitted/null scope resolves to `DEFAULT_WORKSPACE_ID`.
+- Legacy records without `workspaceId` remain Default Workspace compatible and are lazily normalized only when mutated.
+- Reads, CRUD, product-key resolution, and batch upserts are Workspace-scoped.
+- The same `productKey` may exist in different Workspaces; cross-Workspace ID mutation is blocked.
+- Mutations preserve raw records belonging to other Workspaces, and the capacity remains 50 per Workspace.
+- No bulk migration and no route, UI, or runtime Workspace propagation were introduced.
 
 ### R13A — Shared Operator Prompt Scope
 **COMPLETE / MERGED**
@@ -407,7 +418,7 @@ R13A is complete and merged in `84509f055ef4e49549c163e762cbcb5819ca3836`.
 
 **WAITING FOR NEXT TASK**
 
-ARCH-01-I2A is complete and merged in `c81e037a138ef454b50be74f330153413f637bf7`.
+ARCH-01-I2B is complete and merged in `d3282b085cfca1a7221cc7c0dc0b31d820c1d247`.
 
 ---
 
@@ -478,15 +489,17 @@ Major remaining work includes:
 
 Priority: **HIGH**
 
-Status: **DESIGN PENDING**
+Status: **FOUNDATION IN PROGRESS**
 
 Architecture direction:
 
-`User → Workspace / Tenant → Connected Account`
+`User → Workspace → Connected Account`
 
-- **User/login** identifies the system user.
-- **Workspace/Tenant** is the base isolation unit for brand, business, and data context.
-- **Connected Account** represents an actual publishing destination.
+- **User** is login identity only for small personal/family usage.
+- **Workspace** has `ownerUserId` and is the brand, system, and business-data isolation unit.
+- **Connected Account** represents an actual platform, account, or channel destination.
+
+The current design does **not** require a Tenant abstraction, Membership, RBAC, invitations, an organization/team model, or shared Workspace infrastructure.
 
 Principles:
 
@@ -529,28 +542,34 @@ Architecture evolution direction:
 - Keep and extend the existing Publisher Resolver / Adapter architecture.
 - Do not replace the publisher architecture wholesale.
 
-ARCH-01 is not implemented. Login, Workspace/Tenant, and multi-account behavior must not be described as current functionality.
+Completed ARCH-01 checkpoints:
+
+- ARCH-01-D
+- ARCH-01-I1
+- ARCH-01-I2-D
+- ARCH-01-I2A
+- ARCH-01-I2B-D
+- ARCH-01-I2B
+
+ARCH-01 now has compatibility and storage foundations only. User login, Workspace selection, and Connected Account activation are not current functionality.
 
 #### ARCH-01-D — Multi-Account / Multi-Platform Storage & Scope Design Verification
 
-Status: **TODO**
+Status: **COMPLETE / DESIGN VERIFIED**
 
-Design/verification only: determine whether each current repository data set belongs to `SYSTEM`, `WORKSPACE`, or `CONNECTED_ACCOUNT` scope. Do not implement migration or schema changes.
+Completed design verification determined the appropriate `SYSTEM`, `WORKSPACE`, and `CONNECTED_ACCOUNT` scopes without a migration or schema rollout in that tranche.
 
 Review examples:
 
 - Posts, Products, Media Library, Content Pool, Prompt Profile, App Registry
 - `threads_auth`, schedules, execution/history records, analytics/context, diversity/recent-post history
 
-Architecture backlog only:
+Next direction:
 
-- authentication/login design
-- Workspace model/storage and membership
-- Connected Account registry
-- `threads_auth` to connection-scoped credential migration strategy
-- existing KV/data workspace migration strategy
-- TikTok Publisher Adapter
-- YouTube Shorts Publisher Adapter
+- Media and Content Pool Workspace scope
+- account-scoped credentials, history, and diversity
+- simple User login and Workspace selection
+- actual second Threads account activation
 
 ---
 

@@ -211,11 +211,11 @@ Status:
 
 Last completed task:
 
-**ARCH-01-I2A — Workspace-Aware Prompt Profile Storage — COMPLETE / MERGED**
+**ARCH-01-I2B — Workspace-Aware Products Storage Foundation — COMPLETE / MERGED**
 
 Merged application checkpoint:
 
-`c81e037a138ef454b50be74f330153413f637bf7`
+`d3282b085cfca1a7221cc7c0dc0b31d820c1d247`
 
 ### Completed checkpoints
 
@@ -227,6 +227,8 @@ Merged application checkpoint:
 - ADMIN-01-D legacy `/admin` retirement inventory analysis complete; no route was removed.
 
 ARCH-01-I2A is complete. It preserves the Default Workspace legacy profile key and isolates non-default Workspace prompt profiles without migration.
+
+ARCH-01-I2B is complete. It scopes Product service reads and mutations by Workspace while retaining `content_products`, Default Workspace legacy compatibility, and no-migration behavior.
 
 ### R11D completion
 
@@ -366,6 +368,8 @@ R11D is merged in commit:
 
 ARCH-01-I2A merged in `c81e037a138ef454b50be74f330153413f637bf7` before R13A resumed. R13A then merged in `4840261f3b3343cf1055bdc652e50b0df6a3e2d4` and `84509f055ef4e49549c163e762cbcb5819ca3836`.
 
+ARCH-01-I2B merged in `d3282b085cfca1a7221cc7c0dc0b31d820c1d247`, establishing Workspace-aware Product service storage without route, UI, or runtime Workspace propagation.
+
 Both workstreams are complete. Future work must still use the shared working-tree collision checks and rerun relevant regression before commit approval.
 
 ---
@@ -476,11 +480,11 @@ Then continue only the workstream assigned to that account.
 
 Latest shared repository checkpoint before this documentation commit:
 
-`84509f055ef4e49549c163e762cbcb5819ca3836`
+`d3282b085cfca1a7221cc7c0dc0b31d820c1d247`
 
 Latest application implementation checkpoint:
 
-`84509f055ef4e49549c163e762cbcb5819ca3836` — R13A shared prompt scope complete.
+`d3282b085cfca1a7221cc7c0dc0b31d820c1d247` — ARCH-01-I2B Workspace-Aware Products Storage Foundation complete.
 
 Before relying on this hash, use the default local switch check; verify `origin/main` only when remote synchronization is required.
 
@@ -498,7 +502,7 @@ WAITING FOR NEXT TASK. R13A is complete.
 
 ### Codex B
 
-WAITING FOR NEXT TASK. ARCH-01-I2A is complete.
+WAITING FOR NEXT TASK. ARCH-01-I2B is complete.
 
 ---
 
@@ -512,9 +516,10 @@ WAITING FOR NEXT TASK. ARCH-01-I2A is complete.
   - preserve `USER_EXPERIENCE` as distinct from observation and fact context
 - **MEDIA-02-R — optional future external research use**
   - preserve `USER_EXPERIENCE` vs `EXTERNAL_FACT` distinction
-- **ARCH-01-D — Multi-Account / Multi-Platform Storage & Scope Design Verification**
-  - Priority: **HIGH**
-  - verify `User → Workspace → Connected Account` model and audit current storage/KV scope
-  - no implementation or migration in this tranche
+- **ARCH-01 next scope direction**
+  - Media and Content Pool Workspace scope
+  - account-scoped credentials, history, and diversity
+  - simple User login and Workspace selection
+  - actual second Threads account activation
 
 These are pending PM decisions and are not assigned to Codex B.
