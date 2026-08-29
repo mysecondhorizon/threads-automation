@@ -1,4 +1,119 @@
 import { requireAdminSession } from "../middleware/auth.js";
 import { renderAppShell } from "./app-shell.js";
-const fields=[["identityWriting","AI \uC815\uCCB4\uC131\uACFC \uC5ED\uD560"],["generalWritingPolicy","\uAE00 \uC791\uC131 \uC815\uCC45"],["contentAndFormatPreferences","\uCF58\uD150\uCE20\uC640 \uD45C\uD604 \uBC29\uC2DD"],["productWritingGuidance","\uC81C\uD488 \uAE00 \uC791\uC131 \uAC00\uC774\uB4DC"],["analyticsWritingGuidance","\uC131\uACFC \uBC18\uC601 \uAC00\uC774\uB4DC"]];
-export async function handleAppPromptsPage(request,env){const auth=await requireAdminSession(request,env);if(!auth.ok)return auth.response;const areas=fields.map(([key,label])=>`<label>${label}<textarea name="${key}" rows="12"></textarea></label>`).join("");return renderAppShell({activePath:"/app/prompts",title:"\uD504\uB86C\uD504\uD2B8",description:"\uC9C1\uC811 AI \uAE00 \uC791\uC131, \uC790\uB3D9 \uAC8C\uC2DC, \uC81C\uD488 \uD6C4\uAE30 \uAE00 \uC791\uC131\uC5D0 \uC801\uC6A9\uB429\uB2C8\uB2E4. \uC2DC\uC2A4\uD15C \uAC80\uC99D\u00B7\uC548\uC804\u00B7\uC0AC\uC2E4 \uC81C\uC57D\uACFC \uCD9C\uB825 \uADDC\uCE59\uC740 \uBCF4\uD638\uB429\uB2C8\uB2E4.",content:`<section class="app-media-panel"><form id="prompt-profile-form" class="app-media-edit-form">${areas}<div><button class="app-media-button primary" type="submit">\uC800\uC7A5</button><button class="app-media-button" id="prompt-reset" type="button">\uAE30\uBCF8\uAC12\uC73C\uB85C \uB3CC\uB9AC\uAE30</button></div><p id="prompt-status" class="app-media-feedback"></p></form></section><script>(()=>{const f=document.querySelector('#prompt-profile-form'),s=document.querySelector('#prompt-status');async function api(u,o={}){const r=await fetch(u,o),d=await r.json();if(!r.ok||d.ok===false)throw new Error(d.error||'\uC694\uCCAD \uC2E4\uD328');return d}function fill(p){for(const [k,v] of Object.entries(p))f.elements[k].value=v}async function load(){fill((await api('/api/prompts')).prompts)}f.onsubmit=async e=>{e.preventDefault();const p={};for(const a of f.querySelectorAll('textarea'))p[a.name]=a.value;try{f.querySelector('[type=submit]').disabled=true;const d=await api('/api/prompts',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify(p)});fill(d.prompts);s.textContent='\uD504\uB86C\uD504\uD2B8\uAC00 \uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4.'}catch(e){s.textContent=e.message}finally{f.querySelector('[type=submit]').disabled=false}};document.querySelector('#prompt-reset').onclick=async()=>{if(confirm('\uAE30\uBCF8\uAC12\uC73C\uB85C \uB3CC\uB9B4\uAE4C\uC694?'))fill((await api('/api/prompts/reset',{method:'POST'})).prompts)};load()})()</script>`});}
+
+const fields = [
+  ["identityWriting", "AI 정체성과 역할", "글의 말투, 관점, 역할을 정리합니다."],
+  ["generalWritingPolicy", "글 작성 정책", "일반 글에 반영할 작성 원칙을 기록합니다."],
+  ["contentAndFormatPreferences", "콘텐츠와 표현 방식", "선호하는 주제, 구성, 표현 방식을 안내합니다."],
+  ["productWritingGuidance", "제품 글 작성 가이드", "제품 후기 글에 반영할 작성 가이드를 기록합니다."],
+  ["analyticsWritingGuidance", "성과 반영 가이드", "성과 분석을 글 작성에 반영하는 방식을 안내합니다."],
+];
+
+function renderPromptPageContent() {
+  const sections = fields.map(([key, label, help]) => `
+    <section class="app-prompts-section" aria-labelledby="prompt-${key}-heading">
+      <div class="app-prompts-section-heading">
+        <h2 id="prompt-${key}-heading">${label}</h2>
+        <p>${help}</p>
+      </div>
+      <label class="app-prompts-label" for="prompt-${key}">${label}
+        <textarea id="prompt-${key}" name="${key}" rows="6"></textarea>
+      </label>
+    </section>`).join("");
+
+  return `<style>
+    .app-prompts-layout { display:grid; gap:20px; max-width:900px; }
+    .app-prompts-callout { padding:14px 16px; border:1px solid #cbd8f4; border-radius:12px; background:#f4f7ff; color:#344054; font-size:14px; line-height:1.6; }
+    .app-prompts-callout strong { color:#294d9a; }
+    .app-prompts-form { display:grid; gap:16px; }
+    .app-prompts-section { padding:20px; border:1px solid #e2e6ec; border-radius:14px; background:#fff; }
+    .app-prompts-section-heading { display:grid; gap:4px; margin-bottom:14px; }
+    .app-prompts-section h2 { margin:0; color:#1d2433; font-size:18px; letter-spacing:-.02em; }
+    .app-prompts-section p { margin:0; color:#667085; font-size:14px; line-height:1.55; }
+    .app-prompts-label { display:grid; gap:7px; color:#344054; font-size:14px; font-weight:700; }
+    .app-prompts-label textarea { width:100%; min-height:136px; border:1px solid #cfd6e2; border-radius:9px; background:#fff; color:#1d2433; font:inherit; line-height:1.6; padding:11px; resize:vertical; }
+    .app-prompts-label textarea:focus { outline:3px solid rgb(41 77 154 / .16); border-color:#294d9a; }
+    .app-prompts-actions { display:flex; flex-wrap:wrap; gap:9px; align-items:center; padding-top:4px; }
+    .app-prompts-button { border:1px solid #cfd6e2; border-radius:8px; background:#fff; color:#344054; cursor:pointer; font:inherit; font-weight:700; padding:10px 14px; }
+    .app-prompts-button:hover { background:#f7f8fa; }
+    .app-prompts-button:disabled { cursor:wait; opacity:.65; }
+    .app-prompts-button.primary { border-color:#294d9a; background:#294d9a; color:#fff; }
+    .app-prompts-button.primary:hover { background:#213f80; }
+    .app-prompts-button.reset { border-color:#f2c7c3; color:#b42318; }
+    .app-prompts-button.reset:hover { background:#fff5f4; }
+    .app-prompts-feedback { min-height:22px; margin:0; color:#667085; font-size:14px; line-height:1.55; }
+    .app-prompts-feedback[data-state="success"] { color:#067647; }
+    .app-prompts-feedback[data-state="error"] { color:#b42318; }
+    @media (max-width:600px) {
+      .app-prompts-section { padding:16px; }
+      .app-prompts-actions { display:grid; grid-template-columns:1fr; }
+      .app-prompts-button { width:100%; }
+      .app-prompts-label textarea { min-height:120px; }
+    }
+  </style>
+  <div class="app-prompts-layout">
+    <aside class="app-prompts-callout" aria-label="프롬프트 설정 안내"><strong>보호되는 시스템 규칙</strong> — 시스템 검증·안전·사실 제약과 출력 규칙은 보호됩니다.</aside>
+    <form id="prompt-profile-form" class="app-prompts-form">
+      ${sections}
+      <div class="app-prompts-actions">
+        <button class="app-prompts-button primary" type="submit">저장</button>
+        <button class="app-prompts-button reset" id="prompt-reset" type="button">기본값 복원</button>
+      </div>
+      <p id="prompt-status" class="app-prompts-feedback" role="status" aria-live="polite"></p>
+    </form>
+  </div>
+  <script>(() => {
+    const form = document.querySelector("#prompt-profile-form");
+    const status = document.querySelector("#prompt-status");
+    const saveButton = form.querySelector('[type="submit"]');
+    const resetButton = document.querySelector("#prompt-reset");
+    function setStatus(message, state = "") { status.textContent = message; status.dataset.state = state; }
+    async function api(url, options = {}) {
+      const response = await fetch(url, options);
+      const data = await response.json();
+      if (!response.ok || data.ok === false) throw new Error(data.error || "요청에 실패했습니다.");
+      return data;
+    }
+    function fill(profile) { for (const [key, value] of Object.entries(profile)) form.elements[key].value = value; }
+    async function load() {
+      setStatus("프롬프트를 불러오는 중입니다.");
+      try { fill((await api("/api/prompts")).prompts); setStatus(""); }
+      catch { setStatus("프롬프트를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.", "error"); }
+    }
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      const profile = {};
+      for (const area of form.querySelectorAll("textarea")) profile[area.name] = area.value;
+      try {
+        saveButton.disabled = true;
+        setStatus("프롬프트를 저장하는 중입니다.");
+        const data = await api("/api/prompts", { method:"PATCH", headers:{ "content-type":"application/json" }, body:JSON.stringify(profile) });
+        fill(data.prompts);
+        setStatus("프롬프트가 저장되었습니다.", "success");
+      } catch { setStatus("프롬프트를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.", "error"); }
+      finally { saveButton.disabled = false; }
+    };
+    resetButton.onclick = async () => {
+      if (!confirm("기본값으로 복원할까요?")) return;
+      try {
+        resetButton.disabled = true;
+        setStatus("기본값을 복원하는 중입니다.");
+        fill((await api("/api/prompts/reset", { method:"POST" })).prompts);
+        setStatus("기본값으로 복원되었습니다.", "success");
+      } catch { setStatus("기본값을 복원하지 못했습니다. 잠시 후 다시 시도해 주세요.", "error"); }
+      finally { resetButton.disabled = false; }
+    };
+    load();
+  })()</script>`;
+}
+
+export async function handleAppPromptsPage(request, env) {
+  const auth = await requireAdminSession(request, env);
+  if (!auth.ok) return auth.response;
+  return renderAppShell({
+    activePath: "/app/prompts",
+    title: "프롬프트",
+    description: "직접 AI 글 작성, 자동 게시, 제품 후기 글 작성에 적용됩니다.",
+    content: renderPromptPageContent(),
+  });
+}
