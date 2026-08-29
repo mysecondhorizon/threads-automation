@@ -365,7 +365,8 @@ function buildHistorySignals(
 }
 
 export async function buildThreadContext(
-  env
+  env,
+  workspaceId
 ) {
   const now =
     new Date();
@@ -379,7 +380,8 @@ export async function buildThreadContext(
     ),
 
     getActiveProducts(
-      env
+      env,
+      workspaceId
     ),
   ]);
 

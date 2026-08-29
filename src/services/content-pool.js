@@ -5,6 +5,10 @@ import {
 } from "./media.js";
 
 import {
+  getProductById,
+} from "./products.js";
+
+import {
   DEFAULT_WORKSPACE_ID,
 } from "./workspace-foundation.js";
 
@@ -214,6 +218,18 @@ async function assertMediaReferences(env, item, workspaceId) {
   }
 }
 
+async function assertProductReference(env, item, workspaceId) {
+  if (!item.productId) return;
+  const product = await getProductById(env, item.productId, workspaceId);
+  if (!product) {
+    throw fail(
+      "Content Pool product must belong to the same workspace",
+      "content_pool_product_workspace_mismatch",
+      { productId: item.productId }
+    );
+  }
+}
+
 export function isContentPoolItemAvailable(item, at = new Date()) {
   const now = new Date(at).getTime();
   if (!item?.active || Number.isNaN(now)) return false;
@@ -236,6 +252,7 @@ export async function createContentPoolItem(env, input, workspaceId) {
   }
   const item = normalizeItem(input, null, resolvedWorkspaceId);
   await assertMediaReferences(env, item, resolvedWorkspaceId);
+  await assertProductReference(env, item, resolvedWorkspaceId);
   await writeStore(env, mergeWorkspaceItems(store.rawItems, resolvedWorkspaceId, [item, ...workspaceItems]));
   return item;
 }
@@ -257,6 +274,7 @@ export async function createContentPoolBatch(env, inputs, workspaceId) {
     try {
       const item = normalizeItem(inputs[index], null, resolvedWorkspaceId);
       await assertMediaReferences(env, item, resolvedWorkspaceId);
+      await assertProductReference(env, item, resolvedWorkspaceId);
       created.push(item);
     } catch (error) {
       failures.push({ index, code: error?.code || "content_pool_validation_failed", message: error?.message || String(error) });
@@ -309,6 +327,9 @@ export async function updateContentPoolItem(env, itemId, input, workspaceId) {
   const item = normalizeItem(input, workspaceItems[index], resolvedWorkspaceId);
   if (input?.mediaIds !== undefined) {
     await assertMediaReferences(env, item, resolvedWorkspaceId);
+  }
+  if (input?.productId !== undefined) {
+    await assertProductReference(env, item, resolvedWorkspaceId);
   }
   const nextWorkspaceItems = [...workspaceItems];
   nextWorkspaceItems[index] = item;

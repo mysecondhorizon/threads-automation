@@ -160,13 +160,16 @@ export async function generateDistinctThreadPost(
     excludeInfeasibleTargets =
       false,
 
+    workspaceId,
+
     generatePost =
       generateThreadPost,
   } = {}
 ) {
   const effectiveProfile =
     await getEffectivePromptProfile(
-      env
+      env,
+      workspaceId
     );
 
   const systemPrompt =

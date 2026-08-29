@@ -139,6 +139,45 @@ assert.ok(systemPrompts[0].includes("CUSTOM_OPERATOR_WRITING_GUIDANCE"));
 assert.ok(systemPrompts[0].includes(THREADS_VALIDATION_PROMPT));
 assert.ok(systemPrompts[0].includes(THREADS_OUTPUT_PROMPT));
 
+const workspacePromptKeys = [];
+const workspaceResult = await generateDistinctThreadPost(
+  {
+    THREADS_KV: {
+      async get(key, type) {
+        workspacePromptKeys.push({ key, type });
+        return {
+          version: 1,
+          updatedAt: "2026-08-30T00:00:00.000Z",
+          profile: {
+            generalWritingPolicy: "WORKSPACE_A_OPERATOR_GUIDANCE",
+          },
+        };
+      },
+    },
+  },
+  {
+    products: { productDetails: [] },
+    publishing: {
+      goal: "Workspace prompt scope test",
+      publishSequence: 1,
+      targetFormat: repeatedTarget,
+    },
+    history: { recentFormats: [], recentSevenDayPosts: [] },
+  },
+  {
+    workspaceId: "workspace-a",
+    maxAttempts: 1,
+    generatePost: async (_env, _context, options) => {
+      assert.ok(options.systemPrompt.includes("WORKSPACE_A_OPERATOR_GUIDANCE"));
+      return { body: bodyForPattern([5]) };
+    },
+  }
+);
+assert.equal(workspaceResult.attempts, 1);
+assert.deepEqual(workspacePromptKeys, [
+  { key: "operator_prompt_profile:v1:workspace-a", type: "json" },
+]);
+
 let exhaustedGenerationCalls = 0;
 
 await assert.rejects(

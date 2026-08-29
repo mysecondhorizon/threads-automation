@@ -100,6 +100,7 @@ export async function buildAiCandidatePackage(env, options = {}) {
     at,
     type: options.type,
     contentType: options.contentType,
+    workspaceId: options.workspaceId,
   });
   const eligible = scored.filter((item) => item.eligible).slice(0, normalizeLimit(options.limit));
   const productIds = new Set(eligible.map((item) => item.candidate?.productId).filter(Boolean));
@@ -108,8 +109,8 @@ export async function buildAiCandidatePackage(env, options = {}) {
   );
 
   const [products, mediaRecords] = await Promise.all([
-    productIds.size ? getProducts(env) : [],
-    mediaIds.size ? listMedia(env) : [],
+    productIds.size ? getProducts(env, options.workspaceId) : [],
+    mediaIds.size ? listMedia(env, {}, options.workspaceId) : [],
   ]);
   const productsById = new Map(products.map((product) => [product.id, product]));
   const mediaById = new Map(mediaRecords.map((media) => [media.id, media]));

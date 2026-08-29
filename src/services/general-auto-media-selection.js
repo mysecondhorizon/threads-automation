@@ -304,8 +304,8 @@ export async function selectGeneralAutoMedia(
   }
 
   const [poolItems, mediaRecords] = await Promise.all([
-    readContentPool(env, { type: "general" }),
-    readMedia(env, { sourceType: "general" }),
+    readContentPool(env, { type: "general" }, options.workspaceId),
+    readMedia(env, { sourceType: "general" }, options.workspaceId),
   ]);
 
   return selectGeneralAutoMediaFromRecords({

@@ -137,7 +137,7 @@ export function scoreContentPoolCandidates(items, options = {}) {
 }
 
 export async function getScoredContentPoolCandidates(env, options = {}) {
-  const items = await listContentPool(env, { type: options.type });
+  const items = await listContentPool(env, { type: options.type }, options.workspaceId);
   const scored = scoreContentPoolCandidates(items, options);
   return options.limit === undefined
     ? scored
