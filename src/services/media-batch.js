@@ -29,7 +29,10 @@ import {
   analyzeVideoFrames,
   validateVideoClipTiming,
 } from "./media-video-vision.js";
-import { createMediaBatch } from "./media.js";
+import {
+  createMediaBatch,
+  resolveMediaWorkspaceId,
+} from "./media.js";
 import { createContentPoolBatch } from "./content-pool.js";
 
 const MAX_BATCH_FILES = 50;
@@ -367,8 +370,14 @@ export async function batchUploadMedia(
     manifestText = "",
     defaults = {},
     createPoolItems = true,
-  }
+  },
+  workspaceId
 ) {
+  const resolvedWorkspaceId =
+    resolveMediaWorkspaceId(
+      workspaceId
+    );
+
   const fileList = Array.from(files || []);
   if (!fileList.length) throw new Error("At least one image file is required");
   if (fileList.length > MAX_BATCH_FILES) {
@@ -473,7 +482,7 @@ export async function batchUploadMedia(
       peoplePresent: input.peoplePresent,
       textPresent: input.textPresent,
       brandVisible: input.brandVisible,
-    })));
+    })), resolvedWorkspaceId);
   } catch (error) {
     const cleanupFailures = earlyCleanupFailures.concat(
       await cleanupObjects(env, uploaded.flatMap(({ input }) => [
@@ -536,7 +545,7 @@ export async function batchUploadMedia(
         priority: input.priority,
         maxUses: input.maxUses,
         cooldownDays: input.cooldownDays,
-      })));
+      })), resolvedWorkspaceId);
     } catch (error) {
       for (const item of poolRegistered) {
         results[item.originalIndex].status = "partial";

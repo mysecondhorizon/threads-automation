@@ -1,8 +1,44 @@
 import { getJson, putJson } from "./kv.js";
 
+import {
+  getMedia,
+} from "./media.js";
+
+import {
+  DEFAULT_WORKSPACE_ID,
+} from "./workspace-foundation.js";
+
 const CONTENT_POOL_KEY = "content_pool";
 const MAX_POOL_ITEMS = 1000;
 const TYPES = new Set(["general", "product"]);
+
+function normalizeWorkspaceId(workspaceId) {
+  if (workspaceId === undefined || workspaceId === null) {
+    return DEFAULT_WORKSPACE_ID;
+  }
+  if (typeof workspaceId !== "string" || !workspaceId.trim()) {
+    throw fail("Content Pool workspace id is invalid", "content_pool_workspace_invalid");
+  }
+  return workspaceId.trim();
+}
+
+function storedWorkspaceId(item) {
+  const workspaceId = typeof item?.workspaceId === "string"
+    ? item.workspaceId.trim()
+    : "";
+  return workspaceId || DEFAULT_WORKSPACE_ID;
+}
+
+function isInWorkspace(item, workspaceId) {
+  return storedWorkspaceId(item) === workspaceId;
+}
+
+function mergeWorkspaceItems(items, workspaceId, workspaceItems) {
+  return [
+    ...workspaceItems.slice(0, MAX_POOL_ITEMS),
+    ...items.filter((item) => !isInWorkspace(item, workspaceId)),
+  ];
+}
 
 export class ContentPoolError extends Error {
   constructor(message, code = "content_pool_failed", details = null) {
@@ -76,7 +112,7 @@ function createId() {
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
-function normalizeItem(input, existing = null) {
+function normalizeItem(input, existing = null, workspaceId = DEFAULT_WORKSPACE_ID) {
   const now = new Date().toISOString();
   const type = typeValue(input?.type, existing?.type || "general");
   const availableFrom = dateValue(input?.availableFrom, existing?.availableFrom ?? null);
@@ -94,6 +130,7 @@ function normalizeItem(input, existing = null) {
 
   return {
     id: existing?.id || createId(),
+    workspaceId,
     type,
     mediaIds,
     productId: type === "product"
@@ -120,8 +157,12 @@ function normalizeItem(input, existing = null) {
 
 function hydrateItem(input) {
   const type = TYPES.has(input?.type) ? input.type : "general";
+  const workspaceId = typeof input?.workspaceId === "string" && input.workspaceId.trim()
+    ? input.workspaceId.trim()
+    : null;
   return {
     id: text(input?.id),
+    ...(workspaceId ? { workspaceId } : {}),
     type,
     mediaIds: stringList(input?.mediaIds),
     productId: type === "product" ? nullableText(input?.productId) : null,
@@ -144,11 +185,12 @@ function hydrateItem(input) {
 async function readStore(env) {
   const stored = await getJson(env, CONTENT_POOL_KEY);
   if (!stored || !Array.isArray(stored.items)) {
-    return { version: 1, updatedAt: null, items: [] };
+    return { version: 1, updatedAt: null, rawItems: [], items: [] };
   }
   return {
     version: Number(stored.version || 1),
     updatedAt: stored.updatedAt || null,
+    rawItems: stored.items,
     items: stored.items.map(hydrateItem).filter((item) => item.id && item.mediaIds.length),
   };
 }
@@ -157,6 +199,19 @@ async function writeStore(env, items) {
   const value = { version: 1, updatedAt: new Date().toISOString(), items };
   await putJson(env, CONTENT_POOL_KEY, value);
   return value;
+}
+
+async function assertMediaReferences(env, item, workspaceId) {
+  for (const mediaId of item.mediaIds) {
+    const media = await getMedia(env, mediaId, workspaceId);
+    if (!media) {
+      throw fail(
+        "Content Pool media must belong to the same workspace",
+        "content_pool_media_workspace_mismatch",
+        { mediaId }
+      );
+    }
+  }
 }
 
 export function isContentPoolItemAvailable(item, at = new Date()) {
@@ -172,83 +227,111 @@ export function isContentPoolItemAvailable(item, at = new Date()) {
   return true;
 }
 
-export async function createContentPoolItem(env, input) {
+export async function createContentPoolItem(env, input, workspaceId) {
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
   const store = await readStore(env);
-  if (store.items.length >= MAX_POOL_ITEMS) {
+  const workspaceItems = store.items.filter((item) => isInWorkspace(item, resolvedWorkspaceId));
+  if (workspaceItems.length >= MAX_POOL_ITEMS) {
     throw fail("Content Pool has reached its item limit", "content_pool_limit_reached");
   }
-  const item = normalizeItem(input);
-  await writeStore(env, [item, ...store.items]);
+  const item = normalizeItem(input, null, resolvedWorkspaceId);
+  await assertMediaReferences(env, item, resolvedWorkspaceId);
+  await writeStore(env, mergeWorkspaceItems(store.rawItems, resolvedWorkspaceId, [item, ...workspaceItems]));
   return item;
 }
 
-export async function createContentPoolBatch(env, inputs) {
+export async function createContentPoolBatch(env, inputs, workspaceId) {
   if (!Array.isArray(inputs) || inputs.length === 0) {
     return { created: [], failures: [] };
   }
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
   const store = await readStore(env);
+  const workspaceItems = store.items.filter((item) => isInWorkspace(item, resolvedWorkspaceId));
   const created = [];
   const failures = [];
   for (let index = 0; index < inputs.length; index += 1) {
-    if (store.items.length + created.length >= MAX_POOL_ITEMS) {
+    if (workspaceItems.length + created.length >= MAX_POOL_ITEMS) {
       failures.push({ index, code: "content_pool_limit_reached", message: "Content Pool limit reached" });
       continue;
     }
     try {
-      created.push(normalizeItem(inputs[index]));
+      const item = normalizeItem(inputs[index], null, resolvedWorkspaceId);
+      await assertMediaReferences(env, item, resolvedWorkspaceId);
+      created.push(item);
     } catch (error) {
       failures.push({ index, code: error?.code || "content_pool_validation_failed", message: error?.message || String(error) });
     }
   }
-  if (created.length) await writeStore(env, [...created].reverse().concat(store.items));
+  if (created.length) {
+    await writeStore(
+      env,
+      mergeWorkspaceItems(
+        store.rawItems,
+        resolvedWorkspaceId,
+        [...created].reverse().concat(workspaceItems)
+      )
+    );
+  }
   return { created, failures };
 }
 
-export async function getContentPoolItem(env, itemId) {
+export async function getContentPoolItem(env, itemId, workspaceId) {
   const id = text(itemId);
   if (!id) return null;
-  return (await readStore(env)).items.find((item) => item.id === id) || null;
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
+  return (await readStore(env)).items.find((item) =>
+    item.id === id && isInWorkspace(item, resolvedWorkspaceId)
+  ) || null;
 }
 
-export async function listContentPool(env, options = {}) {
+export async function listContentPool(env, options = {}, workspaceId) {
   const type = options.type === undefined ? null : typeValue(options.type);
   const active = options.active;
   if (active !== undefined && typeof active !== "boolean") {
     throw fail("Content Pool active filter must be a boolean", "content_pool_filter_invalid");
   }
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
   return (await readStore(env)).items.filter((item) =>
+    isInWorkspace(item, resolvedWorkspaceId) &&
     (!type || item.type === type) &&
     (active === undefined || item.active === active)
   );
 }
 
-export async function updateContentPoolItem(env, itemId, input) {
+export async function updateContentPoolItem(env, itemId, input, workspaceId) {
   const id = text(itemId);
   if (!id) throw fail("Content Pool id is required", "content_pool_id_missing");
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
   const store = await readStore(env);
-  const index = store.items.findIndex((item) => item.id === id);
+  const workspaceItems = store.items.filter((item) => isInWorkspace(item, resolvedWorkspaceId));
+  const index = workspaceItems.findIndex((item) => item.id === id);
   if (index < 0) throw fail("Content Pool item was not found", "content_pool_not_found", { itemId: id });
-  const item = normalizeItem(input, store.items[index]);
-  const items = [...store.items];
-  items[index] = item;
-  await writeStore(env, items);
+  const item = normalizeItem(input, workspaceItems[index], resolvedWorkspaceId);
+  if (input?.mediaIds !== undefined) {
+    await assertMediaReferences(env, item, resolvedWorkspaceId);
+  }
+  const nextWorkspaceItems = [...workspaceItems];
+  nextWorkspaceItems[index] = item;
+  await writeStore(env, mergeWorkspaceItems(store.rawItems, resolvedWorkspaceId, nextWorkspaceItems));
   return item;
 }
 
-export async function removeContentPoolItem(env, itemId) {
+export async function removeContentPoolItem(env, itemId, workspaceId) {
   const id = text(itemId);
   if (!id) return false;
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
   const store = await readStore(env);
-  const items = store.items.filter((item) => item.id !== id);
-  if (items.length === store.items.length) return false;
-  await writeStore(env, items);
+  const workspaceItems = store.items.filter((item) => isInWorkspace(item, resolvedWorkspaceId));
+  const nextWorkspaceItems = workspaceItems.filter((item) => item.id !== id);
+  if (nextWorkspaceItems.length === workspaceItems.length) return false;
+  await writeStore(env, mergeWorkspaceItems(store.rawItems, resolvedWorkspaceId, nextWorkspaceItems));
   return true;
 }
 
-export async function getAvailableContentPoolCandidates(env, options = {}) {
+export async function getAvailableContentPoolCandidates(env, options = {}, workspaceId) {
   const at = options.at || new Date();
   const limit = integer(options.limit, 100, "limit", { min: 1 });
-  const items = await listContentPool(env, { type: options.type, active: true });
+  const items = await listContentPool(env, { type: options.type, active: true }, workspaceId);
   return items
     .filter((item) => isContentPoolItemAvailable(item, at))
     .sort((left, right) =>
@@ -259,11 +342,11 @@ export async function getAvailableContentPoolCandidates(env, options = {}) {
     .slice(0, limit);
 }
 
-export async function markContentPoolItemUsed(env, itemId, usedAt = new Date()) {
-  const item = await getContentPoolItem(env, itemId);
+export async function markContentPoolItemUsed(env, itemId, usedAt = new Date(), workspaceId) {
+  const item = await getContentPoolItem(env, itemId, workspaceId);
   if (!item) throw fail("Content Pool item was not found", "content_pool_not_found", { itemId });
   return await updateContentPoolItem(env, item.id, {
     usedCount: item.usedCount + 1,
     lastUsedAt: new Date(usedAt).toISOString(),
-  });
+  }, workspaceId);
 }

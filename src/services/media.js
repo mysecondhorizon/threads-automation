@@ -3,6 +3,10 @@ import {
   putJson,
 } from "./kv.js";
 
+import {
+  DEFAULT_WORKSPACE_ID,
+} from "./workspace-foundation.js";
+
 const MEDIA_LIBRARY_KEY =
   "content_media_library";
 
@@ -38,6 +42,69 @@ const MAX_USABLE_ANGLES =
 
 const MAX_USABLE_ANGLE_LENGTH =
   100;
+
+export function resolveMediaWorkspaceId(
+  workspaceId
+) {
+  if (
+    workspaceId === undefined ||
+    workspaceId === null
+  ) {
+    return DEFAULT_WORKSPACE_ID;
+  }
+
+  if (
+    typeof workspaceId !== "string" ||
+    !workspaceId.trim()
+  ) {
+    throw createMediaLibraryError(
+      "Workspace id is invalid",
+      "media_workspace_invalid"
+    );
+  }
+
+  return workspaceId.trim();
+}
+
+function storedWorkspaceId(
+  media
+) {
+  const workspaceId =
+    typeof media?.workspaceId === "string"
+      ? media.workspaceId.trim()
+      : "";
+
+  return workspaceId ||
+    DEFAULT_WORKSPACE_ID;
+}
+
+function isInWorkspace(
+  media,
+  workspaceId
+) {
+  return storedWorkspaceId(media) ===
+    workspaceId;
+}
+
+function mergeWorkspaceMedia(
+  records,
+  workspaceId,
+  workspaceRecords
+) {
+  return [
+    ...workspaceRecords.slice(
+      0,
+      MAX_MEDIA_RECORDS
+    ),
+    ...records.filter(
+      (media) =>
+        !isInWorkspace(
+          media,
+          workspaceId
+        )
+    ),
+  ];
+}
 
 const SOURCE_TYPES =
   new Set([
@@ -505,7 +572,8 @@ function createMediaId() {
 
 function normalizeMediaRecord(
   input,
-  existingMedia = null
+  existingMedia = null,
+  workspaceId = DEFAULT_WORKSPACE_ID
 ) {
   const now =
     new Date().toISOString();
@@ -533,6 +601,8 @@ function normalizeMediaRecord(
     id:
       existingMedia?.id ||
       createMediaId(),
+
+    workspaceId,
 
     mediaKind,
 
@@ -756,11 +826,21 @@ function normalizeStoredMedia(
       ? input.mediaKind
       : "image";
 
+  const workspaceId =
+    typeof input?.workspaceId === "string" &&
+    input.workspaceId.trim()
+      ? input.workspaceId.trim()
+      : null;
+
   return {
     id:
       normalizeText(
         input?.id
       ),
+
+    ...(workspaceId
+      ? { workspaceId }
+      : {}),
 
     mediaKind,
 
@@ -941,6 +1021,9 @@ async function readMediaStore(
       updatedAt:
         null,
 
+      rawRecords:
+        [],
+
       records:
         [],
     };
@@ -956,6 +1039,9 @@ async function readMediaStore(
     updatedAt:
       stored.updatedAt ||
       null,
+
+    rawRecords:
+      stored.records,
 
     records:
       stored.records
@@ -1072,13 +1158,28 @@ function normalizeListOptions(
 
 export async function createMedia(
   env,
-  input
+  input,
+  workspaceId
 ) {
+  const resolvedWorkspaceId =
+    resolveMediaWorkspaceId(
+      workspaceId
+    );
+
   const store =
     await readMediaStore(env);
 
+  const workspaceRecords =
+    store.records.filter(
+      (media) =>
+        isInWorkspace(
+          media,
+          resolvedWorkspaceId
+        )
+    );
+
   if (
-    store.records.length >=
+    workspaceRecords.length >=
     MAX_MEDIA_RECORDS
   ) {
     throw createMediaLibraryError(
@@ -1092,7 +1193,11 @@ export async function createMedia(
   }
 
   const media =
-    normalizeMediaRecord(input);
+    normalizeMediaRecord(
+      input,
+      null,
+      resolvedWorkspaceId
+    );
 
   assertUniqueObjectKey(
     store.records,
@@ -1101,10 +1206,14 @@ export async function createMedia(
 
   await writeMediaStore(
     env,
-    [
-      media,
-      ...store.records,
-    ]
+    mergeWorkspaceMedia(
+      store.rawRecords,
+      resolvedWorkspaceId,
+      [
+        media,
+        ...workspaceRecords,
+      ]
+    )
   );
 
   return media;
@@ -1112,7 +1221,8 @@ export async function createMedia(
 
 export async function createMediaBatch(
   env,
-  inputs
+  inputs,
+  workspaceId
 ) {
   if (!Array.isArray(inputs) || inputs.length === 0) {
     throw createMediaLibraryError(
@@ -1121,8 +1231,20 @@ export async function createMediaBatch(
     );
   }
 
+  const resolvedWorkspaceId =
+    resolveMediaWorkspaceId(
+      workspaceId
+    );
   const store = await readMediaStore(env);
-  const availableSlots = MAX_MEDIA_RECORDS - store.records.length;
+  const workspaceRecords =
+    store.records.filter(
+      (media) =>
+        isInWorkspace(
+          media,
+          resolvedWorkspaceId
+        )
+    );
+  const availableSlots = MAX_MEDIA_RECORDS - workspaceRecords.length;
   const created = [];
   const failures = [];
 
@@ -1137,8 +1259,15 @@ export async function createMediaBatch(
     }
 
     try {
-      const media = normalizeMediaRecord(inputs[index]);
-      assertUniqueObjectKey([...store.records, ...created], media);
+      const media = normalizeMediaRecord(
+        inputs[index],
+        null,
+        resolvedWorkspaceId
+      );
+      assertUniqueObjectKey(
+        [...store.records, ...created],
+        media
+      );
       created.push(media);
     } catch (error) {
       failures.push({
@@ -1150,7 +1279,14 @@ export async function createMediaBatch(
   }
 
   if (created.length > 0) {
-    await writeMediaStore(env, [...created].reverse().concat(store.records));
+    await writeMediaStore(
+      env,
+      mergeWorkspaceMedia(
+        store.rawRecords,
+        resolvedWorkspaceId,
+        [...created].reverse().concat(workspaceRecords)
+      )
+    );
   }
 
   return { created, failures };
@@ -1158,7 +1294,8 @@ export async function createMediaBatch(
 
 export async function getMedia(
   env,
-  mediaId
+  mediaId,
+  workspaceId
 ) {
   const normalizedId =
     normalizeText(mediaId);
@@ -1167,31 +1304,65 @@ export async function getMedia(
     return null;
   }
 
+  const resolvedWorkspaceId =
+    resolveMediaWorkspaceId(
+      workspaceId
+    );
   const store =
     await readMediaStore(env);
 
   return (
     store.records.find(
       (media) =>
-        media.id ===
-        normalizedId
+        media.id === normalizedId &&
+        isInWorkspace(
+          media,
+          resolvedWorkspaceId
+        )
     ) ||
     null
   );
 }
 
+export async function getPublicMediaById(
+  env,
+  mediaId
+) {
+  const normalizedId =
+    normalizeText(mediaId);
+
+  if (!normalizedId) return null;
+
+  const store =
+    await readMediaStore(env);
+
+  return store.records.find(
+    (media) =>
+      media.id === normalizedId
+  ) || null;
+}
+
 export async function listMedia(
   env,
-  options = {}
+  options = {},
+  workspaceId
 ) {
   const filters =
     normalizeListOptions(options);
 
+  const resolvedWorkspaceId =
+    resolveMediaWorkspaceId(
+      workspaceId
+    );
   const store =
     await readMediaStore(env);
 
   return store.records.filter(
     (media) => {
+      if (!isInWorkspace(media, resolvedWorkspaceId)) {
+        return false;
+      }
+
       if (
         filters.sourceType &&
         media.sourceType !==
@@ -1224,7 +1395,8 @@ export async function listMedia(
 export async function updateMedia(
   env,
   mediaId,
-  input
+  input,
+  workspaceId
 ) {
   const normalizedId =
     normalizeText(mediaId);
@@ -1236,11 +1408,24 @@ export async function updateMedia(
     );
   }
 
+  const resolvedWorkspaceId =
+    resolveMediaWorkspaceId(
+      workspaceId
+    );
   const store =
     await readMediaStore(env);
 
+  const workspaceRecords =
+    store.records.filter(
+      (media) =>
+        isInWorkspace(
+          media,
+          resolvedWorkspaceId
+        )
+    );
+
   const existingIndex =
-    store.records.findIndex(
+    workspaceRecords.findIndex(
       (media) =>
         media.id ===
         normalizedId
@@ -1258,14 +1443,15 @@ export async function updateMedia(
   }
 
   const existingMedia =
-    store.records[
+    workspaceRecords[
       existingIndex
     ];
 
   const media =
     normalizeMediaRecord(
       input,
-      existingMedia
+      existingMedia,
+      resolvedWorkspaceId
     );
 
   assertUniqueObjectKey(
@@ -1273,17 +1459,21 @@ export async function updateMedia(
     media
   );
 
-  const nextRecords = [
-    ...store.records,
+  const nextWorkspaceRecords = [
+    ...workspaceRecords,
   ];
 
-  nextRecords[
+  nextWorkspaceRecords[
     existingIndex
   ] = media;
 
   await writeMediaStore(
     env,
-    nextRecords
+    mergeWorkspaceMedia(
+      store.rawRecords,
+      resolvedWorkspaceId,
+      nextWorkspaceRecords
+    )
   );
 
   return media;
@@ -1291,7 +1481,8 @@ export async function updateMedia(
 
 export async function removeMedia(
   env,
-  mediaId
+  mediaId,
+  workspaceId
 ) {
   const normalizedId =
     normalizeText(mediaId);
@@ -1300,26 +1491,43 @@ export async function removeMedia(
     return false;
   }
 
+  const resolvedWorkspaceId =
+    resolveMediaWorkspaceId(
+      workspaceId
+    );
   const store =
     await readMediaStore(env);
 
-  const nextRecords =
+  const workspaceRecords =
     store.records.filter(
+      (media) =>
+        isInWorkspace(
+          media,
+          resolvedWorkspaceId
+        )
+    );
+
+  const nextWorkspaceRecords =
+    workspaceRecords.filter(
       (media) =>
         media.id !==
         normalizedId
     );
 
   if (
-    nextRecords.length ===
-    store.records.length
+    nextWorkspaceRecords.length ===
+    workspaceRecords.length
   ) {
     return false;
   }
 
   await writeMediaStore(
     env,
-    nextRecords
+    mergeWorkspaceMedia(
+      store.rawRecords,
+      resolvedWorkspaceId,
+      nextWorkspaceRecords
+    )
   );
 
   return true;
@@ -1341,22 +1549,28 @@ export function isMediaAvailable(
 
 export async function listAvailableMedia(
   env,
-  options = {}
+  options = {},
+  workspaceId
 ) {
   const at = options.at || new Date();
   const records = await listMedia(env, {
     sourceType: options.sourceType,
     productId: options.productId,
-  });
+  }, workspaceId);
   return records.filter((media) => isMediaAvailable(media, at));
 }
 
 export async function markMediaUsed(
   env,
   mediaId,
-  usedAt = new Date()
+  usedAt = new Date(),
+  workspaceId
 ) {
-  const media = await getMedia(env, mediaId);
+  const media = await getMedia(
+    env,
+    mediaId,
+    workspaceId
+  );
   if (!media) {
     throw createMediaLibraryError(
       "Media record was not found",
@@ -1367,5 +1581,5 @@ export async function markMediaUsed(
   return await updateMedia(env, media.id, {
     usedCount: media.usedCount + 1,
     lastUsedAt: new Date(usedAt).toISOString(),
-  });
+  }, workspaceId);
 }

@@ -1,4 +1,6 @@
-import { getMedia } from "../services/media.js";
+import {
+  getPublicMediaById,
+} from "../services/media.js";
 import {
   getMediaObject,
   headMediaObject,
@@ -70,7 +72,10 @@ export async function handlePublicMedia(request, env, url) {
   if (!mediaId) return notFound();
 
   try {
-    const media = await getMedia(env, mediaId);
+    const media = await getPublicMediaById(
+      env,
+      mediaId
+    );
     if (!media || !media.active) return notFound();
 
     const rangeHeader = request.headers.get("Range");
