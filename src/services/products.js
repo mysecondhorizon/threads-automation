@@ -3,11 +3,76 @@ import {
   putJson,
 } from "./kv.js";
 
+import {
+  DEFAULT_WORKSPACE_ID,
+} from "./workspace-foundation.js";
+
 const PRODUCTS_KEY =
   "content_products";
 
 const MAX_PRODUCTS =
   50;
+
+function normalizeWorkspaceId(
+  workspaceId
+) {
+  if (
+    workspaceId === undefined ||
+    workspaceId === null
+  ) {
+    return DEFAULT_WORKSPACE_ID;
+  }
+
+  if (
+    typeof workspaceId !== "string" ||
+    !workspaceId.trim()
+  ) {
+    throw new Error("Invalid workspace id");
+  }
+
+  return workspaceId.trim();
+}
+
+function productWorkspaceId(
+  product
+) {
+  const workspaceId =
+    typeof product?.workspaceId === "string"
+      ? product.workspaceId.trim()
+      : "";
+
+  return workspaceId ||
+    DEFAULT_WORKSPACE_ID;
+}
+
+function isInWorkspace(
+  product,
+  workspaceId
+) {
+  return productWorkspaceId(product) ===
+    workspaceId;
+}
+
+function mergeWorkspaceProducts(
+  products,
+  workspaceId,
+  workspaceProducts
+) {
+  return [
+    ...workspaceProducts.slice(
+      0,
+      MAX_PRODUCTS
+    ),
+
+    ...products.filter(
+      (product) =>
+        !isInWorkspace(
+          product,
+          workspaceId
+        )
+    ),
+  ];
+}
 
 function normalizeText(
   value
@@ -116,7 +181,8 @@ function createProductId() {
 
 function normalizeProduct(
   input,
-  existingProduct = null
+  existingProduct = null,
+  workspaceId = DEFAULT_WORKSPACE_ID
 ) {
   const now =
     new Date().toISOString();
@@ -128,6 +194,8 @@ function normalizeProduct(
       ) ||
       existingProduct?.id ||
       createProductId(),
+
+    workspaceId,
 
     productKey:
       normalizeProductKey(input?.productKey) ||
@@ -301,11 +369,7 @@ async function writeProductStore(
     updatedAt:
       new Date().toISOString(),
 
-    products:
-      products.slice(
-        0,
-        MAX_PRODUCTS
-      ),
+    products,
   };
 
   await putJson(
@@ -318,22 +382,36 @@ async function writeProductStore(
 }
 
 export async function getProducts(
-  env
+  env,
+  workspaceId
 ) {
+  const resolvedWorkspaceId =
+    normalizeWorkspaceId(
+      workspaceId
+    );
+
   const store =
     await readProductStore(
       env
     );
 
-  return store.products;
+  return store.products.filter(
+    (product) =>
+      isInWorkspace(
+        product,
+        resolvedWorkspaceId
+      )
+  );
 }
 
 export async function getActiveProducts(
-  env
+  env,
+  workspaceId
 ) {
   const products =
     await getProducts(
-      env
+      env,
+      workspaceId
     );
 
   return products.filter(
@@ -344,7 +422,8 @@ export async function getActiveProducts(
 
 export async function getProductById(
   env,
-  productId
+  productId,
+  workspaceId
 ) {
   const normalizedId =
     normalizeText(
@@ -357,7 +436,8 @@ export async function getProductById(
 
   const products =
     await getProducts(
-      env
+      env,
+      workspaceId
     );
 
   return (
@@ -372,11 +452,29 @@ export async function getProductById(
 
 export async function saveProduct(
   env,
-  input
+  input,
+  workspaceId
 ) {
-  const products =
-    await getProducts(
+  const resolvedWorkspaceId =
+    normalizeWorkspaceId(
+      workspaceId
+    );
+
+  const store =
+    await readProductStore(
       env
+    );
+
+  const products =
+    store.products;
+
+  const workspaceProducts =
+    products.filter(
+      (product) =>
+        isInWorkspace(
+          product,
+          resolvedWorkspaceId
+        )
     );
 
   const requestedId =
@@ -384,9 +482,29 @@ export async function saveProduct(
       input?.id
     );
 
+  const foreignProduct =
+    requestedId
+      ? products.find(
+          (product) =>
+            product?.id === requestedId &&
+            !isInWorkspace(
+              product,
+              resolvedWorkspaceId
+            )
+        )
+      : null;
+
+  if (
+    foreignProduct
+  ) {
+    throw new Error(
+      "Product belongs to another workspace"
+    );
+  }
+
   const existingIndex =
     requestedId
-      ? products.findIndex(
+      ? workspaceProducts.findIndex(
           (product) =>
             product.id ===
             requestedId
@@ -395,7 +513,7 @@ export async function saveProduct(
 
   const existingProduct =
     existingIndex >= 0
-      ? products[
+      ? workspaceProducts[
           existingIndex
         ]
       : null;
@@ -404,41 +522,44 @@ export async function saveProduct(
     validateProduct(
       normalizeProduct(
         input,
-        existingProduct
+        existingProduct,
+        resolvedWorkspaceId
       )
     );
 
-  let nextProducts;
-
-  if (
+  const nextWorkspaceProducts =
     existingIndex >= 0
-  ) {
-    nextProducts = [
-      ...products,
-    ];
-
-    nextProducts[
-      existingIndex
-    ] = product;
-  } else {
-    nextProducts = [
-      product,
-      ...products,
-    ];
-  }
+      ? workspaceProducts.map(
+          (item, index) =>
+            index === existingIndex
+              ? product
+              : item
+        )
+      : [
+          product,
+          ...workspaceProducts,
+        ];
 
   await writeProductStore(
     env,
-    nextProducts
+    mergeWorkspaceProducts(
+      products,
+      resolvedWorkspaceId,
+      nextWorkspaceProducts
+    )
   );
 
   return product;
 }
 
-export async function resolveProductIdByKey(env, productKey) {
+export async function resolveProductIdByKey(
+  env,
+  productKey,
+  workspaceId
+) {
   const key = normalizeProductKey(productKey);
   if (!key) return null;
-  const product = (await getProducts(env)).find((item) => item?.productKey === key);
+  const product = (await getProducts(env, workspaceId)).find((item) => item?.productKey === key);
   return product?.id || null;
 }
 
@@ -465,28 +586,77 @@ function preserveEmptyCsvFields(row, existingProduct) {
   return merged;
 }
 
-export async function batchUpsertProducts(env, rows) {
+export async function batchUpsertProducts(
+  env,
+  rows,
+  workspaceId
+) {
   if (!Array.isArray(rows)) throw new Error("rows must be an array");
-  const products = [...(await readProductStore(env)).products];
+
+  const resolvedWorkspaceId =
+    normalizeWorkspaceId(
+      workspaceId
+    );
+
+  const store =
+    await readProductStore(
+      env
+    );
+
+  const products =
+    store.products;
+
+  const workspaceProducts =
+    products.filter(
+      (product) =>
+        isInWorkspace(
+          product,
+          resolvedWorkspaceId
+        )
+    );
+
+  const nextWorkspaceProducts =
+    [...workspaceProducts];
+
   const results = [];
+
   rows.forEach((row, index) => {
     try {
       const productKey = normalizeProductKey(row?.productKey);
       if (!productKey) throw new Error("productKey is required");
-      const existingIndex = products.findIndex((item) => item?.productKey === productKey);
-      const existingProduct = existingIndex >= 0 ? products[existingIndex] : null;
+      const existingIndex = nextWorkspaceProducts.findIndex((item) => item?.productKey === productKey);
+      const existingProduct = existingIndex >= 0 ? nextWorkspaceProducts[existingIndex] : null;
       const input = existingProduct
         ? preserveEmptyCsvFields(row, existingProduct)
         : row;
-      const product = validateProductInput({ ...input, productKey, id: existingProduct?.id }, existingProduct);
-      if (existingIndex >= 0) products[existingIndex] = product;
-      else products.unshift(product);
-      results.push({ row: index + 1, status: existingProduct ? "updated" : "created", productKey, product });
+      const product = validateProductInput(
+        { ...input, productKey, id: existingProduct?.id },
+        existingProduct
+      );
+      const scopedProduct = normalizeProduct(
+        product,
+        existingProduct,
+        resolvedWorkspaceId
+      );
+      if (existingIndex >= 0) nextWorkspaceProducts[existingIndex] = scopedProduct;
+      else nextWorkspaceProducts.unshift(scopedProduct);
+      results.push({ row: index + 1, status: existingProduct ? "updated" : "created", productKey, product: scopedProduct });
     } catch (error) {
       results.push({ row: index + 1, status: "failed", productKey: normalizeProductKey(row?.productKey) || null, error: error.message });
     }
   });
-  if (results.some((item) => item.status !== "failed")) await writeProductStore(env, products);
+
+  if (results.some((item) => item.status !== "failed")) {
+    await writeProductStore(
+      env,
+      mergeWorkspaceProducts(
+        products,
+        resolvedWorkspaceId,
+        nextWorkspaceProducts
+      )
+    );
+  }
+
   return {
     created: results.filter((item) => item.status === "created"),
     updated: results.filter((item) => item.status === "updated"),
@@ -523,7 +693,8 @@ export function parseProductCsv(csvText) {
 
 export async function removeProduct(
   env,
-  productId
+  productId,
+  workspaceId
 ) {
   const normalizedId =
     normalizeText(
@@ -534,28 +705,49 @@ export async function removeProduct(
     return false;
   }
 
-  const products =
-    await getProducts(
+  const resolvedWorkspaceId =
+    normalizeWorkspaceId(
+      workspaceId
+    );
+
+  const store =
+    await readProductStore(
       env
     );
 
-  const nextProducts =
+  const products =
+    store.products;
+
+  const workspaceProducts =
     products.filter(
+      (product) =>
+        isInWorkspace(
+          product,
+          resolvedWorkspaceId
+        )
+    );
+
+  const nextWorkspaceProducts =
+    workspaceProducts.filter(
       (product) =>
         product.id !==
         normalizedId
     );
 
   if (
-    nextProducts.length ===
-    products.length
+    nextWorkspaceProducts.length ===
+    workspaceProducts.length
   ) {
     return false;
   }
 
   await writeProductStore(
     env,
-    nextProducts
+    mergeWorkspaceProducts(
+      products,
+      resolvedWorkspaceId,
+      nextWorkspaceProducts
+    )
   );
 
   return true;
