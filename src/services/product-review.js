@@ -1,7 +1,10 @@
 import { getJson, putJson } from "./kv.js";
 import { getActiveProducts, buildProductContext, isValidOperatorProductLink } from "./products.js";
 import { buildThreadContext } from "./thread-context.js";
-import { generateDistinctThreadPost } from "./post-regenerator.js";
+import {
+  generateDistinctThreadPost,
+  SAFE_FORMAT_DIVERSITY_OPTIONS,
+} from "./post-regenerator.js";
 import { validateAutoPostText, validateAutoPostPolicy } from "./auto-post-validator.js";
 import { getRecentPostLogs } from "./logger.js";
 import { analyzePostFormat, stripAffiliateDisclosure } from "./post-format.js";
@@ -224,6 +227,7 @@ export async function generateProductReviewCandidate(
     threshold: 0.62,
     maxRecentPosts: 20,
     maxAttempts: 2,
+    ...SAFE_FORMAT_DIVERSITY_OPTIONS,
   };
   if (typeof generatePost === "function") generationOptions.generatePost = generatePost;
   const generation = await generateDistinctThreadPost(env, context, generationOptions);

@@ -12,6 +12,7 @@ import {
 } from "./post-similarity.js";
 
 import {
+  PostFormatError,
   selectTargetPostFormat,
   validatePostFormat,
   getContextFormatDisclosures,
@@ -25,6 +26,40 @@ const DEFAULT_MAX_RECENT_POSTS =
 
 const DEFAULT_MAX_ATTEMPTS =
   2;
+
+export const SAFE_FORMAT_DIVERSITY_OPTIONS =
+  Object.freeze({
+    reselectTargetOnRecentPatternConflict:
+      true,
+
+    excludeInfeasibleTargets:
+      true,
+  });
+
+function selectedPatternSignature(
+  details
+) {
+  const explicit =
+    String(
+      details?.selectedPatternSignature ||
+      ""
+    ).trim();
+
+  if (explicit) {
+    return explicit;
+  }
+
+  const match =
+    String(
+      details?.signature ||
+      ""
+    ).match(
+      /^(p\d+:s[\d-]+)/u
+    );
+
+  return match?.[1] ||
+    null;
+}
 
 function buildRetryGoal(
   originalGoal,
@@ -159,8 +194,8 @@ export async function generateDistinctThreadPost(
       );
 
     if (!initialTargetFormat) {
-      throw new PostSimilarityError(
-        "No feasible post format target is available",
+      throw new PostFormatError(
+        "최근 글과 충분히 다른 포맷을 선택할 수 없습니다.",
         {
           code:
             "post_format_validation_failed",
@@ -202,6 +237,9 @@ export async function generateDistinctThreadPost(
       .targetFormat;
 
   const failedTargetFormatIds =
+    new Set();
+
+  const failedPatternSignatures =
     new Set();
 
   const disclosures =
@@ -327,20 +365,37 @@ export async function generateDistinctThreadPost(
           ? error.details.reasons
           : [];
 
+      const formatConflict =
+        reasons.includes(
+          "recent_pattern_too_similar"
+        ) ||
+        reasons.includes(
+          "recent_signature_repeated"
+        );
+
       if (
         reselectTargetOnRecentPatternConflict &&
         error?.code ===
           "post_format_validation_failed" &&
-        reasons.includes(
-          "recent_pattern_too_similar"
-        ) &&
+        formatConflict &&
         targetFormat?.id
       ) {
+        const failedPattern =
+          selectedPatternSignature(
+            error.details
+          );
+
         failedTargetFormatIds.add(
           targetFormat.id
         );
 
-        const nextTargetFormat =
+        if (failedPattern) {
+          failedPatternSignatures.add(
+            failedPattern
+          );
+        }
+
+        let nextTargetFormat =
           selectTargetPostFormat(
             recentFormats,
             {
@@ -352,6 +407,10 @@ export async function generateDistinctThreadPost(
                 ...failedTargetFormatIds,
               ],
 
+              excludedPatternSignatures: [
+                ...failedPatternSignatures,
+              ],
+
               excludeInfeasibleTargets,
 
               selectConcretePattern:
@@ -359,12 +418,55 @@ export async function generateDistinctThreadPost(
             }
           );
 
+        if (!nextTargetFormat) {
+          nextTargetFormat =
+            selectTargetPostFormat(
+              recentFormats,
+              {
+                sequence:
+                  context.publishing
+                    .publishSequence ||
+                  1,
+
+                excludedFormatIds: [
+                  ...failedTargetFormatIds,
+                ].filter(
+                  (formatId) =>
+                    formatId !==
+                      targetFormat.id
+                ),
+
+                excludedPatternSignatures: [
+                  ...failedPatternSignatures,
+                ],
+
+                excludeInfeasibleTargets,
+
+                selectConcretePattern:
+                  excludeInfeasibleTargets,
+              }
+            );
+        }
+
         if (nextTargetFormat) {
           targetFormat =
             nextTargetFormat;
         } else {
+          error.message =
+            "최근 글과 충분히 다른 포맷을 선택할 수 없습니다.";
+
           error.details = {
             ...error.details,
+
+            reasons: [
+              ...new Set([
+                ...reasons,
+                "no_feasible_target_format",
+              ]),
+            ],
+
+            exhausted:
+              true,
 
             attempts:
               attempt,

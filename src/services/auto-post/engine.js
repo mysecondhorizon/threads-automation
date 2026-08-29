@@ -29,6 +29,7 @@ import {
 
 import {
   generateDistinctThreadPost,
+  SAFE_FORMAT_DIVERSITY_OPTIONS,
 } from "../post-regenerator.js";
 
 import {
@@ -929,11 +930,7 @@ async function runExecution(
           maxAttempts:
             MAX_GENERATION_ATTEMPTS,
 
-          reselectTargetOnRecentPatternConflict:
-            true,
-
-          excludeInfeasibleTargets:
-            true,
+          ...SAFE_FORMAT_DIVERSITY_OPTIONS,
         }
       );
 

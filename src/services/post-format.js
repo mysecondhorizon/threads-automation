@@ -267,15 +267,48 @@ function enumerateConcretePatterns(pattern) {
 
 function concretePatternCanAvoidRecentSimilarity(
   pattern,
-  recentFormats
+  recentFormats,
+  excludedPatternSignatures = new Set()
 ) {
-  const recent =
+  if (
+    excludedPatternSignatures.has(
+      pattern.signature
+    )
+  ) {
+    return false;
+  }
+
+  const exactRecent =
+    recentFormats.slice(
+      0,
+      RECENT_EXACT_LIMIT
+    );
+
+  const exactPatternMatch =
+    exactRecent.some(
+      (recentFormat) =>
+        recentFormat.paragraphCount ===
+          pattern.paragraphCount &&
+        recentFormat.sentencePattern.length ===
+          pattern.sentencePattern.length &&
+        recentFormat.sentencePattern.every(
+          (count, index) =>
+            count ===
+              pattern.sentencePattern[index]
+        )
+    );
+
+  if (exactPatternMatch) {
+    return false;
+  }
+
+  const patternRecent =
     recentFormats.slice(
       0,
       RECENT_PATTERN_LIMIT
     );
 
-  return !recent.some(
+  return !patternRecent.some(
     (recentFormat) =>
       arePostFormatsSimilar(
         recentFormat,
@@ -286,22 +319,48 @@ function concretePatternCanAvoidRecentSimilarity(
 
 export function selectConcreteTargetPattern(
   target,
-  recentFormats
+  recentFormats,
+  {
+    excludedPatternSignatures = [],
+  } = {}
 ) {
-  const recent = normalizeRecentFormats(recentFormats)
-    .slice(0, RECENT_PATTERN_LIMIT);
+  const recent =
+    normalizeRecentFormats(
+      recentFormats
+    );
+
+  const excludedPatterns =
+    new Set(
+      excludedPatternSignatures
+        .map(
+          (value) =>
+            String(value || "").trim()
+        )
+        .filter(Boolean)
+    );
+
+  const patternRecent =
+    recent.slice(
+      0,
+      RECENT_PATTERN_LIMIT
+    );
+
   const candidates = (Array.isArray(target?.patterns) ? target.patterns : [])
     .flatMap((pattern, patternOrder) =>
       enumerateConcretePatterns(pattern).map((candidate) => ({
         ...candidate,
         patternOrder,
-        nearestRecentDistance: recent.length
-          ? Math.min(...recent.map((format) => patternDistance(format, candidate)))
+        nearestRecentDistance: patternRecent.length
+          ? Math.min(...patternRecent.map((format) => patternDistance(format, candidate)))
           : 0,
       }))
     )
     .filter((candidate) =>
-      concretePatternCanAvoidRecentSimilarity(candidate, recent)
+      concretePatternCanAvoidRecentSimilarity(
+        candidate,
+        recent,
+        excludedPatterns
+      )
     );
 
   candidates.sort((left, right) =>
@@ -315,12 +374,16 @@ export function selectConcreteTargetPattern(
 
 function targetHasFeasiblePattern(
   target,
-  recentFormats
+  recentFormats,
+  excludedPatternSignatures
 ) {
   return Boolean(
     selectConcreteTargetPattern(
       target,
-      recentFormats
+      recentFormats,
+      {
+        excludedPatternSignatures,
+      }
     )
   );
 }
@@ -330,6 +393,7 @@ export function selectTargetPostFormat(
   {
     sequence = 1,
     excludedFormatIds = [],
+    excludedPatternSignatures = [],
     excludeInfeasibleTargets = false,
     selectConcretePattern = false,
   } = {}
@@ -353,7 +417,11 @@ export function selectTargetPostFormat(
       !excludedIds.has(target.id) &&
       (
         !excludeInfeasibleTargets ||
-        targetHasFeasiblePattern(target, recent)
+        targetHasFeasiblePattern(
+          target,
+          recent,
+          excludedPatternSignatures
+        )
       )
     )
     .map(({ target, index }) => {
@@ -380,7 +448,13 @@ export function selectTargetPostFormat(
   if (!selected) return null;
   const target = getPostFormatPool().find((item) => item.id === selected.id);
   const selectedPattern = selectConcretePattern
-    ? selectConcreteTargetPattern(target, recent)
+    ? selectConcreteTargetPattern(
+      target,
+      recent,
+      {
+        excludedPatternSignatures,
+      }
+    )
     : null;
   if (selectConcretePattern && !selectedPattern) return null;
 
