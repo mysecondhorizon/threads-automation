@@ -28,7 +28,7 @@ PM / coordination account plus parallel worker:
 
 Current parallel workstream:
 
-**R11D — Target App Selection UI Foundation**
+**R11D — Target App Selection UI Foundation — COMPLETED**
 
 The two ChatGPT accounts do not share conversation memory.
 
@@ -236,11 +236,15 @@ Merge one workstream first, sync the other, then continue.
 
 Status:
 
-**READY TO START**
+**COMPLETED / MERGED TO MAIN**
 
 Task:
 
 **R11D — Target App Selection UI Foundation**
+
+Merged commit:
+
+`5ca5511fe4d12beae988f01c42826ec115674bec`
 
 ### Objective
 
@@ -360,13 +364,13 @@ File-level serialization is preferred over manual conflict resolution.
 
 ## 13. Merge Order
 
-If both workstreams finish independently:
+R11D merged first in commit:
 
-Prefer merging the one with fewer shared dependencies first.
+`5ca5511fe4d12beae988f01c42826ec115674bec`
 
-After first push:
+Codex A must fetch/pull and incorporate the latest `origin/main` before continuing R13A.
 
-The second worker must update from the new shared main before commit approval.
+Before R13A commit approval, rerun relevant regression tests after incorporating this checkpoint.
 
 At minimum verify:
 
@@ -481,7 +485,7 @@ Then continue only the workstream assigned to that account.
 
 Latest confirmed main:
 
-`7b948cabad1d513c8b0136f808ac4ee53956f1a4`
+`5ca5511fe4d12beae988f01c42826ec115674bec`
 
 Before relying on this hash, verify `origin/main`.
 
@@ -495,14 +499,12 @@ Current intended parallel execution:
 
 ### Codex A
 
-Continue R13A.
+Fetch/pull latest `origin/main`, incorporate the R11D checkpoint, then continue R13A.
 
 Prefer small checkpoints.
 
 ### Codex B
 
-Start R11D.
-
-Do not touch R13A prompt files.
+R11D complete. Await the next PM assignment.
 
 The PM account should review both completion reports and decide merge order.

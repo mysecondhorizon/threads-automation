@@ -32,11 +32,11 @@ Do not run:
 
 Latest confirmed shared main:
 
-`7b948cabad1d513c8b0136f808ac4ee53956f1a4`
+`5ca5511fe4d12beae988f01c42826ec115674bec`
 
 Latest completed milestone:
 
-**R11C — General AUTO Publisher Adapter Migration**
+**R11D — Target App Selection UI Foundation**
 
 Before any new task, always verify:
 
@@ -202,6 +202,17 @@ Complete.
 ### R11C — General AUTO Publisher Adapter Migration
 Complete.
 
+### R11D — Target App Selection UI Foundation
+Complete.
+
+- Added target-app selection to `/app/write`.
+- Uses the App Registry through `GET /api/apps`.
+- Registry apps with `type: THREADS` are functional targets.
+- WordPress and Custom API are displayed as coming soon.
+- `targetApp = null` remains backward compatible.
+- Explicit invalid targets do not silently fall back to Threads.
+- Published post targets are read-only.
+
 ---
 
 ## 6. Current Publishing Architecture
@@ -299,11 +310,11 @@ Operator prompt preferences must not override code-owned safety/validation rules
 
 See `WORKSTREAMS.md` for live ownership.
 
-Current planned assignments:
+Current workstream status:
 
 ### Codex A
 
-R13A — Shared Operator Prompt Scope
+**ACTIVE — R13A — Shared Operator Prompt Scope**
 
 Goal:
 
@@ -317,13 +328,11 @@ while preserving code-owned constraints.
 
 ### Codex B
 
-R11D — Target App Selection UI Foundation
+**COMPLETED — R11D — Target App Selection UI Foundation**
 
-Goal:
+Merged to `main`:
 
-Expose the existing `targetApp` concept in `/app/write` using the existing app registry.
-
-No WordPress/Custom API implementation.
+`5ca5511fe4d12beae988f01c42826ec115674bec`
 
 ---
 
@@ -374,7 +383,6 @@ Unless a task explicitly changes them, preserve:
 Major remaining work includes:
 
 - R13A shared operator prompt scope
-- R11D target-app selection UI
 - additional production verification of General AUTO
 - Runtime Scheduler final production ownership cutover
 - WordPress publisher
