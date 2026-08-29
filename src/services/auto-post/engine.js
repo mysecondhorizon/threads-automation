@@ -53,6 +53,7 @@ import {
 
 import {
   publishAutoPost,
+  publishGeneralAutoPost,
 } from "./publisher.js";
 
 import {
@@ -1044,7 +1045,11 @@ async function runExecution(
       firstCommentResult,
       mediaSelection: publishedMediaSelection,
       trackingWarnings,
-    } = await publishAutoPost(
+    } = await (
+      generalOnly
+        ? publishGeneralAutoPost
+        : publishAutoPost
+    )(
       env,
       {
         accessToken:

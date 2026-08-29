@@ -11,6 +11,28 @@ export class OperatorPublishError extends Error {
   }
 }
 
+// Shared domain boundary for every publisher migration. It resolves only app
+// metadata; adapters keep provider credentials in their existing stores.
+export async function publishWithResolvedApp({
+  env,
+  targetApp,
+  content,
+  format,
+  context = {},
+  dependencies = {},
+}) {
+  const resolve = dependencies.resolvePublisher || resolvePublisher;
+  const resolved = await resolve({ env, targetApp, format, dependencies });
+  return resolved.publisher.publish({
+    env,
+    content,
+    format,
+    app: resolved.app,
+    context,
+    dependencies,
+  });
+}
+
 function assertPublishableOperatorPost(post) {
   if (!post || typeof post !== "object") {
     throw new OperatorPublishError("Post not found", { code: "post_not_found", status: 404 });
@@ -32,21 +54,13 @@ function assertPublishableOperatorPost(post) {
 export async function publishOperatorPost({ env, post, dependencies = {} }) {
   assertPublishableOperatorPost(post);
   const logSuccess = dependencies.logPostSuccess || logPostSuccess;
-  const resolve = dependencies.resolvePublisher || resolvePublisher;
-  let resolved;
   let publishResult;
   try {
-    resolved = await resolve({
+    publishResult = await publishWithResolvedApp({
       env,
       targetApp: post.targetApp,
-      format: post.format,
-      dependencies,
-    });
-    publishResult = await resolved.publisher.publish({
-      env,
       content: post.body.trim(),
       format: post.format,
-      app: resolved.app,
       context: { source: "OPERATOR", postId: post.id },
       dependencies,
     });

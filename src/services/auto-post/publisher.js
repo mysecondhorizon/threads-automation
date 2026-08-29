@@ -22,6 +22,18 @@ import {
   publishFirstComment,
 } from "./first-comment.js";
 
+import {
+  AutoPostEngineError,
+} from "./errors.js";
+
+import {
+  publishWithResolvedApp,
+} from "../publish-service.js";
+
+import {
+  ThreadsPublisherError,
+} from "../publishers/threads-publisher.js";
+
 const PRODUCT_REVIEW_SOURCE =
   "manual_product_test";
 
@@ -377,6 +389,124 @@ export async function publishAutoPost(
     mediaSelection:
       selection,
 
+    trackingWarnings,
+  };
+}
+
+// General AUTO alone is migrated to the shared adapter. Reviewed publishing,
+// including Product Review candidate flows, stays on publishAutoPost above.
+export async function publishGeneralAutoPost(
+  env,
+  {
+    accessToken,
+    text,
+    firstComment = "",
+    firstCommentTopicTag = null,
+    metadata = null,
+    mediaSelection = null,
+    dependencies = {},
+  }
+) {
+  const selection = normalizeMediaSelection(mediaSelection);
+  if (selection.mode === "VIDEO") {
+    throw new AutoPostEngineError(
+      "General AUTO does not support video publishing",
+      { code: "FORMAT_NOT_SUPPORTED", status: 400, step: "publishing" }
+    );
+  }
+
+  let published;
+  try {
+    published = await publishWithResolvedApp({
+      env,
+      targetApp: null,
+      content: text,
+      format: "TEXT",
+      context: {
+        source: "GENERAL_AUTO",
+        mediaSelection: selection,
+      },
+      dependencies,
+    });
+  } catch (error) {
+    if (error?.code === "APP_NOT_FOUND" || error?.code === "PUBLISHER_NOT_SUPPORTED") {
+      throw new AutoPostEngineError(
+        "General AUTO publishing target is unavailable",
+        { code: error.code, status: error.status, step: "publishing", cause: error }
+      );
+    }
+    if (error instanceof ThreadsPublisherError) {
+      throw new AutoPostEngineError(
+        "Automatic Threads publishing failed",
+        {
+          code: error.code === "FORMAT_NOT_SUPPORTED" ? error.code : "threads_publish_failed",
+          status: error.status,
+          step: "publishing",
+          cause: error,
+        }
+      );
+    }
+    throw error;
+  }
+
+  const profile = {
+    id: published.publisherUserId,
+    username: published.logUsername,
+  };
+  const publishResult = { postId: published.externalPostId };
+  const trackingWarnings = [];
+  const logSuccess = dependencies.logPostSuccess || logPostSuccess;
+  const markUsed = dependencies.markMediaUsed || markMediaUsed;
+  const markPoolUsed = dependencies.markContentPoolItemUsed || markContentPoolItemUsed;
+  const updateFirstComment = dependencies.updatePostLogFirstComment || updatePostLogFirstComment;
+  let logKey = null;
+
+  try {
+    logKey = await logSuccess(env, profile.username, publishResult.postId, text, {
+      ...metadata,
+      publishMode: selection.mode,
+      mediaId: selection.mediaId,
+      contentPoolId: selection.contentPoolId,
+      firstCommentTopicTag: firstCommentTopicTag || null,
+    });
+  } catch (error) {
+    recordTrackingWarning(trackingWarnings, publishResult.postId, "post_success_log_failed");
+  }
+
+  if (selection.mode === "IMAGE") {
+    try {
+      await markUsed(env, selection.mediaId);
+    } catch (error) {
+      recordTrackingWarning(trackingWarnings, publishResult.postId, "media_usage_update_failed");
+    }
+    try {
+      await markPoolUsed(env, selection.contentPoolId);
+    } catch (error) {
+      recordTrackingWarning(trackingWarnings, publishResult.postId, "content_pool_usage_update_failed");
+    }
+  }
+
+  const firstCommentResult = await safelyPublishFirstComment({
+    accessToken,
+    userId: profile.id,
+    postId: publishResult.postId,
+    firstComment,
+    topicTag: firstCommentTopicTag,
+  });
+  try {
+    if (logKey) await updateFirstComment(env, logKey, firstCommentResult);
+  } catch (error) {
+    console.error("Post log first comment metadata update failed", {
+      postId: publishResult.postId,
+      error: serializeCommentError(error),
+    });
+  }
+
+  return {
+    profile,
+    publishResult,
+    firstCommentResult,
+    mediaSelection: selection,
     trackingWarnings,
   };
 }
