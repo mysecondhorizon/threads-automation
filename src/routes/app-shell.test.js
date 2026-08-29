@@ -29,7 +29,7 @@ assert.equal(homeResponse.status, 200);
 assert.match(homePage, /운영 홈/u);
 assert.match(homePage, /class="app-nav-link is-active" href="\/app" aria-current="page"/u);
 
-for (const path of ["/app/write", "/app/media", "/app/products", "/app/prompts", "/app/schedules", "/app/apps"]) {
+for (const path of ["/app/write", "/app/media", "/app/products", "/app/prompts", "/app/activity", "/app/schedules", "/app/apps"]) {
   assert.match(homePage, new RegExp(`href="${path}"`, "u"));
 }
 
@@ -60,7 +60,7 @@ assert.equal(legacyResponse.status, 200);
 assert.match(legacyPage, /Second Horizon Admin/u);
 
 const indexSource = await readFile(new URL("../index.js", import.meta.url), "utf8");
-for (const path of ["/app", "/app/write", "/app/media", "/app/products", "/app/prompts", "/app/schedules", "/app/apps"]) {
+for (const path of ["/app", "/app/write", "/app/media", "/app/products", "/app/prompts", "/app/activity", "/app/schedules", "/app/apps"]) {
   assert.match(indexSource, new RegExp(`"${path}"`, "u"));
 }
 

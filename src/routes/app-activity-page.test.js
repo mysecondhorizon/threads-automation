@@ -1,0 +1,21 @@
+import assert from "node:assert/strict";
+import { handleAppActivityPage } from "./app-activity-page.js";
+
+const env = { THREADS_KV: { async get(key) { return key === "admin_session:session-1" ? "valid" : null; } } };
+const response = await handleAppActivityPage(new Request("https://example.test/app/activity", { headers:{ cookie:"admin_session=session-1" } }), env);
+const page = await response.text();
+assert.equal(response.status, 200);
+assert.match(page, /운영 활동/u);
+assert.equal(page.includes("/api/activity?limit=30"), true);
+assert.match(page, /id="activity-refresh"/u);
+assert.match(page, /id="activity-status" class="app-activity-status" role="status" aria-live="polite"/u);
+assert.match(page, /id="activity-list" class="app-activity-list"/u);
+assert.match(page, /GENERAL_AUTO:'General AUTO'/u);
+assert.match(page, /CANDIDATE_GENERATED/u);
+assert.match(page, /data\.partial/u);
+assert.match(page, /일부 활동 기록을 불러오지 못했습니다/u);
+assert.match(page, /실패 사유/u);
+assert.match(page, /아직 표시할 운영 활동이 없습니다/u);
+assert.doesNotMatch(page, /raw JSON|JSON\.stringify|retry|게시 실행/u);
+assert.equal((await handleAppActivityPage(new Request("https://example.test/app/activity"), env)).status, 302);
+console.log("app activity page fixture passed");

@@ -25,6 +25,11 @@ export const APP_NAVIGATION = [
     description: "AI가 글을 작성하는 방식을 설정합니다.",
   },
   {
+    label: "운영 활동",
+    path: "/app/activity",
+    description: "최근 자동 실행과 게시 활동을 확인합니다.",
+  },
+  {
     label: "자동 게시",
     path: "/app/schedules",
     description: "자동 게시 일정과 상태를 관리합니다.",

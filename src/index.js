@@ -136,7 +136,9 @@ import {
   handleOperatorMediaUpload,
 } from "./routes/api-media-upload.js";
 import { handleAppPromptsPage } from "./routes/app-prompts-page.js";
+import { handleAppActivityPage } from "./routes/app-activity-page.js";
 import { handleOperatorPromptReset, handleOperatorPrompts } from "./routes/api-prompts.js";
+import { handleOperatorActivity } from "./routes/api-activity.js";
 
 import {
   handleShortToken,
@@ -269,6 +271,10 @@ export default {
     }
     if (pathname === "/app/prompts" && method === "GET") return handleAppPromptsPage(request, env);
 
+    if (pathname === "/app/activity" && method === "GET") {
+      return handleAppActivityPage(request, env);
+    }
+
     if (pathname === "/app/schedules" && method === "GET") {
       return handleAppSchedulesPage(request, env);
     }
@@ -334,6 +340,7 @@ export default {
     }
     if (pathname === "/api/prompts") return handleOperatorPrompts(request, env);
     if (pathname === "/api/prompts/reset") return handleOperatorPromptReset(request, env);
+    if (pathname === "/api/activity") return handleOperatorActivity(request, env, url);
 
     if (pathname === "/api/products/analyze") {
       return handleOperatorProductAnalyze(request, env);
