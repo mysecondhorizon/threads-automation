@@ -6,6 +6,11 @@ import {
 } from "./post-format.js";
 
 import {
+  THREADS_OUTPUT_PROMPT,
+  THREADS_VALIDATION_PROMPT,
+} from "../prompts/threads/index.js";
+
+import {
   generateDistinctThreadPost,
   SAFE_FORMAT_DIVERSITY_OPTIONS,
 } from "./post-regenerator.js";
@@ -47,11 +52,28 @@ const repeatedTarget = {
 
 const targetIds = [];
 const targetPrompts = [];
+const systemPrompts = [];
 let generationCalls = 0;
+
+const env = {
+  THREADS_KV: {
+    async get(key, type) {
+      assert.equal(key, "operator_prompt_profile:v1");
+      assert.equal(type, "json");
+      return {
+        version: 1,
+        updatedAt: "2026-08-29T00:00:00.000Z",
+        profile: {
+          generalWritingPolicy: "CUSTOM_OPERATOR_WRITING_GUIDANCE",
+        },
+      };
+    },
+  },
+};
 
 const result =
   await generateDistinctThreadPost(
-    {},
+    env,
     {
       products: {
         productDetails: [],
@@ -73,7 +95,7 @@ const result =
     {
       maxAttempts: 2,
       ...SAFE_FORMAT_DIVERSITY_OPTIONS,
-      generatePost: async (_env, context) => {
+      generatePost: async (_env, context, options) => {
         generationCalls += 1;
         targetIds.push(
           context.publishing.targetFormat.id
@@ -81,6 +103,7 @@ const result =
         targetPrompts.push(
           context.publishing.targetFormat.prompt
         );
+        systemPrompts.push(options.systemPrompt);
 
         const body = generationCalls === 1
           ? bodyForPattern([5])
@@ -110,12 +133,17 @@ assert.notEqual(
   result.format.signature,
   "p1:s5:bl0:first-grouped:last-grouped:q0"
 );
+assert.equal(systemPrompts.length, 2);
+assert.equal(systemPrompts[0], systemPrompts[1]);
+assert.ok(systemPrompts[0].includes("CUSTOM_OPERATOR_WRITING_GUIDANCE"));
+assert.ok(systemPrompts[0].includes(THREADS_VALIDATION_PROMPT));
+assert.ok(systemPrompts[0].includes(THREADS_OUTPUT_PROMPT));
 
 let exhaustedGenerationCalls = 0;
 
 await assert.rejects(
   generateDistinctThreadPost(
-    {},
+    env,
     {
       products: {
         productDetails: [],

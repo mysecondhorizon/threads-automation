@@ -3,6 +3,11 @@ import {
 } from "./ai.js";
 
 import {
+  composeEffectiveThreadsPrompt,
+  getEffectivePromptProfile,
+} from "./prompt-profile.js";
+
+import {
   validateAutoPostText,
 } from "./auto-post-validator.js";
 
@@ -159,6 +164,16 @@ export async function generateDistinctThreadPost(
       generateThreadPost,
   } = {}
 ) {
+  const effectiveProfile =
+    await getEffectivePromptProfile(
+      env
+    );
+
+  const systemPrompt =
+    composeEffectiveThreadsPrompt(
+      effectiveProfile.profile
+    );
+
   const recentFormats =
     Array.isArray(
       context?.history
@@ -292,7 +307,8 @@ export async function generateDistinctThreadPost(
     const generatedPost =
       await generatePost(
         env,
-        attemptContext
+        attemptContext,
+        { systemPrompt }
       );
 
     lastGeneratedPost =

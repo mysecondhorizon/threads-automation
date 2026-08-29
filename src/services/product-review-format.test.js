@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 
 import {
+  THREADS_OUTPUT_PROMPT,
+  THREADS_VALIDATION_PROMPT,
+} from "../prompts/threads/index.js";
+
+import {
   generateProductReviewCandidate,
 } from "./product-review.js";
 
@@ -92,6 +97,13 @@ const kv = new MemoryKv({
     version: 1,
     candidates: [],
   },
+  "operator_prompt_profile:v1": {
+    version: 1,
+    updatedAt: "2026-08-29T00:00:00.000Z",
+    profile: {
+      productWritingGuidance: "CUSTOM_PRODUCT_REVIEW_GUIDANCE",
+    },
+  },
   "post_log:recent": {
     status: "published",
     post_id: "recent-post",
@@ -110,6 +122,7 @@ const env = {
 };
 
 const targetIds = [];
+const systemPrompts = [];
 let generationCalls = 0;
 const originalFetch = globalThis.fetch;
 
@@ -126,11 +139,12 @@ try {
     await generateProductReviewCandidate(
       env,
       {
-        generatePost: async (_env, context) => {
+        generatePost: async (_env, context, options) => {
           generationCalls += 1;
           targetIds.push(
             context.publishing.targetFormat.id
           );
+          systemPrompts.push(options.systemPrompt);
 
           const body = generationCalls === 1
             ? bodyForPattern(
@@ -166,6 +180,15 @@ try {
 }
 
 assert.equal(generationCalls, 2);
+assert.equal(systemPrompts.length, 2);
+assert.equal(systemPrompts[0], systemPrompts[1]);
+assert.ok(
+  systemPrompts.every((prompt) =>
+    prompt.includes("CUSTOM_PRODUCT_REVIEW_GUIDANCE")
+  )
+);
+assert.ok(systemPrompts[0].includes(THREADS_VALIDATION_PROMPT));
+assert.ok(systemPrompts[0].includes(THREADS_OUTPUT_PROMPT));
 assert.notEqual(
   targetIds[1],
   targetIds[0],
