@@ -8,6 +8,7 @@ import {
 import { validateAutoPostText, validateAutoPostPolicy } from "./auto-post-validator.js";
 import { getRecentPostLogs } from "./logger.js";
 import { analyzePostFormat, stripAffiliateDisclosure } from "./post-format.js";
+import { DEFAULT_WORKSPACE_ID } from "./workspace-foundation.js";
 
 const STORE_KEY = "product_review_candidates";
 const MAX_CANDIDATES = 50;
@@ -34,6 +35,37 @@ function createId() {
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
+function normalizeWorkspaceId(workspaceId) {
+  if (workspaceId === undefined || workspaceId === null) {
+    return DEFAULT_WORKSPACE_ID;
+  }
+  if (typeof workspaceId !== "string" || !workspaceId.trim()) {
+    throw new ProductReviewError(
+      "Product Review workspace id is invalid.",
+      "product_review_workspace_invalid"
+    );
+  }
+  return workspaceId.trim();
+}
+
+function storedWorkspaceId(candidate) {
+  const workspaceId = typeof candidate?.workspaceId === "string"
+    ? candidate.workspaceId.trim()
+    : "";
+  return workspaceId || DEFAULT_WORKSPACE_ID;
+}
+
+function isInWorkspace(candidate, workspaceId) {
+  return storedWorkspaceId(candidate) === workspaceId;
+}
+
+function mergeWorkspaceCandidates(candidates, workspaceId, workspaceCandidates) {
+  return [
+    ...workspaceCandidates.slice(0, MAX_CANDIDATES),
+    ...candidates.filter((candidate) => !isInWorkspace(candidate, workspaceId)),
+  ];
+}
+
 async function readStore(env) {
   const stored = await getJson(env, STORE_KEY);
   return {
@@ -46,7 +78,7 @@ async function writeStore(env, candidates) {
   const value = {
     version: 1,
     updatedAt: new Date().toISOString(),
-    candidates: candidates.slice(0, MAX_CANDIDATES),
+    candidates,
   };
   await putJson(env, STORE_KEY, value);
   return value;
@@ -198,14 +230,19 @@ export async function generateProductReviewCandidate(
     cron = null,
     scheduledTime = null,
     generatePost = null,
-  } = {}
+  } = {},
+  workspaceId
 ) {
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
   const [products, store, context] = await Promise.all([
-    getActiveProducts(env),
+    getActiveProducts(env, resolvedWorkspaceId),
     readStore(env),
-    buildThreadContext(env),
+    buildThreadContext(env, resolvedWorkspaceId),
   ]);
-  const product = selectProductForReview(products, store.candidates, text(productId) || null);
+  const workspaceCandidates = store.candidates.filter((candidate) =>
+    isInWorkspace(candidate, resolvedWorkspaceId)
+  );
+  const product = selectProductForReview(products, workspaceCandidates, text(productId) || null);
   context.products = buildProductReviewAiContext(product);
   context.publishing.productConnectedAvailable = true;
   context.publishing.affiliateLinkAvailable = true;
@@ -227,6 +264,7 @@ export async function generateProductReviewCandidate(
     threshold: 0.62,
     maxRecentPosts: 20,
     maxAttempts: 2,
+    workspaceId: resolvedWorkspaceId,
     ...SAFE_FORMAT_DIVERSITY_OPTIONS,
   };
   if (typeof generatePost === "function") generationOptions.generatePost = generatePost;
@@ -236,6 +274,7 @@ export async function generateProductReviewCandidate(
   const now = new Date().toISOString();
   const candidate = {
     id: createId(),
+    workspaceId: resolvedWorkspaceId,
     source,
     status: "pending_review",
     productId: product.id,
@@ -261,25 +300,37 @@ export async function generateProductReviewCandidate(
     publishedAt: null,
     postId: null,
   };
-  await writeStore(env, [candidate, ...store.candidates]);
+  await writeStore(
+    env,
+    mergeWorkspaceCandidates(
+      store.candidates,
+      resolvedWorkspaceId,
+      [candidate, ...workspaceCandidates]
+    )
+  );
   return candidate;
 }
 
-export async function listProductReviewCandidates(env, limit = 30) {
+export async function listProductReviewCandidates(env, limit = 30, workspaceId) {
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
   const store = await readStore(env);
   return store.candidates
+    .filter((candidate) => isInWorkspace(candidate, resolvedWorkspaceId))
     .slice(0, Math.max(1, Math.min(Number(limit || 30), MAX_CANDIDATES)))
     .map(normalizeStoredProductReviewCandidate);
 }
 
-export async function getProductReviewCandidate(env, candidateId) {
+export async function getProductReviewCandidate(env, candidateId, workspaceId) {
   const id = text(candidateId);
   if (!id) return null;
-  const candidate = (await readStore(env)).candidates.find((item) => item.id === id) || null;
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
+  const candidate = (await readStore(env)).candidates.find((item) =>
+    item.id === id && isInWorkspace(item, resolvedWorkspaceId)
+  ) || null;
   return candidate ? normalizeStoredProductReviewCandidate(candidate) : null;
 }
 
-export async function removeProductReviewCandidate(env, candidateId) {
+export async function removeProductReviewCandidate(env, candidateId, workspaceId) {
   const id = text(candidateId);
   if (!id) {
     throw new ProductReviewError(
@@ -288,8 +339,12 @@ export async function removeProductReviewCandidate(env, candidateId) {
     );
   }
 
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
   const store = await readStore(env);
-  const candidate = store.candidates.find((item) => item.id === id) || null;
+  const workspaceCandidates = store.candidates.filter((item) =>
+    isInWorkspace(item, resolvedWorkspaceId)
+  );
+  const candidate = workspaceCandidates.find((item) => item.id === id) || null;
   if (!candidate) {
     throw new ProductReviewError(
       "The product review candidate was not found.",
@@ -307,14 +362,22 @@ export async function removeProductReviewCandidate(env, candidateId) {
 
   await writeStore(
     env,
-    store.candidates.filter((item) => item.id !== id)
+    mergeWorkspaceCandidates(
+      store.candidates,
+      resolvedWorkspaceId,
+      workspaceCandidates.filter((item) => item.id !== id)
+    )
   );
   return normalizeStoredProductReviewCandidate(candidate);
 }
 
-export async function removePendingProductReviewCandidates(env) {
+export async function removePendingProductReviewCandidates(env, workspaceId) {
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
   const store = await readStore(env);
-  const removed = store.candidates.filter(
+  const workspaceCandidates = store.candidates.filter((candidate) =>
+    isInWorkspace(candidate, resolvedWorkspaceId)
+  );
+  const removed = workspaceCandidates.filter(
     (candidate) => candidate.status === "pending_review"
   );
   if (!removed.length) {
@@ -323,8 +386,12 @@ export async function removePendingProductReviewCandidates(env) {
 
   await writeStore(
     env,
-    store.candidates.filter(
-      (candidate) => candidate.status !== "pending_review"
+    mergeWorkspaceCandidates(
+      store.candidates,
+      resolvedWorkspaceId,
+      workspaceCandidates.filter(
+        (candidate) => candidate.status !== "pending_review"
+      )
     )
   );
   return { removedCount: removed.length };
@@ -347,6 +414,7 @@ function normalizeStoredProductReviewCandidate(candidate) {
   try {
     return {
       ...candidate,
+      workspaceId: storedWorkspaceId(candidate),
       ...buildProductReviewPayload(
         {
           ...candidate,
@@ -389,14 +457,20 @@ export async function markProductReviewPublished(
   env,
   candidateId,
   postId,
-  firstCommentResult = null
+  firstCommentResult = null,
+  workspaceId
 ) {
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
   const store = await readStore(env);
-  const index = store.candidates.findIndex((candidate) => candidate.id === candidateId);
+  const workspaceCandidates = store.candidates.filter((candidate) =>
+    isInWorkspace(candidate, resolvedWorkspaceId)
+  );
+  const index = workspaceCandidates.findIndex((candidate) => candidate.id === candidateId);
   if (index < 0) return null;
   const now = new Date().toISOString();
   const candidate = {
-    ...store.candidates[index],
+    ...workspaceCandidates[index],
+    workspaceId: resolvedWorkspaceId,
     status: "published",
     postId,
     firstCommentResult: firstCommentResult
@@ -415,9 +489,12 @@ export async function markProductReviewPublished(
     publishedAt: now,
     updatedAt: now,
   };
-  const candidates = [...store.candidates];
+  const candidates = [...workspaceCandidates];
   candidates[index] = candidate;
-  await writeStore(env, candidates);
+  await writeStore(
+    env,
+    mergeWorkspaceCandidates(store.candidates, resolvedWorkspaceId, candidates)
+  );
   return candidate;
 }
 
