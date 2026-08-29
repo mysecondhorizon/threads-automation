@@ -32,24 +32,20 @@ Do not run:
 
 Latest confirmed shared main:
 
-`8ce732bd80f5952486096079042b427d59f9e229`
+`7d6eea3`
 
 Latest completed milestone:
 
-**MEDIA-02-I — User Experience Media Hints**
+**R11D — Target App Selection UI Foundation**
 
-Before any new task, always verify:
+Default local switch check:
 
 ```bash
 git status
-git log -5 --oneline
-git rev-parse HEAD
-git fetch origin
+git log -3 --oneline
 ```
 
-Do not assume this document is newer than Git.
-
-If `origin/main` has moved, update this section after confirming the new merged checkpoint.
+Fetch/pull only when another machine or clone may have pushed, GitHub changed directly, `origin/main` may be ahead, or the PM explicitly requests remote synchronization.
 
 ---
 
@@ -216,11 +212,12 @@ Complete.
 
 - Added target-app selection to `/app/write`.
 - Uses the App Registry through `GET /api/apps`.
-- Registry apps with `type: THREADS` are functional targets.
-- WordPress and Custom API are displayed as coming soon.
+- `threads-primary` is the only currently proven selectable publish destination.
+- WordPress and Custom API remain preparing/nonfunctional.
 - `targetApp = null` remains backward compatible.
 - Explicit invalid targets do not silently fall back to Threads.
 - Published post targets are read-only.
+- No Workspace implementation was added.
 
 ### R11D-V — Target App Selection Integration Verification
 Complete.
@@ -365,25 +362,15 @@ Current workstream status:
 
 ### Codex A
 
-**ACTIVE — R13A — Shared Operator Prompt Scope**
+**WAITING FOR NEXT NON-CONFLICTING TASK**
 
-Goal:
-
-Apply one effective operator prompt profile consistently to:
-
-- Manual AI generation
-- General AUTO
-- Product Review
-
-while preserving code-owned constraints.
+R13A is deferred until ARCH-01-I2A is merged because both affect Prompt Profile behavior.
 
 ### Codex B
 
-**COMPLETED / MERGED TO MAIN — MEDIA-02-I — User Experience Media Hints**
+**ACTIVE — ARCH-01-I2A — Workspace-Aware Prompt Profile Storage**
 
-Merged to `main`:
-
-`8ce732bd80f5952486096079042b427d59f9e229`
+Chat B / Codex B owns this tranche. It adds only the Prompt Profile storage boundary; no Workspace UI or runtime propagation is included.
 
 ---
 
@@ -433,7 +420,7 @@ Unless a task explicitly changes them, preserve:
 
 Major remaining work includes:
 
-- R13A shared operator prompt scope
+- R13A shared operator prompt scope (deferred until ARCH-01-I2A is merged)
 - UI-01 `/app/prompts` UI/UX cleanup
   - broken/awkward alignment
   - page hierarchy/layout cleanup
@@ -558,13 +545,33 @@ After a workstream is approved and merged:
 2. update `PROJECT_STATUS.md`;
 3. update `WORKSTREAMS.md`;
 4. commit those status updates with the implementation or as a small follow-up checkpoint;
-5. the other account must fetch/pull the latest `origin/main` before starting dependent work.
+5. use the Shared Local Repository Rule below before switching workstreams.
 
 Do not rely on copied chat history as the canonical project state.
 
 ---
 
-## 15. Status Update Rules
+## 15. Shared Local Repository Rule
+
+Codex A and Codex B currently use the same local repository:
+
+`C:\Users\cmy11\projects\threads-automation`
+
+Account switching does not automatically require `git fetch` or `git pull`.
+The default switch check is:
+
+```bash
+git status
+git log -3 --oneline
+```
+
+This confirms the current HEAD, reveals another Codex's uncommitted work, and prevents file collisions. Use fetch/pull only when another machine or clone may have pushed, GitHub changed directly, `origin/main` may be ahead, or the PM explicitly requests remote synchronization.
+
+Because both workers share one working tree, uncommitted changes are immediately visible. Never edit the same file concurrently, and never reset, restore, clean, pull, rebase, or checkout unknown work while another Codex has uncommitted changes.
+
+---
+
+## 16. Status Update Rules
 
 When a milestone is merged, update at least:
 

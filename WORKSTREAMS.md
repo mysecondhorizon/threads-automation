@@ -18,7 +18,7 @@ Primary worker:
 
 Current workstream:
 
-**R13A — Shared Operator Prompt Scope**
+**WAITING FOR NEXT NON-CONFLICTING TASK**
 
 ### Account B
 
@@ -28,15 +28,11 @@ PM / coordination account plus parallel worker:
 
 Current parallel workstream:
 
-**MEDIA-02-I — User Experience Media Hints — COMPLETED / MERGED TO MAIN**
+**ARCH-01-I2A — Workspace-Aware Prompt Profile Storage**
 
 The two ChatGPT accounts do not share conversation memory.
 
-Synchronization happens through:
-
-1. GitHub `origin/main`
-2. `PROJECT_STATUS.md`
-3. `WORKSTREAMS.md`
+The workers share the same local repository and working tree. GitHub `origin/main`, `PROJECT_STATUS.md`, and `WORKSTREAMS.md` remain the shared checkpoint for remote and cross-session coordination.
 
 ---
 
@@ -46,10 +42,10 @@ Before beginning any workstream:
 
 ```bash
 git status
-git fetch origin
-git log -5 --oneline
-git rev-parse HEAD
+git log -3 --oneline
 ```
+
+Remote synchronization is conditional: fetch/pull only when another machine or clone may have pushed, GitHub changed directly, `origin/main` may be ahead, or the PM explicitly requests it.
 
 Confirm the working tree does not contain another worker's changes.
 
@@ -100,11 +96,13 @@ Never include:
 
 Status:
 
-**ACTIVE / CONTINUE EXISTING WORK**
+**WAITING FOR NEXT NON-CONFLICTING TASK**
 
 Task:
 
-**R13A — Shared Operator Prompt Scope**
+**R13A — Shared Operator Prompt Scope — DEFERRED**
+
+Do not resume R13A until Chat B merges ARCH-01-I2A and shares the new checkpoint. Do not assign ARCH-01-I2A to Codex A.
 
 ### Objective
 
@@ -236,15 +234,15 @@ Merge one workstream first, sync the other, then continue.
 
 Status:
 
-**COMPLETED / MERGED TO MAIN**
+**ACTIVE / OWNED BY CODEX B**
 
 Task:
 
-**MEDIA-02-I — User Experience Media Hints — COMPLETED / MERGED TO MAIN**
+**ARCH-01-I2A — Workspace-Aware Prompt Profile Storage**
 
-Merged commit:
+Current shared checkpoint before this tranche:
 
-`8ce732bd80f5952486096079042b427d59f9e229`
+`7d6eea3`
 
 ### Completed checkpoints
 
@@ -254,9 +252,15 @@ Merged commit:
 - MEDIA-02-D design verification complete.
 - MEDIA-02-I merged: optional `experienceTags` / `experienceNote` upload hints.
 
-Codex B status: **AWAITING PM ASSIGNMENT**.
+Codex B owns ARCH-01-I2A. R13A remains deferred until this prompt-profile storage tranche is merged.
 
-The R11D detail below is retained as historical scope, not a current Codex B assignment.
+### R11D completion
+
+**COMPLETED / MERGED**
+
+Commit: `7d6eea3`
+
+The R11D detail below is retained as historical scope, not a current assignment.
 
 ### Completed verification checkpoint
 
@@ -382,11 +386,11 @@ File-level serialization is preferred over manual conflict resolution.
 
 ## 13. Merge Order
 
-R11D merged first in commit:
+R11D is merged in commit:
 
-`5ca5511fe4d12beae988f01c42826ec115674bec`
+`7d6eea3`
 
-Codex A must fetch/pull and incorporate the latest `origin/main` before continuing R13A.
+Codex A remains deferred from R13A until ARCH-01-I2A is merged.
 
 Before R13A commit approval, rerun relevant regression tests after incorporating this checkpoint.
 
@@ -485,10 +489,11 @@ Ensure latest completed tranche is:
 Run:
 
 ```bash
-git fetch origin
 git status
-git log -5 --oneline
+git log -3 --oneline
 ```
+
+Do not fetch/pull automatically when switching accounts in this shared local repository. Use remote synchronization only when another machine or clone may have pushed, GitHub changed directly, `origin/main` may be ahead, or the PM explicitly requests it.
 
 Read:
 
@@ -503,9 +508,9 @@ Then continue only the workstream assigned to that account.
 
 Latest confirmed main:
 
-`8ce732bd80f5952486096079042b427d59f9e229`
+`7d6eea3`
 
-Before relying on this hash, verify `origin/main`.
+Before relying on this hash, use the default local switch check; verify `origin/main` only when remote synchronization is required.
 
 Update this section after each approved merged checkpoint.
 
@@ -517,15 +522,13 @@ Current intended parallel execution:
 
 ### Codex A
 
-Fetch/pull latest `origin/main`, incorporate the MEDIA-02-I checkpoint, then continue R13A.
-
-Prefer small checkpoints.
+WAITING FOR NEXT NON-CONFLICTING TASK. R13A remains deferred until Chat B merges ARCH-01-I2A and shares the new checkpoint.
 
 ### Codex B
 
-AWAITING PM ASSIGNMENT.
+Continue **ARCH-01-I2A — Workspace-Aware Prompt Profile Storage**.
 
-The PM account should review both completion reports and decide merge order.
+The PM account should review the completion report before any R13A resumption.
 
 ---
 
