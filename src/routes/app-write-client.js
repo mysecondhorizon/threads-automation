@@ -30,7 +30,10 @@ export function isFunctionalTargetApp(targetApp, apps) {
     || (appId === "threads-primary"
       ? { id: "threads-primary", name: "Second Horizon Threads", type: "THREADS" }
       : null);
-  return app?.type === "THREADS";
+  // The legacy credential compatibility foundation proves only this built-in
+  // connection. Other THREADS registry records remain non-selectable until
+  // they have a distinct, supported Connected Account implementation.
+  return appId === "threads-primary" && app?.type === "THREADS";
 }
 
 export function getTargetAppOptions(apps) {

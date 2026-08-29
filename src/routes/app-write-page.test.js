@@ -55,6 +55,7 @@ assert.match(page, /editorTopicId = null/u);
 assert.match(page, /selectTopic\(topic\.id\)/u);
 assert.match(page, /catch \(error\) \{\s*setTopicFeedback\(error\.message, "error"\)/u);
 assert.doesNotMatch(page, /innerHTML/u);
+assert.doesNotMatch(page, /threads_auth|access_token|oauth/iu);
 
 assert.deepEqual(getPostSaveRequest({
   editingId: null,
@@ -120,11 +121,11 @@ assert.equal(targetOptions.find((option) => option.id === "future-wordpress")?.d
 assert.equal(targetOptions.find((option) => option.id === "future-wordpress")?.label, "WordPress — 준비 중");
 assert.equal(targetOptions.find((option) => option.id === "future-custom")?.disabled, true);
 assert.equal(targetOptions.find((option) => option.id === "future-custom")?.label, "Custom API — 준비 중");
-assert.equal(targetOptions.find((option) => option.id === "other-threads")?.disabled, false);
+assert.equal(targetOptions.find((option) => option.id === "other-threads")?.disabled, true);
 assert.equal(targetOptions.find((option) => option.id === "future-unknown")?.disabled, true);
 assert.equal(targetOptions.find((option) => option.id === "future-unknown")?.label, "Unknown — 사용 불가");
 assert.equal(isFunctionalTargetApp("threads-primary", targetApps), true);
-assert.equal(isFunctionalTargetApp("other-threads", targetApps), true);
+assert.equal(isFunctionalTargetApp("other-threads", targetApps), false);
 assert.equal(isFunctionalTargetApp("future-wordpress", targetApps), false);
 assert.equal(isFunctionalTargetApp("future-custom", targetApps), false);
 assert.equal(isFunctionalTargetApp("missing", targetApps), false);
