@@ -79,9 +79,65 @@ function statusForRun(run) {
   return "UNKNOWN";
 }
 
+const SAFE_FAILURE_MESSAGES = {
+  CONTENT_FORMAT_VALIDATION: "최근 게시물과 다른 글 구조를 만들지 못했습니다.",
+  AI_GENERATION: "AI 글 생성에 실패했습니다.",
+  PUBLISHING: "Threads 게시 처리에 실패했습니다.",
+  THREADS_AUTH: "Threads 계정 연결을 확인해야 합니다.",
+  PRODUCT_SELECTION: "게시 가능한 제품을 찾지 못했습니다.",
+  UNKNOWN: "자동 실행 처리 중 문제가 발생했습니다.",
+};
+
+function safeAttempts(details) {
+  const attempts = Number(details?.attempts);
+  return Number.isSafeInteger(attempts) && attempts >= 0 && attempts <= 2 ? attempts : null;
+}
+
+export function normalizeScheduleFailure(run) {
+  if (run?.status !== "failed") return null;
+  const error = run?.error && typeof run.error === "object" && !Array.isArray(run.error) ? run.error : {};
+  const code = typeof error.code === "string" ? error.code : "";
+  const step = typeof error.step === "string" ? error.step : "";
+  const name = typeof error.name === "string" ? error.name : "";
+  const reasons = Array.isArray(error?.details?.reasons) ? error.details.reasons : [];
+  const formatFailure = code === "post_format_validation_failed" || name === "PostFormatError";
+  let stage = "UNKNOWN";
+  let safeCode = "unknown_schedule_failure";
+  if (formatFailure || code === "no_feasible_target_format" || reasons.includes("no_feasible_target_format") || error?.details?.exhausted === true) {
+    stage = "CONTENT_FORMAT_VALIDATION";
+    safeCode = "post_format_validation_failed";
+  } else if (code === "ai_generation_failed" || step === "ai_generation") {
+    stage = "AI_GENERATION";
+    safeCode = "ai_generation_failed";
+  } else if (code === "threads_auth_missing" || step === "loading_auth") {
+    stage = "THREADS_AUTH";
+    safeCode = "threads_auth_missing";
+  } else if (code === "threads_publish_failed" || /^(?:create|publish)_/u.test(step)) {
+    stage = "PUBLISHING";
+    safeCode = "threads_publish_failed";
+  } else if (code === "product_review_inventory_empty" || code === "product_review_product_unavailable") {
+    stage = "PRODUCT_SELECTION";
+    safeCode = code;
+  }
+  const attempts = stage === "CONTENT_FORMAT_VALIDATION" ? safeAttempts(error.details) : null;
+  return {
+    stage,
+    code: safeCode,
+    message: SAFE_FAILURE_MESSAGES[stage],
+    ...(attempts !== null ? { attempts } : {}),
+  };
+}
+
 export function normalizeScheduleHistory(runs) {
   if (!Array.isArray(runs)) return [];
-  return runs.map((run) => ({ type: operationType(run), scheduledAt: asIso(run?.scheduledTime) || asIso(run?.startedAt), completedAt: asIso(run?.completedAt), status: statusForRun(run), result: resultForRun(run) }));
+  return runs.map((run) => ({
+    type: operationType(run),
+    scheduledAt: asIso(run?.scheduledTime) || asIso(run?.startedAt),
+    completedAt: asIso(run?.completedAt),
+    status: statusForRun(run),
+    result: resultForRun(run),
+    ...(normalizeScheduleFailure(run) ? { failure: normalizeScheduleFailure(run) } : {}),
+  }));
 }
 
 export function enrichScheduleOperations(schedules, history, now = Date.now(), mode = SCHEDULER_MODE) {

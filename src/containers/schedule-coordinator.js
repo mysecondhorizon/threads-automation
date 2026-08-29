@@ -1,11 +1,15 @@
 import { DurableObject } from "cloudflare:workers";
 import { runRuntimeSchedule } from "../services/runtime-schedule-dispatcher.js";
 import { isRuntimeSchedulerActive } from "../services/scheduler-ownership.js";
+import { getScheduleRuns } from "../services/auto-post/schedule-store.js";
 
 export const RUNTIME_SCHEDULER_EXECUTION_ENABLED = isRuntimeSchedulerActive();
 export const RUNTIME_SCHEDULE_TIME_ZONE = "Asia/Seoul";
 export const RUNTIME_SCHEDULE_GRACE_MS = 15 * 60 * 1000;
 export const RUNTIME_ALARM_MATCH_TOLERANCE_MS = 1000;
+// General AUTO can take several minutes while it generates and publishes. Keep a
+// RUNNING receipt for 15 minutes before treating it as abandoned state.
+export const RUNTIME_RECEIPT_STALE_MS = 15 * 60 * 1000;
 
 const SCHEDULE_PREFIX = "schedule:";
 const SLOT_PREFIX = "slot:";
@@ -40,6 +44,29 @@ function asIso(value) {
 function asEpoch(value) {
   const timestamp = typeof value === "number" ? value : Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function historyType(run) {
+  return run?.operation === "product_review" ? "PRODUCT_REVIEW" :
+    run?.operation === "auto_general" ? "GENERAL_AUTO" : null;
+}
+
+function terminalHistoryOutcome(receipt, schedule, runs) {
+  const scheduledFor = asEpoch(receipt?.scheduledFor);
+  if (!scheduledFor || !Array.isArray(runs)) return null;
+  const matchingRun = runs.find((run) =>
+    run?.source === "runtime_scheduler" &&
+    run?.scheduleId === schedule.id &&
+    historyType(run) === schedule.type &&
+    asEpoch(run?.scheduledTime) === scheduledFor &&
+    asEpoch(run?.completedAt) > 0 &&
+    (run?.status === "completed" || run?.status === "review_ready" || run?.status === "failed")
+  );
+  if (!matchingRun) return null;
+  return {
+    status: matchingRun.status === "failed" ? "FAILED" : "SUCCESS",
+    completedAt: asIso(matchingRun.completedAt),
+  };
 }
 
 function publicReceipt(receipt, includeScheduleId = false) {
@@ -195,6 +222,33 @@ export class ScheduleCoordinator extends DurableObject {
     return [...entries.values()].sort((left, right) => asEpoch(right?.scheduledFor) - asEpoch(left?.scheduledFor))[0] || null;
   }
 
+  async recoverStaleReceipts(schedules, now = Date.now()) {
+    const records = Array.isArray(schedules) ? schedules : [];
+    const scheduleById = new Map(records.map((schedule) => [schedule.id, schedule]));
+    const receipts = await this.ctx.storage.list({ prefix: SLOT_PREFIX });
+    const staleReceipts = [...receipts.entries()].filter(([, receipt]) =>
+      receipt?.status === "RUNNING" && now - asEpoch(receipt.startedAt) >= RUNTIME_RECEIPT_STALE_MS
+    );
+    if (!staleReceipts.length) return { recovered: 0 };
+
+    // This reads existing history only. Recovery never invokes scheduling or business work.
+    const history = await getScheduleRuns(this.env, 50);
+    const recoveredAt = new Date(now).toISOString();
+    let recovered = 0;
+    for (const [key, receipt] of staleReceipts) {
+      const schedule = scheduleById.get(receipt.scheduleId);
+      const outcome = schedule ? terminalHistoryOutcome(receipt, schedule, history) : null;
+      const normalized = {
+        ...receipt,
+        status: outcome?.status || "UNCERTAIN",
+        completedAt: outcome?.completedAt || recoveredAt,
+      };
+      await this.ctx.storage.put(key, normalized);
+      recovered += 1;
+    }
+    return { recovered };
+  }
+
   earliestEnabledNextRunAt(schedules, now) {
     const nextTimes = schedules
       .map((schedule) => getNextRunAt(schedule, now))
@@ -220,6 +274,7 @@ export class ScheduleCoordinator extends DurableObject {
   async listSchedules() {
     const now = Date.now();
     const schedules = await this.readSchedules();
+    await this.recoverStaleReceipts(schedules, now);
     const records = await Promise.all(schedules.map(async (schedule) => publicSchedule(schedule, await this.getLastRun(schedule.id), now)));
     return { schedules: records, runtimeExecutionEnabled: RUNTIME_SCHEDULER_EXECUTION_ENABLED };
   }
@@ -227,6 +282,7 @@ export class ScheduleCoordinator extends DurableObject {
   async getCoordinatorStatus() {
     const now = Date.now();
     const schedules = await this.readSchedules();
+    await this.recoverStaleReceipts(schedules, now);
     const alarm = await this.ctx.storage.getAlarm();
     return this.buildCoordinatorStatus(schedules, now, alarm);
   }

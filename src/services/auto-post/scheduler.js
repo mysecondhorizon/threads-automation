@@ -26,6 +26,10 @@ import {
 } from "../product-review.js";
 
 import {
+  PostFormatError,
+} from "../post-format.js";
+
+import {
   buildAiCandidatePackage,
 } from "../ai-candidate-package.js";
 
@@ -155,9 +159,35 @@ export function getScheduledOperation(cron) {
     : "auto_general";
 }
 
-function serializeSchedulerError(
+function formatErrorDetails(details) {
+  if (!details || typeof details !== "object" || Array.isArray(details)) return null;
+  const reasons = Array.isArray(details.reasons)
+    ? details.reasons.filter((value) => typeof value === "string").slice(0, 8)
+    : [];
+  const attempts = Number.isSafeInteger(details.attempts) && details.attempts >= 0 && details.attempts <= 2
+    ? details.attempts
+    : null;
+  return {
+    ...(reasons.length ? { reasons } : {}),
+    ...(details.exhausted === true ? { exhausted: true } : {}),
+    ...(attempts !== null ? { attempts } : {}),
+  };
+}
+
+export function serializeSchedulerError(
   error
 ) {
+  if (error instanceof PostFormatError) {
+    return {
+      name: error.name,
+      code: error.code,
+      status: 409,
+      step: "similarity_validation",
+      message: error.message,
+      details: formatErrorDetails(error.details),
+    };
+  }
+
   if (
     error instanceof
     AutoPostEngineError

@@ -8,8 +8,9 @@ const testableSource = source
   .replace('import { DurableObject } from "cloudflare:workers";', 'class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }')
   .replace('import { runRuntimeSchedule } from "../services/runtime-schedule-dispatcher.js";', 'const runtimeCalls = []; const runRuntimeSchedule = async (input) => { runtimeCalls.push(input); return { ok: true }; };')
   .replace('import { isRuntimeSchedulerActive } from "../services/scheduler-ownership.js";', 'const isRuntimeSchedulerActive = () => false;')
-  .concat('\nexport { runtimeCalls };');
-const { ScheduleCoordinator, getNextRunAt, getMostRecentScheduledFor, RUNTIME_SCHEDULER_EXECUTION_ENABLED, runtimeCalls } = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(testableSource)}`);
+  .replace('import { getScheduleRuns } from "../services/auto-post/schedule-store.js";', 'const historyRuns = []; const getScheduleRuns = async () => historyRuns;')
+  .concat('\nexport { runtimeCalls, historyRuns };');
+const { ScheduleCoordinator, getNextRunAt, getMostRecentScheduledFor, RUNTIME_SCHEDULER_EXECUTION_ENABLED, RUNTIME_RECEIPT_STALE_MS, runtimeCalls, historyRuns } = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(testableSource)}`);
 
 class Storage {
   constructor() { this.values = new Map(); this.alarm = null; this.setAlarmCalls = []; this.deleteAlarmCalls = 0; }
@@ -93,5 +94,37 @@ try {
 } finally {
   Date.now = originalDateNow;
 }
+
+const recoveryStorage = new Storage();
+const recoveryCoordinator = new ScheduleCoordinator({ storage: recoveryStorage }, {});
+const recoverySchedules = await recoveryCoordinator.readSchedules();
+const recoverySchedule = recoverySchedules[0];
+const scheduledFor = fixedNow;
+const scheduledForIso = new Date(scheduledFor).toISOString();
+const recentKey = `slot:${recoverySchedule.id}:${scheduledForIso}`;
+await recoveryStorage.put(recentKey, { scheduleId: recoverySchedule.id, scheduledFor, status: "RUNNING", startedAt: new Date(fixedNow - RUNTIME_RECEIPT_STALE_MS + 1).toISOString(), completedAt: null });
+await recoveryCoordinator.recoverStaleReceipts(recoverySchedules, fixedNow);
+assert.equal((await recoveryStorage.get(recentKey)).status, "RUNNING");
+
+const successKey = `slot:${recoverySchedule.id}:${scheduledForIso}:success`;
+await recoveryStorage.put(successKey, { scheduleId: recoverySchedule.id, scheduledFor, status: "RUNNING", startedAt: new Date(fixedNow - RUNTIME_RECEIPT_STALE_MS).toISOString(), completedAt: null });
+historyRuns.push({ source: "runtime_scheduler", scheduleId: recoverySchedule.id, operation: "auto_general", scheduledTime: scheduledForIso, completedAt: "2026-08-24T00:01:00.000Z", status: "completed" });
+assert.deepEqual(await recoveryCoordinator.recoverStaleReceipts(recoverySchedules, fixedNow), { recovered: 1 });
+assert.equal((await recoveryStorage.get(successKey)).status, "SUCCESS");
+assert.equal((await recoveryStorage.get(successKey)).completedAt, "2026-08-24T00:01:00.000Z");
+assert.deepEqual(await recoveryCoordinator.recoverStaleReceipts(recoverySchedules, fixedNow), { recovered: 0 });
+
+const failedScheduledFor = fixedNow - 24 * 60 * 60 * 1000;
+const failedScheduledForIso = new Date(failedScheduledFor).toISOString();
+const failureKey = `slot:${recoverySchedule.id}:${failedScheduledForIso}:failure`;
+await recoveryStorage.put(failureKey, { scheduleId: recoverySchedule.id, scheduledFor: failedScheduledFor, status: "RUNNING", startedAt: new Date(fixedNow - RUNTIME_RECEIPT_STALE_MS).toISOString(), completedAt: null });
+historyRuns.push({ source: "runtime_scheduler", scheduleId: recoverySchedule.id, operation: "auto_general", scheduledTime: failedScheduledForIso, completedAt: "2026-08-24T00:02:00.000Z", status: "failed" });
+await recoveryCoordinator.recoverStaleReceipts(recoverySchedules, fixedNow);
+assert.equal((await recoveryStorage.get(failureKey)).status, "FAILED");
+
+const uncertainKey = `slot:${recoverySchedule.id}:${scheduledForIso}:uncertain`;
+await recoveryStorage.put(uncertainKey, { scheduleId: recoverySchedule.id, scheduledFor: fixedNow - 2 * 24 * 60 * 60 * 1000, status: "RUNNING", startedAt: new Date(fixedNow - RUNTIME_RECEIPT_STALE_MS).toISOString(), completedAt: null });
+await recoveryCoordinator.recoverStaleReceipts(recoverySchedules, fixedNow);
+assert.equal((await recoveryStorage.get(uncertainKey)).status, "UNCERTAIN");
 assert.equal(runtimeCalls.length, 0);
 console.log("schedule coordinator fixture passed");

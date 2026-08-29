@@ -22,4 +22,14 @@ assert.equal(enabled.actualProductionNextRunAt, "2026-08-25T23:10:00.000Z");
 assert.equal(disabled.actualProductionStatus, "RUNTIME_PREPARING");
 assert.equal(disabled.actualProductionNextRunAt, "2026-08-26T02:30:00.000Z");
 assert.equal(disabled.actualProductionLastRun, null);
+
+const failureHistory = normalizeScheduleHistory([
+  { operation: "auto_general", status: "failed", scheduledTime: "2026-08-25T23:10:00.000Z", completedAt: "2026-08-25T23:11:00.000Z", error: { code: "post_format_validation_failed", step: "similarity_validation", details: { reasons: ["recent_signature_repeated"], attempts: 2, targetPrompt: "must not be exposed" } } },
+  { operation: "product_review", status: "failed", scheduledTime: "2026-08-25T11:30:00.000Z", completedAt: "2026-08-25T11:31:00.000Z", error: { name: "PostFormatError", message: "legacy product review format error" } },
+  { operation: "auto_general", status: "failed", scheduledTime: "2026-08-25T02:30:00.000Z", completedAt: "2026-08-25T02:31:00.000Z", error: { name: "ProviderPayloadError", details: { token: "must not be exposed" } } },
+]);
+assert.deepEqual(failureHistory[0].failure, { stage: "CONTENT_FORMAT_VALIDATION", code: "post_format_validation_failed", message: "최근 게시물과 다른 글 구조를 만들지 못했습니다.", attempts: 2 });
+assert.deepEqual(failureHistory[1].failure, { stage: "CONTENT_FORMAT_VALIDATION", code: "post_format_validation_failed", message: "최근 게시물과 다른 글 구조를 만들지 못했습니다." });
+assert.deepEqual(failureHistory[2].failure, { stage: "UNKNOWN", code: "unknown_schedule_failure", message: "자동 실행 처리 중 문제가 발생했습니다." });
+assert.equal(JSON.stringify(failureHistory).includes("must not be exposed"), false);
 console.log("schedule operations fixture passed");
