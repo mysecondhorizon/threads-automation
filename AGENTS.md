@@ -1,5 +1,15 @@
 # AGENTS.md
 
+## PM Review / Code Output Policy
+
+- Do **not** output complete source files or full diffs merely for PM review. Full-file and full-diff review output is prohibited by default.
+- Codex must inspect `git diff` itself as part of validation, but must not echo the complete diff to PM/ChatGPT.
+- Normal completion reports contain only changed files, a concise change summary, tests and results, `git diff --check`, and `git status`.
+- Once code is committed and pushed, PM/ChatGPT with GitHub access must inspect the repository or commit directly instead of asking Codex to reproduce source code.
+- Do not automatically print an entire new or untracked file for review.
+- Pre-commit excerpts or diff hunks are allowed only when a genuinely high-risk security or data-integrity concern cannot reasonably be approved from implementation and test reporting alone. In that exception, output only the minimum relevant hunk or section.
+- Minimize Codex token use, copy/paste, and PM-to-Codex round trips.
+
 이 문서는 `mysecondhorizon/threads-automation` 저장소에서 작업하는 개발 에이전트를 위한 장기 지침이다. 저장소 전체에 적용하며, 실제 코드와 이 문서가 다를 때는 먼저 현재 구현을 조사하고 차이를 사용자에게 설명한 뒤 안전하게 작업한다.
 
 ## 프로젝트 목적
