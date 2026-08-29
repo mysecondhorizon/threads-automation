@@ -28,7 +28,7 @@ PM / coordination account plus parallel worker:
 
 Current parallel workstream:
 
-**UI-02 — Products UI/UX Cleanup — COMPLETED / MERGED TO MAIN**
+**MEDIA-02-I — User Experience Media Hints — COMPLETED / MERGED TO MAIN**
 
 The two ChatGPT accounts do not share conversation memory.
 
@@ -240,11 +240,23 @@ Status:
 
 Task:
 
-**UI-02 — Products UI/UX Cleanup — COMPLETED / MERGED TO MAIN**
+**MEDIA-02-I — User Experience Media Hints — COMPLETED / MERGED TO MAIN**
 
 Merged commit:
 
-`393940ae2b3f9aee8b701428ad9c9b147833c72b`
+`8ce732bd80f5952486096079042b427d59f9e229`
+
+### Completed checkpoints
+
+- UI-02 — Products UI/UX Cleanup merged.
+- PRODUCT-01-D decision complete / deferred.
+- AUTO-PV1 read-only verification complete: **NOT VERIFIABLE**.
+- MEDIA-02-D design verification complete.
+- MEDIA-02-I merged: optional `experienceTags` / `experienceNote` upload hints.
+
+Codex B status: **AWAITING PM ASSIGNMENT**.
+
+The R11D detail below is retained as historical scope, not a current Codex B assignment.
 
 ### Completed verification checkpoint
 
@@ -491,7 +503,7 @@ Then continue only the workstream assigned to that account.
 
 Latest confirmed main:
 
-`393940ae2b3f9aee8b701428ad9c9b147833c72b`
+`8ce732bd80f5952486096079042b427d59f9e229`
 
 Before relying on this hash, verify `origin/main`.
 
@@ -505,7 +517,7 @@ Current intended parallel execution:
 
 ### Codex A
 
-Fetch/pull latest `origin/main`, incorporate the UI-02 checkpoint, then continue R13A.
+Fetch/pull latest `origin/main`, incorporate the MEDIA-02-I checkpoint, then continue R13A.
 
 Prefer small checkpoints.
 
@@ -523,9 +535,13 @@ The PM account should review both completion reports and decide merge order.
   - fix broken/awkward alignment
   - clean up page hierarchy/layout and responsive behavior
   - preserve functional prompt semantics
-- **PRODUCT-01 — Product ↔ Product Media relationship decision**
-  - product media currently uses `sourceType: product`
-  - media is not directly tied to an individual Product record
-  - decide whether direct per-product association is needed before implementation
+- **MEDIA-02-AI — provenance-labeled AI generation context for user experience hints**
+  - preserve `USER_EXPERIENCE` as distinct from observation and fact context
+- **MEDIA-02-R — optional future external research use**
+  - preserve `USER_EXPERIENCE` vs `EXTERNAL_FACT` distinction
+- **ARCH-01-D — Multi-Account / Multi-Platform Storage & Scope Design Verification**
+  - Priority: **HIGH**
+  - verify `User → Workspace → Connected Account` model and audit current storage/KV scope
+  - no implementation or migration in this tranche
 
 These are pending PM decisions and are not assigned to Codex B.

@@ -32,11 +32,11 @@ Do not run:
 
 Latest confirmed shared main:
 
-`393940ae2b3f9aee8b701428ad9c9b147833c72b`
+`8ce732bd80f5952486096079042b427d59f9e229`
 
 Latest completed milestone:
 
-**UI-02 — Products UI/UX Cleanup**
+**MEDIA-02-I — User Experience Media Hints**
 
 Before any new task, always verify:
 
@@ -136,6 +136,15 @@ This is the first confirmed successful production General AUTO run after the for
 
 Do not weaken or remove the current diversity safeguards without explicit PM approval.
 
+### AUTO-PV1 — Additional General AUTO Production Verification
+
+- Read-only verification was attempted after the confirmed 2026-08-29 11:30 KST success.
+- 14:30 KST / later run evidence could not be retrieved.
+- Result: **NOT VERIFIABLE**.
+- No production write or manual trigger was performed.
+- Code-level scheduler owner remains `LEGACY_ACTIVE_RUNTIME_PREPARING` and runtime execution remains disabled by the current ownership mode.
+- Do not claim runtime diversity safeguards were re-verified.
+
 ---
 
 ## 5. Major Completed Milestones
@@ -229,6 +238,31 @@ Complete.
 - Added clearer state badges, feedback, responsive layout, and product-media presentation.
 - Product API/storage semantics were not changed.
 - Product Media remains `sourceType: product` and is not directly associated with an individual Product record.
+
+### PRODUCT-01 — Product ↔ Product Media Relationship Decision
+Decision complete / DEFERRED.
+
+- Current Product Review is text-only.
+- Direct per-product image association is not required now.
+- Existing nullable `productId` capability reduces future migration risk.
+- Revisit only when an actual Product Review/image publishing consumer exists.
+
+### MEDIA-02-D — User Experience Media Hints Design Verification
+Complete.
+
+- Inspected existing tags/description provenance.
+- Decision: do not reuse legacy/vision tags as user-experience provenance.
+- Selected a small model/API extension.
+
+### MEDIA-02-I — User Experience Media Hints
+Complete.
+
+- Media records now support optional `experienceTags` and `experienceNote`.
+- These fields represent `USER_EXPERIENCE` context.
+- General Media and Product Media uploads support batch-level optional hints.
+- Image/video media model compatibility is preserved and existing records require no migration.
+- Existing `tags`, `description`, and `altText` semantics remain unchanged.
+- AI generation/research consumption is **not** implemented yet.
 
 ---
 
@@ -345,11 +379,11 @@ while preserving code-owned constraints.
 
 ### Codex B
 
-**COMPLETED — UI-02 — Products UI/UX Cleanup**
+**COMPLETED / MERGED TO MAIN — MEDIA-02-I — User Experience Media Hints**
 
 Merged to `main`:
 
-`393940ae2b3f9aee8b701428ad9c9b147833c72b`
+`8ce732bd80f5952486096079042b427d59f9e229`
 
 ---
 
@@ -405,11 +439,9 @@ Major remaining work includes:
   - page hierarchy/layout cleanup
   - responsive cleanup
   - functional prompt semantics must remain unchanged
-- PRODUCT-01 Product ↔ Product Media relationship decision
-  - current product media uses `sourceType: product`
-  - media is not directly tied to an individual Product record
-  - decide whether direct per-product association is needed before implementation
-- additional production verification of General AUTO
+- additional General AUTO production verification when evidence access becomes available
+- MEDIA-02-AI — consume user experience hints as provenance-labeled AI generation context
+- MEDIA-02-R — optional future external research use, preserving `USER_EXPERIENCE` vs `EXTERNAL_FACT` distinction
 - Runtime Scheduler final production ownership cutover
 - WordPress publisher
 - Custom API publisher
@@ -418,6 +450,84 @@ Major remaining work includes:
 - whole-collection KV scalability
 - stronger global exactly-once guarantees
 - optional future General AUTO video support only if explicitly approved
+
+### ARCH-01 — Multi-Account / Multi-Platform Workspace Architecture
+
+Priority: **HIGH**
+
+Status: **DESIGN PENDING**
+
+Architecture direction:
+
+`User → Workspace / Tenant → Connected Account`
+
+- **User/login** identifies the system user.
+- **Workspace/Tenant** is the base isolation unit for brand, business, and data context.
+- **Connected Account** represents an actual publishing destination.
+
+Principles:
+
+- One User may access multiple Workspaces.
+- One Workspace may contain multiple Connected Accounts.
+- Same-platform multiple accounts must be supported.
+- Future platforms include Threads, TikTok, YouTube Shorts, and future publisher platforms.
+
+Data scope direction:
+
+**SYSTEM**
+
+- code-owned safety
+- validation
+- platform capability / shared runtime behavior
+
+**WORKSPACE**
+
+- Products
+- Media
+- base Prompt / Brand context
+- user experience media hints
+- other shared brand context
+
+**CONNECTED_ACCOUNT**
+
+- platform credentials
+- account-specific publishing history
+- account-specific schedules where applicable
+- analytics
+- account-specific preferences/context
+
+Long-term AI context composition:
+
+`SYSTEM → WORKSPACE → CONNECTED_ACCOUNT → CONTENT-SPECIFIC CONTEXT`
+
+Architecture evolution direction:
+
+- Keep and extend the existing `targetApp` concept where possible.
+- Keep and extend the existing Publisher Resolver / Adapter architecture.
+- Do not replace the publisher architecture wholesale.
+
+ARCH-01 is not implemented. Login, Workspace/Tenant, and multi-account behavior must not be described as current functionality.
+
+#### ARCH-01-D — Multi-Account / Multi-Platform Storage & Scope Design Verification
+
+Status: **TODO**
+
+Design/verification only: determine whether each current repository data set belongs to `SYSTEM`, `WORKSPACE`, or `CONNECTED_ACCOUNT` scope. Do not implement migration or schema changes.
+
+Review examples:
+
+- Posts, Products, Media Library, Content Pool, Prompt Profile, App Registry
+- `threads_auth`, schedules, execution/history records, analytics/context, diversity/recent-post history
+
+Architecture backlog only:
+
+- authentication/login design
+- Workspace model/storage and membership
+- Connected Account registry
+- `threads_auth` to connection-scoped credential migration strategy
+- existing KV/data workspace migration strategy
+- TikTok Publisher Adapter
+- YouTube Shorts Publisher Adapter
 
 ---
 
