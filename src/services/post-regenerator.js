@@ -18,6 +18,7 @@ import {
 
 import {
   PostFormatError,
+  analyzePostFormat,
   selectTargetPostFormat,
   validatePostFormat,
   getContextFormatDisclosures,
@@ -160,6 +161,9 @@ export async function generateDistinctThreadPost(
     excludeInfeasibleTargets =
       false,
 
+    enforceFormatValidation =
+      true,
+
     workspaceId,
 
     generatePost =
@@ -204,9 +208,12 @@ export async function generateDistinctThreadPost(
               .publishSequence ||
             1,
 
-          excludeInfeasibleTargets,
+          excludeInfeasibleTargets:
+            enforceFormatValidation &&
+            excludeInfeasibleTargets,
 
           selectConcretePattern:
+            enforceFormatValidation &&
             excludeInfeasibleTargets,
         }
       );
@@ -293,6 +300,13 @@ export async function generateDistinctThreadPost(
       .targetFormat =
       targetFormat;
 
+    if (!enforceFormatValidation) {
+      attemptContext
+        .publishing
+        .targetFormatGuidance =
+        "advisory";
+    }
+
     if (
       attempt > 1 &&
       lastSimilarityError
@@ -324,14 +338,19 @@ export async function generateDistinctThreadPost(
 
     try {
       const format =
-        validatePostFormat(
-          validation.text,
-          {
-            targetFormat,
-            recentFormats,
-            disclosures,
-          }
-        );
+        enforceFormatValidation
+          ? validatePostFormat(
+            validation.text,
+            {
+              targetFormat,
+              recentFormats,
+              disclosures,
+            }
+          )
+          : analyzePostFormat(
+            validation.text,
+            { disclosures }
+          );
 
       const similarity =
         validatePostSimilarity(

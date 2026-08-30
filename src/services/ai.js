@@ -982,10 +982,17 @@ function buildGenerationInput(
     context,
   }
 ) {
+  const targetFormatIsAdvisory =
+    context?.publishing
+      ?.targetFormatGuidance ===
+    "advisory";
+
   const lines = [
     `작성 목표: ${topic}`,
     `기본 톤: ${tone}`,
-    "세 초안 모두 publishing.targetFormat 범위 안에서 작성하되 세부 표현과 도입부는 서로 겹치지 않게 작성하세요.",
+    targetFormatIsAdvisory
+      ? "publishing.targetFormat은 자연스러운 표현 변화를 위한 참고사항으로만 사용하고, 세부 표현과 도입부는 서로 겹치지 않게 작성하세요."
+      : "세 초안 모두 publishing.targetFormat 범위 안에서 작성하되 세부 표현과 도입부는 서로 겹치지 않게 작성하세요.",
     "각 초안의 text에는 실제 게시할 본문만 작성하세요.",
     "제품 링크나 추가 안내가 필요한 경우에만 firstComment를 작성하세요.",
     "첫 댓글이 필요하지 않으면 firstComment는 빈 문자열로 작성하세요.",
@@ -1005,8 +1012,12 @@ function buildGenerationInput(
       "todayQuestionCount를 참고해 질문형 마무리가 과도하게 반복되지 않게 하세요.",
       "todayProductConnectedCount와 todayAffiliateLinkCount를 참고해 제품 콘텐츠와 링크 사용을 조절하세요.",
       "recentProductIds를 참고해 최근 사용 제품의 반복을 피하세요.",
-      "publishing.targetFormat은 코드가 최근 포맷을 분석해 선택한 이번 글의 필수 문장·문단 구조입니다.",
-      "targetFormat.prompt와 patterns를 따르고 recentFormatSignatures 및 recentFormats와 같은 문단 패턴을 반복하지 마세요.",
+      targetFormatIsAdvisory
+        ? "publishing.targetFormat은 자연스러운 글 흐름을 위한 참고 힌트입니다. 문단이나 문장 수를 기계적으로 맞출 필요는 없습니다."
+        : "publishing.targetFormat은 코드가 최근 포맷을 분석해 선택한 이번 글의 필수 문장·문단 구조입니다.",
+      targetFormatIsAdvisory
+        ? "recentFormatSignatures 및 recentFormats는 표현의 단조로움을 피하기 위한 참고 정보이며, 내용의 자연스러움과 정확성을 우선하세요."
+        : "targetFormat.prompt와 patterns를 따르고 recentFormatSignatures 및 recentFormats와 같은 문단 패턴을 반복하지 마세요.",
       "제품 글을 작성할 때는 products의 실제 데이터만 사용하세요.",
       "제품 경험이 없거나 정보가 부족하면 일반 글을 작성하세요.",
       "affiliateLink가 비어 있거나 linkEnabled가 false라면 firstComment에 링크를 만들지 마세요.",

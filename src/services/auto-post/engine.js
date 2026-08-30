@@ -28,6 +28,10 @@ import {
 } from "../post-similarity.js";
 
 import {
+  PostFormatError,
+} from "../post-format.js";
+
+import {
   generateDistinctThreadPost,
   SAFE_FORMAT_DIVERSITY_OPTIONS,
 } from "../post-regenerator.js";
@@ -452,7 +456,10 @@ function normalizeEngineError(
           409,
 
         step:
-          "similarity_validation",
+          error instanceof
+            PostFormatError
+            ? "format_validation"
+            : "similarity_validation",
 
         details:
           error.details,
@@ -931,7 +938,13 @@ async function runExecution(
           maxAttempts:
             MAX_GENERATION_ATTEMPTS,
 
+          enforceFormatValidation:
+            !generalOnly,
+
           ...SAFE_FORMAT_DIVERSITY_OPTIONS,
+
+          excludeInfeasibleTargets:
+            !generalOnly,
         }
       );
 

@@ -182,7 +182,7 @@ export function serializeSchedulerError(
       name: error.name,
       code: error.code,
       status: 409,
-      step: "similarity_validation",
+      step: "format_validation",
       message: error.message,
       details: formatErrorDetails(error.details),
     };

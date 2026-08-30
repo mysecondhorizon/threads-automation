@@ -16,7 +16,7 @@ assert.deepEqual(serialized, {
   name: "PostFormatError",
   code: "post_format_validation_failed",
   status: 409,
-  step: "similarity_validation",
+  step: "format_validation",
   message: "internal format detail must stay internal",
   details: {
     reasons: ["recent_signature_repeated", "no_feasible_target_format"],
