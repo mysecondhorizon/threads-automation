@@ -7,9 +7,9 @@ const dependencies = {
   async getApp(_env, id) {
     return id === "threads-primary" ? { id: "threads-primary", type: "THREADS", active: true } : null;
   },
-  async getJson(_env, key) {
-    assert.equal(key, "threads_auth");
-    return { access_token: "token" };
+  async getThreadsCredentialForAccount(_env, options) {
+    assert.deepEqual(options, {});
+    return { credential: { access_token: "token" } };
   },
   async getThreadsProfile(token) {
     assert.equal(token, "token");
@@ -30,6 +30,36 @@ assert.deepEqual(await publishOperatorPost({ env: {}, post, dependencies }), {
 });
 assert.deepEqual(calls[0], { token: "token", userId: "user-1", text: "saved body" });
 assert.equal(calls[1].metadata.source, "OPERATOR");
+
+const executionContext = {
+  workspaceId: "workspace-a",
+  connectedAccountId: "threads-account-a",
+};
+let receivedExecutionContext = null;
+await publishOperatorPost({
+  env: {},
+  post: { ...post, id: "post-scoped" },
+  executionContext,
+  dependencies: {
+    ...dependencies,
+    async resolvePublisher() {
+      return {
+        app: { id: "threads-primary", type: "THREADS" },
+        publisher: {
+          async publish(options) {
+            receivedExecutionContext = options.executionContext;
+            return {
+              provider: "THREADS",
+              externalPostId: "threads-scoped",
+              logUsername: "operator",
+            };
+          },
+        },
+      };
+    },
+  },
+});
+assert.deepEqual(receivedExecutionContext, executionContext);
 
 await assert.rejects(
   publishOperatorPost({ env: {}, post: { ...post, targetApp: "missing" }, dependencies }),
@@ -52,7 +82,7 @@ for (const invalidPost of [
 }
 
 await assert.rejects(
-  publishOperatorPost({ env: {}, post, dependencies: { ...dependencies, getJson: async () => null } }),
+  publishOperatorPost({ env: {}, post, dependencies: { ...dependencies, getThreadsCredentialForAccount: async () => { throw new Error("missing credential"); } } }),
   (error) => error instanceof OperatorPublishError && error.code === "threads_auth_missing"
 );
 await assert.rejects(

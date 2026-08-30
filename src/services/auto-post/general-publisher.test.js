@@ -11,7 +11,10 @@ function dependencies(overrides = {}) {
         assert.equal(id, "threads-primary");
         return { id: "threads-primary", type: "THREADS", active: false };
       },
-      async getJson(_env, key) { assert.equal(key, "threads_auth"); return { access_token: "token" }; },
+      async getThreadsCredentialForAccount(_env, options) {
+        assert.deepEqual(options, {});
+        return { credential: { access_token: "token" } };
+      },
       async getThreadsProfile(token) { assert.equal(token, "token"); return { id: "user-1", username: "auto" }; },
       async publishTextPost(token, userId, text) { calls.push({ mode: "TEXT", token, userId, text }); return { postId: "text-1" }; },
       async publishImagePost(env, token, userId, text, mediaId) { calls.push({ mode: "IMAGE", env, token, userId, text, mediaId }); return { postId: "image-1" }; },

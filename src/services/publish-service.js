@@ -19,6 +19,7 @@ export async function publishWithResolvedApp({
   content,
   format,
   context = {},
+  executionContext = null,
   dependencies = {},
 }) {
   const resolve = dependencies.resolvePublisher || resolvePublisher;
@@ -29,6 +30,7 @@ export async function publishWithResolvedApp({
     format,
     app: resolved.app,
     context,
+    executionContext,
     dependencies,
   });
 }
@@ -51,7 +53,12 @@ function assertPublishableOperatorPost(post) {
   }
 }
 
-export async function publishOperatorPost({ env, post, dependencies = {} }) {
+export async function publishOperatorPost({
+  env,
+  post,
+  executionContext = null,
+  dependencies = {},
+}) {
   assertPublishableOperatorPost(post);
   const logSuccess = dependencies.logPostSuccess || logPostSuccess;
   let publishResult;
@@ -62,6 +69,7 @@ export async function publishOperatorPost({ env, post, dependencies = {} }) {
       content: post.body.trim(),
       format: post.format,
       context: { source: "OPERATOR", postId: post.id },
+      executionContext,
       dependencies,
     });
   } catch (error) {

@@ -45,13 +45,16 @@ function createEnv(
     )
   );
   const writes = [];
+  const reads = [];
 
   return {
     values,
     writes,
+    reads,
     env: {
       THREADS_KV: {
         async get(key, type) {
+          reads.push(key);
           const value = values.get(key);
           if (value === undefined) return null;
           return type === "json"
@@ -299,6 +302,80 @@ test("persisted account credential failures are fail-closed", async () => {
       connectedAccountId: unsupported.id,
     }),
     "connected_account_platform_unsupported"
+  );
+});
+
+test("persisted account authRef must belong to the resolved account", async () => {
+  const accountA = account({
+    id: "threads-account-a",
+    authRef: "connected_account_auth:threads-account-b",
+  });
+  const { env, reads } = createEnv({
+    [CONNECTED_ACCOUNTS_KEY]: {
+      version: 1,
+      updatedAt: TIMESTAMP,
+      records: [accountA],
+    },
+    "connected_account_auth:threads-account-b": {
+      access_token: "account-b-token",
+    },
+  });
+
+  await expectCode(
+    () => getThreadsCredentialForAccount(env, {
+      workspaceId: "workspace-a",
+      connectedAccountId: accountA.id,
+    }),
+    "connected_account_auth_unconfigured"
+  );
+
+  assert.equal(
+    reads.includes("connected_account_auth:threads-account-b"),
+    false
+  );
+});
+
+test("blank persisted account access tokens fail closed", async () => {
+  const persisted = account();
+  const { env } = createEnv({
+    [CONNECTED_ACCOUNTS_KEY]: {
+      version: 1,
+      updatedAt: TIMESTAMP,
+      records: [persisted],
+    },
+    [persisted.authRef]: {
+      access_token: "   ",
+    },
+  });
+
+  await expectCode(
+    () => getThreadsCredentialForAccount(env, {
+      workspaceId: persisted.workspaceId,
+      connectedAccountId: persisted.id,
+    }),
+    "connected_account_credential_missing"
+  );
+});
+
+test("malformed persisted account authRef fails closed", async () => {
+  const malformed = account({
+    id: "threads-malformed-auth",
+    authRef: "not-a-connected-account-auth-ref",
+  });
+  const { env } = createEnv({
+    [CONNECTED_ACCOUNTS_KEY]: {
+      version: 1,
+      updatedAt: TIMESTAMP,
+      records: [malformed],
+    },
+  });
+
+  await expectCode(
+    () => getThreadsCredentialForAccount(env, {
+      workspaceId: malformed.workspaceId,
+      connectedAccountId: malformed.id,
+    }),
+    "connected_account_not_found"
   );
 });
 

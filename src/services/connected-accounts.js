@@ -22,6 +22,12 @@ const LEGACY_ACCOUNT_MARKER =
 const AUTH_REF_PATTERN =
   /^connected_account_auth:[A-Za-z0-9_-]+$/u;
 
+function getExpectedCredentialRef(
+  accountId
+) {
+  return `connected_account_auth:${accountId}`;
+}
+
 export class ConnectedAccountError extends Error {
   constructor(
     message,
@@ -310,7 +316,12 @@ export function resolveCredentialRef(
       ? account.authRef.trim()
       : "";
 
-  if (!AUTH_REF_PATTERN.test(authRef)) {
+  if (
+    !AUTH_REF_PATTERN.test(authRef) ||
+    authRef !== getExpectedCredentialRef(
+      account?.id
+    )
+  ) {
     fail(
       "Connected Account credential is not configured",
       "connected_account_auth_unconfigured"
