@@ -31,6 +31,9 @@ assert.match(page, /experienceNote/u);
 assert.match(page, /labels\.noExperienceTags/u);
 assert.match(page, /labels\.noExperienceNote/u);
 assert.match(page, /media\.sourceType === "product"/u);
+assert.match(page, /if \(media\.sourceType !== "product"\) return null/u);
+assert.match(page, /linkedProduct\?\.name/u);
+assert.match(page, /payload\.productId = productLink\.select\.value \|\| null/u);
 assert.doesNotMatch(page, /innerHTML/u);
 assert.doesNotMatch(page, /objectKey|content_media_library|THREADS_MEDIA/u);
 assert.deepEqual(getMediaUpdateRequest("media-1", { active: false }), {
