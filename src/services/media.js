@@ -573,7 +573,8 @@ function createMediaId() {
 function normalizeMediaRecord(
   input,
   existingMedia = null,
-  workspaceId = DEFAULT_WORKSPACE_ID
+  workspaceId = DEFAULT_WORKSPACE_ID,
+  createdMediaId = null,
 ) {
   const now =
     new Date().toISOString();
@@ -600,6 +601,7 @@ function normalizeMediaRecord(
   return {
     id:
       existingMedia?.id ||
+      createdMediaId ||
       createMediaId(),
 
     workspaceId,
@@ -1159,7 +1161,8 @@ function normalizeListOptions(
 export async function createMedia(
   env,
   input,
-  workspaceId
+  workspaceId,
+  { id: createdMediaId = null } = {},
 ) {
   const resolvedWorkspaceId =
     resolveMediaWorkspaceId(
@@ -1196,7 +1199,8 @@ export async function createMedia(
     normalizeMediaRecord(
       input,
       null,
-      resolvedWorkspaceId
+      resolvedWorkspaceId,
+      createdMediaId
     );
 
   assertUniqueObjectKey(

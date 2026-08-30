@@ -116,7 +116,7 @@ function createId() {
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
-function normalizeItem(input, existing = null, workspaceId = DEFAULT_WORKSPACE_ID) {
+function normalizeItem(input, existing = null, workspaceId = DEFAULT_WORKSPACE_ID, createdItemId = null) {
   const now = new Date().toISOString();
   const type = typeValue(input?.type, existing?.type || "general");
   const availableFrom = dateValue(input?.availableFrom, existing?.availableFrom ?? null);
@@ -133,7 +133,7 @@ function normalizeItem(input, existing = null, workspaceId = DEFAULT_WORKSPACE_I
   }
 
   return {
-    id: existing?.id || createId(),
+    id: existing?.id || createdItemId || createId(),
     workspaceId,
     type,
     mediaIds,
@@ -243,14 +243,19 @@ export function isContentPoolItemAvailable(item, at = new Date()) {
   return true;
 }
 
-export async function createContentPoolItem(env, input, workspaceId) {
+export async function createContentPoolItem(
+  env,
+  input,
+  workspaceId,
+  { id: createdItemId = null } = {},
+) {
   const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
   const store = await readStore(env);
   const workspaceItems = store.items.filter((item) => isInWorkspace(item, resolvedWorkspaceId));
   if (workspaceItems.length >= MAX_POOL_ITEMS) {
     throw fail("Content Pool has reached its item limit", "content_pool_limit_reached");
   }
-  const item = normalizeItem(input, null, resolvedWorkspaceId);
+  const item = normalizeItem(input, null, resolvedWorkspaceId, createdItemId);
   await assertMediaReferences(env, item, resolvedWorkspaceId);
   await assertProductReference(env, item, resolvedWorkspaceId);
   await writeStore(env, mergeWorkspaceItems(store.rawItems, resolvedWorkspaceId, [item, ...workspaceItems]));

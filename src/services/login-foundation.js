@@ -256,6 +256,16 @@ export async function getWorkspaceForOwner(env, workspaceId, ownerUserId) {
   ) ?? null;
 }
 
+export async function getWorkspaceById(env, workspaceId) {
+  const normalizedWorkspaceId = normalizeId(workspaceId, "Workspace id");
+  if (normalizedWorkspaceId === DEFAULT_WORKSPACE_ID) {
+    return getDefaultWorkspace();
+  }
+  return (await readWorkspaces(env)).find(
+    (workspace) => workspace.id === normalizedWorkspaceId,
+  ) ?? null;
+}
+
 export async function createWorkspace(
   env,
   { ownerUserId, name, active = true },

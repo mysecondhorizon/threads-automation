@@ -6,7 +6,7 @@ import {
   THREADS_PRODUCT_PROMPT,
   composeThreadsSystemPrompt,
 } from "../prompts/threads/index.js";
-import { getJson, putJson } from "./kv.js";
+import { getJson, getText, putJson } from "./kv.js";
 import { DEFAULT_WORKSPACE_ID } from "./workspace-foundation.js";
 
 const KEY = "operator_prompt_profile:v1";
@@ -87,6 +87,10 @@ export async function getStoredPromptProfile(env, workspaceId) {
     profile,
     updatedAt: typeof stored.updatedAt === "string" ? stored.updatedAt : null,
   };
+}
+
+export async function hasPersistedPromptProfile(env, workspaceId) {
+  return (await getText(env, getStorageKey(workspaceId))) !== null;
 }
 
 export async function getEffectivePromptProfile(env, workspaceId) {
