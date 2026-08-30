@@ -3,6 +3,7 @@ import {
   createPasswordAuthRecord,
   createUser,
   createWorkspace,
+  normalizeLoginId,
   setUserPassword,
 } from "./login-foundation.js";
 
@@ -37,14 +38,19 @@ function partialFailure(stage, user) {
 
 export async function provisionRegisteredUser(
   env,
-  { loginId, displayName, password, workspaceName },
+  { loginId, password, workspaceName },
   options = {},
 ) {
   // Reuse the login foundation's password validation before creating any record.
   // The generated record stays in memory only; persistence is handled solely by setUserPassword().
   await createPasswordAuthRecord(password, options);
+  const normalizedLoginId = normalizeLoginId(loginId);
 
-  const user = await createUser(env, { loginId, displayName, active: true }, options);
+  const user = await createUser(
+    env,
+    { loginId: normalizedLoginId, displayName: normalizedLoginId, active: true },
+    options,
+  );
 
   try {
     await setUserPassword(env, user.id, password, options);

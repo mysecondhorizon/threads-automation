@@ -95,7 +95,6 @@ async function main() {
     { THREADS_KV: createRemoteKv(namespaceId) },
     {
       loginId: readOption("--login-id"),
-      displayName: readOption("--display-name"),
       password,
       workspaceName: readOption("--workspace-name"),
     },

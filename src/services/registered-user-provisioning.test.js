@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -43,7 +44,6 @@ test("provisioning creates an active User, password credential, and owned non-de
   const { env } = createEnv();
   const result = await provisionRegisteredUser(env, {
     loginId: "  Operator@Example.Test  ",
-    displayName: "Operator",
     password: "correct horse battery staple",
     workspaceName: "Main Brand",
   }, options);
@@ -51,7 +51,7 @@ test("provisioning creates an active User, password credential, and owned non-de
   assert.deepEqual(result, {
     userId: "user-provisioned",
     loginId: "operator@example.test",
-    displayName: "Operator",
+    displayName: "operator@example.test",
     workspaceId: "workspace-provisioned",
     workspaceName: "Main Brand",
   });
@@ -65,6 +65,7 @@ test("provisioning creates an active User, password credential, and owned non-de
     updatedAt: "2026-08-30T00:00:00.000Z",
   }]);
   assert.notEqual(result.workspaceId, DEFAULT_WORKSPACE_ID);
+  assert.equal(result.displayName, result.loginId);
   assert.deepEqual(Object.keys(result).sort(), [
     "displayName",
     "loginId",
@@ -78,7 +79,6 @@ test("provisioning rejects duplicate login ids and invalid passwords before crea
   const { env } = createEnv();
   await provisionRegisteredUser(env, {
     loginId: "operator@example.test",
-    displayName: "Operator",
     password: "correct horse battery staple",
     workspaceName: "Main Brand",
   }, options);
@@ -86,7 +86,6 @@ test("provisioning rejects duplicate login ids and invalid passwords before crea
   await assert.rejects(
     () => provisionRegisteredUser(env, {
       loginId: " OPERATOR@example.test ",
-      displayName: "Duplicate",
       password: "another password",
       workspaceName: "Another Brand",
     }, {
@@ -101,7 +100,6 @@ test("provisioning rejects duplicate login ids and invalid passwords before crea
   await assert.rejects(
     () => provisionRegisteredUser(invalid.env, {
       loginId: "invalid@example.test",
-      displayName: "Invalid",
       password: "",
       workspaceName: "Invalid Brand",
     }, options),
@@ -116,7 +114,6 @@ test("provisioning reports a safe partial failure when Workspace creation cannot
   await assert.rejects(
     () => provisionRegisteredUser(env, {
       loginId: "partial@example.test",
-      displayName: "Partial",
       password: "correct horse battery staple",
       workspaceName: "Partial Brand",
     }, options),
@@ -126,7 +123,7 @@ test("provisioning reports a safe partial failure when Workspace creation cannot
       assert.deepEqual(error.details, {
         userId: "user-provisioned",
         loginId: "partial@example.test",
-        displayName: "Partial",
+        displayName: "partial@example.test",
         stage: "Workspace creation",
       });
       return true;
@@ -134,4 +131,15 @@ test("provisioning reports a safe partial failure when Workspace creation cannot
   );
 
   assert.equal(await verifyUserPassword(env, "user-provisioned", "correct horse battery staple"), true);
+});
+
+test("maintenance invocation derives displayName from loginId instead of accepting it", async () => {
+  const script = await readFile(
+    new URL("../../maintenance-provision-registered-user.js", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(script, /readOption\("--login-id"\)/u);
+  assert.match(script, /readOption\("--workspace-name"\)/u);
+  assert.doesNotMatch(script, /--display-name/u);
 });
