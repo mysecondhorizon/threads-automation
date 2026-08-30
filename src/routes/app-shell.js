@@ -1,5 +1,10 @@
 import { requireAdminSession } from "../middleware/auth.js";
 import {
+  AppContextError,
+  resolveCurrentAppContext,
+  selectCurrentWorkspace,
+} from "../services/app-context.js";
+import {
   APP_NAVIGATION,
   getAppNavigationItem,
 } from "../services/app-navigation.js";
@@ -21,6 +26,32 @@ function renderNavigation(activePath) {
   }).join("");
 }
 
+function renderWorkspaceContext(appContext) {
+  if (!appContext || appContext.legacy) return "";
+
+  const { user, currentWorkspace, workspaces } = appContext;
+  const workspaceStatus = currentWorkspace
+    ? `Current Workspace: <strong>${escapeHtml(currentWorkspace.name)}</strong>`
+    : workspaces.length
+      ? "Select a workspace to establish your app context."
+      : "No workspace available.";
+  const selector = workspaces.length
+    ? `<form class="app-workspace-form" method="POST" action="/app/workspace">
+        <label for="app-workspace-id">Workspace</label>
+        <select id="app-workspace-id" name="workspaceId">
+          ${workspaces.map((workspace) => `<option value="${escapeHtml(workspace.id)}"${workspace.id === currentWorkspace?.id ? " selected" : ""}>${escapeHtml(workspace.name)}</option>`).join("")}
+        </select>
+        <button type="submit">Select</button>
+      </form>`
+    : "";
+
+  return `<section class="app-workspace-context" aria-label="Current workspace">
+    <strong>${escapeHtml(user.displayName)}</strong>
+    <p>${workspaceStatus}</p>
+    ${selector}
+  </section>`;
+}
+
 function renderStyles() {
   return `<style>
     :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f6f8; color: #1d2433; }
@@ -32,6 +63,11 @@ function renderStyles() {
     .app-brand { display: block; padding: 0 12px 24px; text-decoration: none; font-size: 18px; font-weight: 760; letter-spacing: -0.02em; }
     .app-brand small { display: block; margin-top: 4px; color: #697386; font-size: 12px; font-weight: 600; letter-spacing: 0; }
     .app-navigation { display: grid; gap: 4px; }
+    .app-workspace-context { display:grid; gap:8px; margin:0 0 18px; padding:12px; border:1px solid #d9e2f5; border-radius:10px; background:#f7f9ff; color:#344054; font-size:13px; line-height:1.45; }
+    .app-workspace-context strong, .app-workspace-context p { margin:0; }
+    .app-workspace-form { display:grid; gap:7px; }
+    .app-workspace-form select, .app-workspace-form button { width:100%; border:1px solid #cfd6e2; border-radius:7px; background:#fff; color:#344054; font:inherit; padding:8px; }
+    .app-workspace-form button { cursor:pointer; font-weight:700; }
     .app-nav-link { padding: 10px 12px; border-radius: 9px; color: #586174; font-size: 14px; font-weight: 650; text-decoration: none; }
     .app-nav-link:hover { background: #f1f3f6; color: #1d2433; }
     .app-nav-link.is-active { background: #e9eefb; color: #294d9a; }
@@ -59,7 +95,7 @@ function renderStyles() {
   </style>`;
 }
 
-export function renderAppShell({ activePath, title, description, content }) {
+export function renderAppShell({ activePath, title, description, content, appContext = null, status = 200 }) {
   return html(`<!doctype html>
 <html lang="ko">
   <head>
@@ -72,6 +108,7 @@ export function renderAppShell({ activePath, title, description, content }) {
     <div class="app-layout">
       <aside class="app-sidebar">
         <a class="app-brand" href="/app">Second Horizon<small>운영 콘솔</small></a>
+        ${renderWorkspaceContext(appContext)}
         <nav class="app-navigation" aria-label="운영 메뉴">${renderNavigation(activePath)}</nav>
       </aside>
       <main class="app-main">
@@ -84,7 +121,7 @@ export function renderAppShell({ activePath, title, description, content }) {
       </main>
     </div>
   </body>
-</html>`);
+</html>`, status);
 }
 
 async function requireAppSession(request, env) {
@@ -95,6 +132,7 @@ export async function handleAppHome(request, env) {
   const auth = await requireAppSession(request, env);
   if (!auth.ok) return auth.response;
 
+  const appContext = await resolveCurrentAppContext(request, env);
   const cards = APP_NAVIGATION
     .filter((item) => item.path !== "/app")
     .map((item) => `<a class="app-card" href="${item.path}"><h2>${escapeHtml(item.label)}</h2><p>${escapeHtml(item.description)}</p></a>`)
@@ -105,6 +143,50 @@ export async function handleAppHome(request, env) {
     title: "운영 홈",
     description: "콘텐츠 운영에 필요한 작업을 한곳에서 시작하세요.",
     content: `<section class="app-card-grid" aria-label="운영 기능">${cards}</section>`,
+    appContext,
+  });
+}
+
+export async function handleAppWorkspaceSelection(request, env) {
+  if (request.method !== "POST") {
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: { allow: "POST", "cache-control": "no-store" },
+    });
+  }
+
+  try {
+    const workspaceId = (await request.formData()).get("workspaceId");
+    await selectCurrentWorkspace(request, env, workspaceId);
+  } catch (error) {
+    const status = error instanceof AppContextError &&
+      error.code !== "workspace_selection_unauthenticated"
+      ? 400
+      : 401;
+    return new Response("Workspace selection is not available.", {
+      status,
+      headers: { "cache-control": "no-store" },
+    });
+  }
+
+  return new Response(null, {
+    status: 302,
+    headers: {
+      location: "/app",
+      "cache-control": "no-store",
+    },
+  });
+}
+
+export function renderAppWorkspaceUnavailable(appContext, path) {
+  const page = getAppNavigationItem(path);
+  return renderAppShell({
+    activePath: page?.path || "/app",
+    title: page?.label || "Workspace",
+    description: page?.description || "Workspace context is active.",
+    appContext,
+    content: `<section class="app-empty"><strong>Workspace data access is not available yet.</strong>Existing app data operations remain in the legacy Default Workspace and are blocked for this selected Workspace.</section>`,
+    status: 409,
   });
 }
 

@@ -5,6 +5,7 @@ import {
   getParsedAdminSession,
   getUserById,
 } from "../services/login-foundation.js";
+import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
 
 const LEGACY_CURRENT_USER = Object.freeze({
   id: LEGACY_USER_ID,
@@ -12,7 +13,7 @@ const LEGACY_CURRENT_USER = Object.freeze({
   active: true,
 });
 
-async function resolveAuthenticatedSession(request, env) {
+export async function resolveCurrentSession(request, env) {
   let sessionId;
   try {
     sessionId = getCookieValue(request, "admin_session");
@@ -27,6 +28,7 @@ async function resolveAuthenticatedSession(request, env) {
   if (session.legacy) {
     return {
       sessionId,
+      session,
       user: { ...LEGACY_CURRENT_USER },
     };
   }
@@ -36,6 +38,7 @@ async function resolveAuthenticatedSession(request, env) {
 
   return {
     sessionId,
+    session,
     user: {
       id: user.id,
       displayName: user.displayName,
@@ -45,12 +48,12 @@ async function resolveAuthenticatedSession(request, env) {
 }
 
 export async function resolveCurrentUser(request, env) {
-  const resolved = await resolveAuthenticatedSession(request, env);
+  const resolved = await resolveCurrentSession(request, env);
   return resolved?.user ?? null;
 }
 
 export async function requireAdminSession(request, env) {
-  const resolved = await resolveAuthenticatedSession(request, env);
+  const resolved = await resolveCurrentSession(request, env);
   if (!resolved) {
     return {
       ok: false,
@@ -64,6 +67,7 @@ export async function requireAdminSession(request, env) {
   return {
     ok: true,
     sessionId: resolved.sessionId,
+    session: resolved.session,
     user: resolved.user,
   };
 }
@@ -78,6 +82,16 @@ export async function requireAdminApiSession(
   );
 
   if (result.ok) {
+    if (
+      !result.session.legacy &&
+      result.session.selectedWorkspaceId &&
+      result.session.selectedWorkspaceId !== DEFAULT_WORKSPACE_ID
+    ) {
+      return {
+        ok: false,
+        response: fail("Workspace data access is not available yet", 409),
+      };
+    }
     return result;
   }
 

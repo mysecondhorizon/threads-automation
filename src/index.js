@@ -87,7 +87,13 @@ import {
 
 import {
   handleAppHome,
+  handleAppWorkspaceSelection,
+  renderAppWorkspaceUnavailable,
 } from "./routes/app-shell.js";
+import {
+  isUnscopedAppAccessBlocked,
+  resolveCurrentAppContext,
+} from "./services/app-context.js";
 import { handleAppAppsPage } from "./routes/app-apps-page.js";
 import { handleAppById, handleAppsCollection } from "./routes/api-apps.js";
 
@@ -264,6 +270,17 @@ export default {
 
     if (pathname === "/app" && method === "GET") {
       return handleAppHome(request, env);
+    }
+
+    if (pathname === "/app/workspace" && method === "POST") {
+      return handleAppWorkspaceSelection(request, env);
+    }
+
+    if (pathname.startsWith("/app/") && method === "GET") {
+      const appContext = await resolveCurrentAppContext(request, env);
+      if (isUnscopedAppAccessBlocked(appContext)) {
+        return renderAppWorkspaceUnavailable(appContext, pathname);
+      }
     }
 
     if (pathname === "/app/write" && method === "GET") {
