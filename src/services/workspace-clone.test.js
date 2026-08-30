@@ -10,6 +10,7 @@ import { listContentPool } from "./content-pool.js";
 import {
   WorkspaceCloneError,
   cloneWorkspace,
+  preflightWorkspaceClone,
 } from "./workspace-clone.js";
 
 const DESTINATION = "workspace-destination";
@@ -97,7 +98,14 @@ function destinationWorkspace() {
   };
 }
 
-function createEnv({ destinationData = null, sourceProducts = [sourceProduct()], sourceObjectPresent = true, failKvKey = null } = {}) {
+function createEnv({
+  destinationData = null,
+  sourceProducts = [sourceProduct()],
+  sourceObjectPresent = true,
+  sourceBodyReadable = true,
+  sourceDisappearsDuringCopy = false,
+  failKvKey = null,
+} = {}) {
   const events = [];
   const values = new Map();
   const sourceRecords = {
@@ -126,6 +134,7 @@ function createEnv({ destinationData = null, sourceProducts = [sourceProduct()],
   }
 
   const objects = new Map();
+  const stats = { sourceGetCount: 0 };
   if (sourceObjectPresent) {
     objects.set(SOURCE_OBJECT_KEY, {
       bytes: new TextEncoder().encode("source media body"),
@@ -142,6 +151,7 @@ function createEnv({ destinationData = null, sourceProducts = [sourceProduct()],
     values,
     objects,
     events,
+    stats,
     sourceRecords,
     env: {
       THREADS_KV: {
@@ -167,8 +177,14 @@ function createEnv({ destinationData = null, sourceProducts = [sourceProduct()],
           events.push(`r2:get:${key}`);
           const object = objects.get(key);
           if (!object) return null;
+          if (key === SOURCE_OBJECT_KEY) {
+            stats.sourceGetCount += 1;
+            if (sourceDisappearsDuringCopy && stats.sourceGetCount > 1) return null;
+          }
           return {
-            body: object.bytes.slice().buffer,
+            body: sourceBodyReadable
+              ? new Response(object.bytes.slice()).body
+              : new ReadableStream({ start(controller) { controller.error(new Error("unreadable source body")); } }),
             httpMetadata: cloneJson(object.httpMetadata),
             customMetadata: cloneJson(object.customMetadata),
             size: object.bytes.byteLength,
@@ -257,7 +273,20 @@ test("clones Default Workspace content with fresh ids, remapped references, and 
   assert.equal(fixture.events.some((event) => event.includes("product_review_candidates")), false);
 
   const firstWrite = fixture.events.findIndex((event) => event.includes(":put:") || event.startsWith("r2:put:"));
-  assert.ok(firstWrite > fixture.events.lastIndexOf(`r2:get:${SOURCE_OBJECT_KEY}`));
+  assert.ok(firstWrite > fixture.events.indexOf(`r2:get:${SOURCE_OBJECT_KEY}`));
+  assert.equal(fixture.stats.sourceGetCount, 2);
+});
+
+test("preflight validates each R2 body without retaining it in the clone plan", async () => {
+  const fixture = createEnv();
+  const plan = await preflightWorkspaceClone(fixture.env, cloneInput(), deterministicCloneOptions());
+
+  assert.equal(Object.hasOwn(plan.media[0], "sourceObject"), false);
+  assert.equal(Object.hasOwn(plan.media[0], "body"), false);
+  assert.deepEqual(plan.media[0].httpMetadata, { contentType: "image/jpeg", cacheControl: "public, max-age=60" });
+  assert.deepEqual(plan.media[0].customMetadata, { source: "default", capture: "morning" });
+  assert.equal(fixture.stats.sourceGetCount, 1);
+  assert.deepEqual(writeEvents(fixture.events), []);
 });
 
 test("destination data in any cloneable store fails closed before writes", async () => {
@@ -279,6 +308,28 @@ test("source limits and missing source objects fail before destination writes", 
   const missingObject = createEnv({ sourceObjectPresent: false });
   await assert.rejects(() => cloneWorkspace(missingObject.env, cloneInput(), deterministicCloneOptions()));
   assert.deepEqual(writeEvents(missingObject.events), []);
+
+  const unreadableObject = createEnv({ sourceBodyReadable: false });
+  await assert.rejects(() => cloneWorkspace(unreadableObject.env, cloneInput(), deterministicCloneOptions()));
+  assert.deepEqual(writeEvents(unreadableObject.events), []);
+});
+
+test("a source object disappearing after preflight is a sanitized partial failure", async () => {
+  const fixture = createEnv({ sourceDisappearsDuringCopy: true });
+  let partial;
+  await assert.rejects(
+    () => cloneWorkspace(fixture.env, cloneInput(), deterministicCloneOptions()),
+    (error) => {
+      partial = error;
+      return error instanceof WorkspaceCloneError && error.code === "workspace_clone_partial";
+    },
+  );
+
+  assert.equal(partial.stage, "r2_copy");
+  assert.equal(partial.created.promptProfilePersisted, true);
+  assert.deepEqual(partial.created.objectKeys, []);
+  assert.equal(fixture.stats.sourceGetCount, 2);
+  assert.equal(fixture.events.some((event) => event.startsWith("r2:put:")), false);
 });
 
 test("partial post-write failure reports created resources and makes a rerun fail closed", async () => {

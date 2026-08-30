@@ -61,6 +61,21 @@ function copyCreated(created) {
   };
 }
 
+async function verifyReadableSourceBody(body) {
+  if (body && typeof body.getReader === "function") {
+    const reader = body.getReader();
+    try {
+      while (true) {
+        const { done } = await reader.read();
+        if (done) return;
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+  await new Response(body).arrayBuffer();
+}
+
 function validateWorkspacePair(source, destination) {
   if (!source || !source.active) {
     fail("Source Workspace is unavailable", "workspace_clone_source_unavailable");
@@ -230,11 +245,9 @@ export async function preflightWorkspaceClone(
       if (!sourceObject || sourceObject.body === null || sourceObject.body === undefined) {
         fail("Source media object is unavailable", "workspace_clone_source_object_missing");
       }
-      mediaItem.sourceObject = {
-        body: await new Response(sourceObject.body).arrayBuffer(),
-        httpMetadata: sourceObject.httpMetadata,
-        customMetadata: sourceObject.customMetadata,
-      };
+      await verifyReadableSourceBody(sourceObject.body);
+      mediaItem.httpMetadata = sourceObject.httpMetadata;
+      mediaItem.customMetadata = sourceObject.customMetadata;
     }
 
     return Object.freeze({
@@ -275,9 +288,13 @@ export async function cloneWorkspace(env, input, options = {}) {
 
     stage = "r2_copy";
     for (const mediaItem of plan.media) {
-      await putMediaObject(env, mediaItem.objectKey, mediaItem.sourceObject.body, {
-        httpMetadata: mediaItem.sourceObject.httpMetadata,
-        customMetadata: mediaItem.sourceObject.customMetadata,
+      const sourceObject = await getMediaObject(env, mediaItem.sourceObjectKey);
+      if (!sourceObject || sourceObject.body === null || sourceObject.body === undefined) {
+        throw new Error("Source media object is unavailable during copy");
+      }
+      await putMediaObject(env, mediaItem.objectKey, sourceObject.body, {
+        httpMetadata: mediaItem.httpMetadata,
+        customMetadata: mediaItem.customMetadata,
       });
       created.objectKeys.push(mediaItem.objectKey);
     }
