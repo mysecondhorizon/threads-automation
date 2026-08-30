@@ -170,4 +170,28 @@ assert.ok((await rawRecords(capacityKv)).some((item) => item.id === capacityFore
 
 await assert.rejects(listMedia(env, {}, ""), /Workspace id is invalid/u);
 
+const productMedia = await createMedia(env, {
+  sourceType: "product",
+  productId: "product-default-1",
+  objectKey: "media/product/default-1.jpg",
+  experienceTags: ["before"],
+  experienceNote: "Before update",
+});
+const editedProductMedia = await updateMedia(env, productMedia.id, {
+  experienceTags: ["weekend", "weekend", "with family"],
+  experienceNote: "Updated product media experience",
+});
+assert.deepEqual(editedProductMedia.experienceTags, ["weekend", "with family"]);
+assert.equal(editedProductMedia.experienceNote, "Updated product media experience");
+assert.equal(editedProductMedia.productId, "product-default-1");
+assert.equal(editedProductMedia.sourceType, "product");
+assert.equal(
+  (await rawRecords(kv)).find((item) => item.id === productMedia.id).productId,
+  "product-default-1"
+);
+await assert.rejects(
+  updateMedia(env, productMedia.id, { experienceNote: "x".repeat(1001) }),
+  /experience_note is too long/u
+);
+
 console.log("workspace-aware media fixtures passed");

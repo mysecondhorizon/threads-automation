@@ -27,6 +27,8 @@ function renderMediaPageContent() {
     .app-media-content h3 { margin:0 0 8px; font-size:17px; }
     .app-media-meta, .app-media-tags { margin:0; color:#667085; font-size:13px; }
     .app-media-description { margin:14px 0 10px; color:#344054; line-height:1.6; white-space:pre-wrap; word-break:break-word; }
+    .app-media-experience { display:grid; gap:5px; margin-top:12px; padding:10px 12px; border-radius:9px; background:#f8fafc; color:#475467; font-size:13px; line-height:1.5; }
+    .app-media-experience-note { margin:0; white-space:pre-wrap; word-break:break-word; }
     .app-media-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
     .app-media-edit-form { display:grid; gap:12px; grid-column:1 / -1; padding-top:16px; border-top:1px solid #e2e6ec; }
     .app-media-edit-form label { display:grid; gap:6px; color:#344054; font-size:14px; font-weight:700; }

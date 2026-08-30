@@ -39,10 +39,13 @@ const listed = await handleOperatorMediaCollection(request("https://example.test
   list: async (_env, options) => { listOptions = options; return [image, video, product]; },
 });
 const listedMedia = (await listed.json()).media;
-assert.deepEqual(listOptions, { sourceType: "general" });
-assert.equal(listedMedia.length, 2);
+assert.deepEqual(listOptions, {});
+assert.equal(listedMedia.length, 3);
 assert.equal(listedMedia[0].previewUrl, "/media/image-1");
 assert.equal(listedMedia[1].previewUrl, "/media/video-1");
+assert.equal(listedMedia[2].sourceType, "product");
+assert.deepEqual(listedMedia[0].experienceTags, []);
+assert.equal(listedMedia[0].experienceNote, "");
 assert.equal(Object.hasOwn(listedMedia[0], "objectKey"), false);
 
 const updated = await handleOperatorMediaById(request("https://example.test/api/media/image-1", "PATCH", { description: "수정", tags: ["태그", "태그"], active: false }), env(), "image-1", {
@@ -54,10 +57,29 @@ const protectedField = await handleOperatorMediaById(request("https://example.te
 assert.equal(protectedField.status, 400);
 const malformedTags = await handleOperatorMediaById(request("https://example.test/api/media/image-1", "PATCH", { tags: "no" }), env(), "image-1", { get: async () => image });
 assert.equal(malformedTags.status, 400);
+const malformedExperienceTags = await handleOperatorMediaById(request("https://example.test/api/media/image-1", "PATCH", { experienceTags: "no" }), env(), "image-1", { get: async () => image });
+assert.equal(malformedExperienceTags.status, 400);
+const malformedExperienceNote = await handleOperatorMediaById(request("https://example.test/api/media/image-1", "PATCH", { experienceNote: ["no"] }), env(), "image-1", { get: async () => image });
+assert.equal(malformedExperienceNote.status, 400);
 const unknown = await handleOperatorMediaById(request("https://example.test/api/media/no", "PATCH", { active: false }), env(), "no", { get: async () => null });
 assert.equal(unknown.status, 404);
-const productPatch = await handleOperatorMediaById(request("https://example.test/api/media/product-1", "PATCH", { active: false }), env(), "product-1", { get: async () => product });
-assert.equal(productPatch.status, 404);
+let productUpdate = null;
+const productPatch = await handleOperatorMediaById(request("https://example.test/api/media/product-1", "PATCH", {
+  experienceTags: ["with-family"],
+  experienceNote: "Product media note",
+}), env(), "product-1", {
+  get: async () => product,
+  update: async (_env, id, value) => {
+    productUpdate = value;
+    return { ...product, id, ...value };
+  },
+});
+assert.equal(productPatch.status, 200);
+assert.deepEqual(productUpdate, {
+  experienceTags: ["with-family"],
+  experienceNote: "Product media note",
+});
+assert.equal((await productPatch.json()).media.sourceType, "product");
 
 const uploadForm = new FormData();
 uploadForm.append("files", new Blob(["image"], { type: "image/jpeg" }), "photo.jpg");
@@ -147,4 +169,15 @@ const unauthenticatedUpload = await handleOperatorMediaUpload(
   env(false)
 );
 assert.equal(unauthenticatedUpload.status, 401);
+
+const experienceUpdated = await handleOperatorMediaById(request("https://example.test/api/media/image-1", "PATCH", {
+  experienceTags: ["weekend", "weekend"],
+  experienceNote: "Long walk",
+}), env(), "image-1", {
+  get: async () => image,
+  update: async (_env, id, value) => ({ ...image, id, ...value }),
+});
+const experienceMedia = (await experienceUpdated.json()).media;
+assert.deepEqual(experienceMedia.experienceTags, ["weekend"]);
+assert.equal(experienceMedia.experienceNote, "Long walk");
 console.log("operator media API fixture passed");

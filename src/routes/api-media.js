@@ -6,8 +6,11 @@ function toOperatorMedia(media) {
   return {
     id: media.id,
     kind: media.mediaKind === "video" ? "video" : "image",
+    sourceType: media.sourceType === "product" ? "product" : "general",
     description: media.description || "",
     tags: Array.isArray(media.tags) ? [...media.tags] : [],
+    experienceTags: Array.isArray(media.experienceTags) ? [...media.experienceTags] : [],
+    experienceNote: media.experienceNote || "",
     active: media.active === true,
     createdAt: media.createdAt,
     updatedAt: media.updatedAt,
@@ -24,9 +27,9 @@ function parsePatch(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { error: "Media update must be an object" };
   }
-  const allowed = new Set(["description", "tags", "active"]);
+  const allowed = new Set(["description", "tags", "experienceTags", "experienceNote", "active"]);
   if (!Object.keys(value).length || Object.keys(value).some((key) => !allowed.has(key))) {
-    return { error: "Only description, tags, and active can be updated" };
+    return { error: "Only description, tags, experienceTags, experienceNote, and active can be updated" };
   }
   const update = {};
   if (Object.hasOwn(value, "description")) {
@@ -38,6 +41,16 @@ function parsePatch(value) {
       return { error: "tags must be an array of strings" };
     }
     update.tags = [...new Set(value.tags.map((tag) => tag.trim()).filter(Boolean))];
+  }
+  if (Object.hasOwn(value, "experienceTags")) {
+    if (!Array.isArray(value.experienceTags) || value.experienceTags.some((tag) => typeof tag !== "string")) {
+      return { error: "experienceTags must be an array of strings" };
+    }
+    update.experienceTags = [...new Set(value.experienceTags.map((tag) => tag.trim()).filter(Boolean))];
+  }
+  if (Object.hasOwn(value, "experienceNote")) {
+    if (typeof value.experienceNote !== "string") return { error: "experienceNote must be a string" };
+    update.experienceNote = value.experienceNote.trim();
   }
   if (Object.hasOwn(value, "active")) {
     if (typeof value.active !== "boolean") return { error: "active must be a boolean" };
@@ -66,8 +79,8 @@ export async function handleOperatorMediaCollection(request, env, {
   if (unauthorized) return unauthorized;
   if (request.method !== "GET") return fail("Method Not Allowed", 405);
   try {
-    const media = await list(env, { sourceType: "general" });
-    return ok({ media: media.filter((item) => item.sourceType === "general").map(toOperatorMedia) });
+    const media = await list(env, {});
+    return ok({ media: media.map(toOperatorMedia) });
   } catch (error) {
     return errorResponse(error, "Media lookup failed");
   }
@@ -86,7 +99,7 @@ export async function handleOperatorMediaById(request, env, mediaId, {
 
   try {
     const existing = await get(env, mediaId);
-    if (!existing || existing.sourceType !== "general") {
+    if (!existing) {
       return fail("Media not found", 404, { code: "media_not_found" });
     }
     return ok({ media: toOperatorMedia(await update(env, mediaId, parsed.update)) });
