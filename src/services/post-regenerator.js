@@ -8,6 +8,7 @@ import {
 } from "./prompt-profile.js";
 
 import {
+  AutoPostValidationError,
   validateAutoPostText,
 } from "./auto-post-validator.js";
 
@@ -33,6 +34,15 @@ const DEFAULT_MAX_RECENT_POSTS =
 const DEFAULT_MAX_ATTEMPTS =
   2;
 
+const MAX_DIAGNOSTIC_ATTEMPTS =
+  2;
+
+const MAX_DIAGNOSTIC_TEXT_LENGTH =
+  500;
+
+const MAX_DIAGNOSTIC_REASONS =
+  8;
+
 export const SAFE_FORMAT_DIVERSITY_OPTIONS =
   Object.freeze({
     reselectTargetOnRecentPatternConflict:
@@ -41,6 +51,102 @@ export const SAFE_FORMAT_DIVERSITY_OPTIONS =
     excludeInfeasibleTargets:
       true,
   });
+
+function diagnosticText(
+  value,
+  maximum = MAX_DIAGNOSTIC_TEXT_LENGTH
+) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maximum);
+}
+
+function diagnosticDraftText(
+  value,
+  maximum = MAX_DIAGNOSTIC_TEXT_LENGTH
+) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .trim()
+    .slice(0, maximum);
+}
+
+function diagnosticFormat(format) {
+  if (!format || typeof format !== "object") {
+    return null;
+  }
+
+  return {
+    signature:
+      diagnosticText(format.signature, 120) ||
+      null,
+
+    paragraphCount:
+      Number.isSafeInteger(format.paragraphCount)
+        ? format.paragraphCount
+        : null,
+
+    sentencePattern:
+      Array.isArray(format.sentencePattern)
+        ? format.sentencePattern
+          .filter(Number.isSafeInteger)
+          .slice(0, 8)
+        : [],
+  };
+}
+
+function diagnosticTargetFormat(targetFormat) {
+  if (!targetFormat || typeof targetFormat !== "object") {
+    return null;
+  }
+
+  return {
+    id:
+      diagnosticText(targetFormat.id, 120) ||
+      null,
+
+    name:
+      diagnosticText(targetFormat.name, 160) ||
+      null,
+  };
+}
+
+function diagnosticReasons(error) {
+  return Array.isArray(error?.details?.reasons)
+    ? error.details.reasons
+      .map((reason) => diagnosticText(reason, 120))
+      .filter(Boolean)
+      .slice(0, MAX_DIAGNOSTIC_REASONS)
+    : [];
+}
+
+function diagnosticStage(error, fallback) {
+  if (error instanceof AutoPostValidationError) {
+    return "validation";
+  }
+
+  if (error instanceof PostFormatError) {
+    return "format_validation";
+  }
+
+  if (error instanceof PostSimilarityError) {
+    return "similarity_validation";
+  }
+
+  return fallback;
+}
+
+function attachGenerationDiagnostics(error, attempts) {
+  if (error && typeof error === "object") {
+    error.generationDiagnostics = {
+      attempts: attempts
+        .slice(0, MAX_DIAGNOSTIC_ATTEMPTS),
+    };
+  }
+
+  return error;
+}
 
 function selectedPatternSignature(
   details
@@ -181,6 +287,8 @@ export async function generateDistinctThreadPost(
       effectiveProfile.profile
     );
 
+  const attemptDiagnostics = [];
+
   const recentFormats =
     Array.isArray(
       context?.history
@@ -219,7 +327,8 @@ export async function generateDistinctThreadPost(
       );
 
     if (!initialTargetFormat) {
-      throw new PostFormatError(
+      throw attachGenerationDiagnostics(
+        new PostFormatError(
         "최근 글과 충분히 다른 포맷을 선택할 수 없습니다.",
         {
           code:
@@ -249,6 +358,8 @@ export async function generateDistinctThreadPost(
               false,
           },
         }
+        ),
+        attemptDiagnostics
       );
     }
 
@@ -321,22 +432,77 @@ export async function generateDistinctThreadPost(
         );
     }
 
-    const generatedPost =
-      await generatePost(
-        env,
-        attemptContext,
-        { systemPrompt }
+    let generatedPost;
+
+    try {
+      generatedPost =
+        await generatePost(
+          env,
+          attemptContext,
+          { systemPrompt }
+        );
+    } catch (error) {
+      attemptDiagnostics.push({
+        attempt,
+        draftText: "",
+        format: null,
+        targetFormat:
+          diagnosticTargetFormat(
+            targetFormat
+          ),
+        stage: "ai_generation",
+        errorCode:
+          diagnosticText(error?.code, 120) ||
+          "ai_generation_failed",
+        reasons:
+          diagnosticReasons(error),
+        similarity: null,
+        regenerated:
+          attempt > 1,
+        retrying: false,
+      });
+
+      throw attachGenerationDiagnostics(
+        error,
+        attemptDiagnostics
       );
+    }
 
     lastGeneratedPost =
       generatedPost;
 
-    const validation =
-      validateAutoPostText(
-        generatedPost?.body
-      );
+    const attemptDiagnostic = {
+      attempt,
+      draftText:
+        diagnosticDraftText(
+          generatedPost?.body
+        ),
+      format:
+        diagnosticFormat(
+          analyzePostFormat(
+            generatedPost?.body,
+            { disclosures }
+          )
+        ),
+      targetFormat:
+        diagnosticTargetFormat(
+          targetFormat
+        ),
+      stage: "validation",
+      errorCode: null,
+      reasons: [],
+      similarity: null,
+      regenerated:
+        attempt > 1,
+      retrying: false,
+    };
 
     try {
+      const validation =
+        validateAutoPostText(
+          generatedPost?.body
+        );
+
       const format =
         enforceFormatValidation
           ? validatePostFormat(
@@ -384,6 +550,51 @@ export async function generateDistinctThreadPost(
     } catch (
       error
     ) {
+      const retrying =
+        error instanceof
+          PostSimilarityError &&
+        attempt < maxAttempts;
+
+      attemptDiagnostics.push({
+        ...attemptDiagnostic,
+        stage:
+          diagnosticStage(
+            error,
+            attemptDiagnostic.stage
+          ),
+        errorCode:
+          diagnosticText(error?.code, 120) ||
+          "generation_validation_failed",
+        reasons:
+          diagnosticReasons(error),
+        similarity:
+          error instanceof PostSimilarityError
+            ? {
+              highestScore:
+                Number.isFinite(
+                  error?.details?.highestScore
+                )
+                  ? error.details.highestScore
+                  : null,
+              matchedPostId:
+                diagnosticText(
+                  error?.details?.matchedPostId,
+                  160
+                ) || null,
+              matchedPostText:
+                diagnosticDraftText(
+                  error?.details?.matchedText
+                ) || null,
+            }
+            : null,
+        retrying,
+      });
+
+      attachGenerationDiagnostics(
+        error,
+        attemptDiagnostics
+      );
+
       if (
         !(
           error instanceof

@@ -84,6 +84,12 @@ const SIMILARITY_THRESHOLD =
 const MAX_SIMILARITY_POSTS =
   20;
 
+const MAX_DIAGNOSTIC_ATTEMPTS =
+  2;
+
+const MAX_DIAGNOSTIC_TEXT_LENGTH =
+  500;
+
 const MAX_GENERATION_ATTEMPTS =
   2;
 
@@ -273,7 +279,128 @@ async function applyCurrentTopicForGeneralAuto(env, context, options = {}) {
   if (decision.fallbackReason) {
     console.warn("Current topic AUTO fallback", { code: decision.fallbackReason });
   }
-  return decision.currentTopic;
+  return decision;
+}
+
+function diagnosticText(value, maximum = MAX_DIAGNOSTIC_TEXT_LENGTH) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maximum);
+}
+
+function diagnosticDraftText(value, maximum = MAX_DIAGNOSTIC_TEXT_LENGTH) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .trim()
+    .slice(0, maximum);
+}
+
+export function buildCurrentTopicDiagnostic(decision) {
+  if (!decision || typeof decision !== "object") {
+    return null;
+  }
+
+  const topic = decision.currentTopic;
+
+  return {
+    mode: topic
+      ? "current_topic"
+      : decision.fallbackReason
+        ? "fallback"
+        : "everyday_personal",
+    topicId:
+      diagnosticText(topic?.topicId, 160) ||
+      null,
+    category:
+      diagnosticText(topic?.category, 80) ||
+      null,
+    subject:
+      diagnosticText(topic?.subject, 240) ||
+      null,
+    selectedAngle:
+      diagnosticText(topic?.selectedAngle, 240) ||
+      null,
+    fallbackReason:
+      diagnosticText(decision.fallbackReason, 160) ||
+      null,
+  };
+}
+
+function normalizeGenerationAttemptDiagnostics(value) {
+  const attempts = Array.isArray(value?.attempts)
+    ? value.attempts
+    : [];
+
+  return attempts
+    .slice(0, MAX_DIAGNOSTIC_ATTEMPTS)
+    .map((attempt, index) => ({
+      attempt:
+        Number.isSafeInteger(attempt?.attempt) &&
+        attempt.attempt > 0
+          ? attempt.attempt
+          : index + 1,
+      draftText:
+        diagnosticDraftText(attempt?.draftText),
+      format: attempt?.format
+        ? {
+          signature:
+            diagnosticText(attempt.format.signature, 120) ||
+            null,
+          paragraphCount:
+            Number.isSafeInteger(attempt.format.paragraphCount)
+              ? attempt.format.paragraphCount
+              : null,
+          sentencePattern:
+            Array.isArray(attempt.format.sentencePattern)
+              ? attempt.format.sentencePattern
+                .filter(Number.isSafeInteger)
+                .slice(0, 8)
+              : [],
+        }
+        : null,
+      targetFormat: attempt?.targetFormat
+        ? {
+          id:
+            diagnosticText(attempt.targetFormat.id, 120) ||
+            null,
+          name:
+            diagnosticText(attempt.targetFormat.name, 160) ||
+            null,
+        }
+        : null,
+      stage:
+        diagnosticText(attempt?.stage, 120) ||
+        "unknown",
+      errorCode:
+        diagnosticText(attempt?.errorCode, 120) ||
+        null,
+      reasons:
+        Array.isArray(attempt?.reasons)
+          ? attempt.reasons
+            .map((reason) => diagnosticText(reason, 120))
+            .filter(Boolean)
+            .slice(0, 8)
+          : [],
+      similarity: attempt?.similarity
+        ? {
+          highestScore:
+            Number.isFinite(attempt.similarity.highestScore)
+              ? attempt.similarity.highestScore
+              : null,
+          matchedPostId:
+            diagnosticText(attempt.similarity.matchedPostId, 160) ||
+            null,
+          matchedPostText:
+            diagnosticDraftText(attempt.similarity.matchedPostText) ||
+            null,
+        }
+        : null,
+      regenerated:
+        Boolean(attempt?.regenerated),
+      retrying:
+        Boolean(attempt?.retrying),
+    }));
 }
 
 function buildGeneralAutoContentMetadata(context) {
@@ -392,6 +519,9 @@ function createExecution(
       error:
         null,
     },
+
+    diagnostic:
+      null,
 
     error:
       null,
@@ -829,6 +959,9 @@ async function runExecution(
   let generatedPost =
     null;
 
+  let currentTopicDecision =
+    null;
+
   let mainPublished =
     false;
 
@@ -908,7 +1041,8 @@ async function runExecution(
         context
       );
 
-      await applyCurrentTopicForGeneralAuto(
+      currentTopicDecision =
+        await applyCurrentTopicForGeneralAuto(
         env,
         context,
         { source, generalOnly }
@@ -921,6 +1055,18 @@ async function runExecution(
       {
         step:
           "generating_content",
+
+        ...(generalOnly
+          ? {
+            diagnostic: {
+              currentTopic:
+                buildCurrentTopicDiagnostic(
+                  currentTopicDecision
+                ),
+              attempts: [],
+            },
+          }
+          : {}),
       }
     );
 
@@ -1243,6 +1389,11 @@ async function runExecution(
         generatedPost
       );
 
+    const failedAttemptDiagnostics =
+      normalizeGenerationAttemptDiagnostics(
+        error?.generationDiagnostics
+      );
+
     console.error(
       "Auto post execution failed",
       {
@@ -1297,6 +1448,19 @@ async function runExecution(
           details:
             engineError.details,
         },
+
+        ...(generalOnly
+          ? {
+            diagnostic: {
+              currentTopic:
+                buildCurrentTopicDiagnostic(
+                  currentTopicDecision
+                ),
+              attempts:
+                failedAttemptDiagnostics,
+            },
+          }
+          : {}),
       }
     );
 

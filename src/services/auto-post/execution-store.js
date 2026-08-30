@@ -90,3 +90,46 @@ export async function getLatestExecution(
     AUTO_POST_LATEST_EXECUTION_KEY
   );
 }
+
+export async function listRecentExecutions(
+  env,
+  { limit = 12 } = {}
+) {
+  const maximum = Math.min(
+    Math.max(
+      Number.isSafeInteger(limit)
+        ? limit
+        : 12,
+      1
+    ),
+    24
+  );
+
+  const listed =
+    await env.THREADS_KV.list({
+      prefix:
+        AUTO_POST_EXECUTION_PREFIX,
+    });
+
+  const keys = Array.isArray(listed?.keys)
+    ? listed.keys
+      .map((item) => String(item?.name || ""))
+      .filter((key) => key.startsWith(AUTO_POST_EXECUTION_PREFIX))
+      .slice(0, 64)
+    : [];
+
+  const executions = await Promise.all(
+    keys.map((key) =>
+      getJson(env, key)
+    )
+  );
+
+  return executions
+    .filter((execution) => execution && typeof execution === "object")
+    .sort((left, right) =>
+      String(right.startedAt || "").localeCompare(
+        String(left.startedAt || "")
+      )
+    )
+    .slice(0, maximum);
+}

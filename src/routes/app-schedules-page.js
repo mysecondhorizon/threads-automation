@@ -1,6 +1,7 @@
 import { requireAdminSession } from "../middleware/auth.js";
 import { renderAppShell } from "./app-shell.js";
 import { buildSchedulesPageClientScript } from "./app-schedules-client.js";
+import { buildSchedulesDiagnosticsClientScript } from "./app-schedules-diagnostics-client.js";
 
 function content() {
   return `<style>
@@ -18,5 +19,5 @@ function content() {
 export async function handleAppSchedulesPage(request, env) {
   const auth = await requireAdminSession(request, env);
   if (!auth.ok) return auth.response;
-  return renderAppShell({ activePath: "/app/schedules", title: "자동 게시", description: "자동 실행 시간을 관리합니다.", content: content() });
+  return renderAppShell({ activePath: "/app/schedules", title: "자동 게시", description: "자동 실행 시간을 관리합니다.", content: `${content()}<script>${buildSchedulesDiagnosticsClientScript()}</script>` });
 }

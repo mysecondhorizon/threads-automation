@@ -1,5 +1,6 @@
 import {
   getLatestExecution,
+  listRecentExecutions,
 } from "./execution-store.js";
 
 import {
@@ -101,12 +102,198 @@ function normalizeSimilarityStatus(
   };
 }
 
+function safeText(value, maximum = 500) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maximum);
+}
+
+function safeDraftText(value, maximum = 500) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .trim()
+    .slice(0, maximum);
+}
+
+function normalizeError(error) {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const details = error.details;
+
+  return {
+    code:
+      safeText(error.code, 120) ||
+      "auto_post_failed",
+    message:
+      safeText(error.message, 280) ||
+      "자동 게시 실행이 실패했습니다.",
+    details: {
+      reasons:
+        Array.isArray(details?.reasons)
+          ? details.reasons
+            .map((reason) => safeText(reason, 120))
+            .filter(Boolean)
+            .slice(0, 8)
+          : [],
+      attempts:
+        Number.isSafeInteger(details?.attempts)
+          ? details.attempts
+          : null,
+    },
+  };
+}
+
+function normalizeDiagnostic(diagnostic) {
+  if (!diagnostic || typeof diagnostic !== "object") {
+    return null;
+  }
+
+  const currentTopic = diagnostic.currentTopic;
+  const attempts = Array.isArray(diagnostic.attempts)
+    ? diagnostic.attempts
+    : [];
+
+  return {
+    currentTopic: currentTopic && typeof currentTopic === "object"
+      ? {
+        mode:
+          safeText(currentTopic.mode, 80) ||
+          "everyday_personal",
+        topicId:
+          safeText(currentTopic.topicId, 160) ||
+          null,
+        category:
+          safeText(currentTopic.category, 80) ||
+          null,
+        subject:
+          safeText(currentTopic.subject, 240) ||
+          null,
+        selectedAngle:
+          safeText(currentTopic.selectedAngle, 240) ||
+          null,
+        fallbackReason:
+          safeText(currentTopic.fallbackReason, 160) ||
+          null,
+      }
+      : null,
+    attempts: attempts.slice(0, 2).map((attempt, index) => ({
+      attempt:
+        Number.isSafeInteger(attempt?.attempt) && attempt.attempt > 0
+          ? attempt.attempt
+          : index + 1,
+      draftText:
+        safeDraftText(attempt?.draftText),
+      format: attempt?.format && typeof attempt.format === "object"
+        ? {
+          signature:
+            safeText(attempt.format.signature, 120) || null,
+          paragraphCount:
+            Number.isSafeInteger(attempt.format.paragraphCount)
+              ? attempt.format.paragraphCount
+              : null,
+          sentencePattern:
+            Array.isArray(attempt.format.sentencePattern)
+              ? attempt.format.sentencePattern
+                .filter(Number.isSafeInteger)
+                .slice(0, 8)
+              : [],
+        }
+        : null,
+      targetFormat: attempt?.targetFormat && typeof attempt.targetFormat === "object"
+        ? {
+          id:
+            safeText(attempt.targetFormat.id, 120) || null,
+          name:
+            safeText(attempt.targetFormat.name, 160) || null,
+        }
+        : null,
+      stage:
+        safeText(attempt?.stage, 120) || "unknown",
+      errorCode:
+        safeText(attempt?.errorCode, 120) || null,
+      reasons:
+        Array.isArray(attempt?.reasons)
+          ? attempt.reasons
+            .map((reason) => safeText(reason, 120))
+            .filter(Boolean)
+            .slice(0, 8)
+          : [],
+      similarity: attempt?.similarity && typeof attempt.similarity === "object"
+        ? {
+          highestScore:
+            Number.isFinite(attempt.similarity.highestScore)
+              ? attempt.similarity.highestScore
+              : null,
+          matchedPostId:
+            safeText(attempt.similarity.matchedPostId, 160) || null,
+          matchedPostText:
+            safeDraftText(attempt.similarity.matchedPostText) || null,
+        }
+        : null,
+      regenerated:
+        Boolean(attempt?.regenerated),
+      retrying:
+        Boolean(attempt?.retrying),
+    })),
+  };
+}
+
+function normalizeExecution(execution) {
+  return {
+    id:
+      safeText(execution.id, 160) ||
+      null,
+    source:
+      safeText(execution.source, 120) ||
+      "auto_post",
+    status:
+      safeText(execution.status, 80) ||
+      "unknown",
+    step:
+      safeText(execution.step, 120) ||
+      null,
+    startedAt:
+      execution.startedAt || null,
+    updatedAt:
+      execution.updatedAt || null,
+    completedAt:
+      execution.completedAt || null,
+    postId:
+      safeText(execution.postId, 160) ||
+      null,
+    username:
+      safeText(execution.username, 160) ||
+      null,
+    postType:
+      safeText(execution.postType, 120) ||
+      null,
+    textLength:
+      Number.isSafeInteger(execution.textLength)
+        ? execution.textLength
+        : null,
+    generation:
+      normalizeGenerationStatus(execution.generation),
+    similarity:
+      normalizeSimilarityStatus(execution.similarity),
+    firstComment:
+      normalizeFirstCommentStatus(execution.firstComment),
+    error:
+      normalizeError(execution.error),
+    diagnostic:
+      normalizeDiagnostic(execution.diagnostic),
+  };
+}
+
 export async function getAutoPostStatus(
   env
 ) {
   const [
     activeLock,
     latestExecution,
+    executions,
   ] = await Promise.all([
     getExecutionLock(
       env
@@ -114,6 +301,11 @@ export async function getAutoPostStatus(
 
     getLatestExecution(
       env
+    ),
+
+    listRecentExecutions(
+      env,
+      { limit: 24 }
     ),
   ]);
 
@@ -136,60 +328,25 @@ export async function getAutoPostStatus(
 
     latestExecution:
       latestExecution
-        ? {
-            id:
-              latestExecution.id,
-
-            source:
-              latestExecution.source ||
-              "auto_post",
-
-            status:
-              latestExecution.status,
-
-            step:
-              latestExecution.step,
-
-            startedAt:
-              latestExecution.startedAt,
-
-            updatedAt:
-              latestExecution.updatedAt,
-
-            completedAt:
-              latestExecution.completedAt,
-
-            postId:
-              latestExecution.postId,
-
-            username:
-              latestExecution.username,
-
-            postType:
-              latestExecution.postType ||
-              null,
-
-            textLength:
-              latestExecution.textLength,
-
-            generation:
-              normalizeGenerationStatus(
-                latestExecution.generation
-              ),
-
-            similarity:
-              normalizeSimilarityStatus(
-                latestExecution.similarity
-              ),
-
-            firstComment:
-              normalizeFirstCommentStatus(
-                latestExecution.firstComment
-              ),
-
-            error:
-              latestExecution.error,
-          }
+        ? normalizeExecution(latestExecution)
         : null,
+
+    recentGeneralAutoExecutions:
+      executions
+        .filter((execution) =>
+          execution.source === "cron_auto_general"
+        )
+        .sort((left, right) => {
+          const statusDifference =
+            Number(right.status === "failed") -
+            Number(left.status === "failed");
+
+          return statusDifference ||
+            String(right.startedAt || "").localeCompare(
+              String(left.startedAt || "")
+            );
+        })
+        .slice(0, 8)
+        .map(normalizeExecution),
   };
 }

@@ -125,7 +125,7 @@ assert.ok(systemPrompts[0].includes(THREADS_OUTPUT_PROMPT));
 
 let similarityGenerationCalls = 0;
 const similarityTargetIds = [];
-const duplicateBody = bodyForPattern([2]);
+const duplicateBody = bodyForPattern([1, 1]);
 const similarityResult = await generateDistinctThreadPost(
   env,
   {
@@ -186,6 +186,65 @@ await assert.rejects(
   (error) => error?.code === "empty_post_text"
 );
 assert.equal(validationGenerationCalls, 1);
+
+let diagnosticFailureCalls = 0;
+let diagnosticFailure = null;
+await assert.rejects(
+  generateDistinctThreadPost(
+    env,
+    {
+      products: { productDetails: [] },
+      publishing: {
+        goal: "Failed attempt diagnostics test",
+        publishSequence: 1,
+        targetFormat: repeatedTarget,
+      },
+      history: {
+        recentFormats: [analyzePostFormat(duplicateBody)],
+        recentSevenDayPosts: [{ postId: "recent-1", text: duplicateBody }],
+      },
+    },
+    {
+      maxAttempts: 2,
+      enforceFormatValidation: false,
+      generatePost: async () => {
+        diagnosticFailureCalls += 1;
+        return { body: duplicateBody };
+      },
+    }
+  ),
+  (error) => {
+    diagnosticFailure = error;
+    return error?.code === "recent_post_too_similar";
+  }
+);
+
+assert.equal(diagnosticFailureCalls, 2);
+assert.equal(diagnosticFailure.generationDiagnostics.attempts.length, 2);
+assert.equal(
+  diagnosticFailure.generationDiagnostics.attempts[0].draftText,
+  duplicateBody
+);
+assert.equal(
+  diagnosticFailure.generationDiagnostics.attempts[0].draftText.includes("\n\n"),
+  true
+);
+assert.equal(
+  diagnosticFailure.generationDiagnostics.attempts[0].stage,
+  "similarity_validation"
+);
+assert.equal(
+  diagnosticFailure.generationDiagnostics.attempts[0].similarity.matchedPostId,
+  "recent-1"
+);
+assert.equal(
+  diagnosticFailure.generationDiagnostics.attempts[0].retrying,
+  true
+);
+assert.equal(
+  diagnosticFailure.generationDiagnostics.attempts[1].retrying,
+  false
+);
 
 const workspacePromptKeys = [];
 const workspaceResult = await generateDistinctThreadPost(
