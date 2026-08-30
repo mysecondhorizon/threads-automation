@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { provisionRegisteredUser } from "./src/services/registered-user-provisioning.js";
 
@@ -31,15 +33,27 @@ function runWrangler(args) {
   return String(result.stdout || "");
 }
 
-function createRemoteKv(namespaceId) {
+export function isMissingRemoteKvKeyError(error, namespaceId, key) {
+  const message = String(error?.message || "");
+  const valueEndpoint = `/storage/kv/namespaces/${encodeURIComponent(namespaceId)}/values/${encodeURIComponent(key)}`;
+  return /\b404\b/u.test(message) && message.includes(valueEndpoint);
+}
+
+export function createRemoteKv(namespaceId, { run = runWrangler } = {}) {
   return {
     async get(key, type) {
-      const raw = runWrangler(["kv", "key", "get", key, "--namespace-id", namespaceId, "--remote"]);
+      let raw;
+      try {
+        raw = run(["kv", "key", "get", key, "--namespace-id", namespaceId, "--remote"]);
+      } catch (error) {
+        if (isMissingRemoteKvKeyError(error, namespaceId, key)) return null;
+        throw error;
+      }
       if (!raw.trim()) return null;
       return type === "json" ? JSON.parse(raw) : raw;
     },
     async put(key, value) {
-      runWrangler(["kv", "key", "put", key, value, "--namespace-id", namespaceId, "--remote"]);
+      run(["kv", "key", "put", key, value, "--namespace-id", namespaceId, "--remote"]);
     },
   };
 }
@@ -103,10 +117,12 @@ async function main() {
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
-main().catch((error) => {
-  process.stderr.write(`Provisioning failed: ${error.message}\n`);
-  if (error?.partial && error.details?.userId) {
-    process.stderr.write(`Partial provisioning may require operator cleanup for User ${error.details.userId}.\n`);
-  }
-  process.exitCode = 1;
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    process.stderr.write(`Provisioning failed: ${error.message}\n`);
+    if (error?.partial && error.details?.userId) {
+      process.stderr.write(`Partial provisioning may require operator cleanup for User ${error.details.userId}.\n`);
+    }
+    process.exitCode = 1;
+  });
+}
