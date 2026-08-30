@@ -1,0 +1,175 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { ADMIN_SESSION_KEY_PREFIX, USERS_KEY } from "../services/login-foundation.js";
+import { WorkspaceCloneError } from "../services/workspace-clone.js";
+import { handleAdminWorkspaceClone } from "./admin-workspace-clone.js";
+
+const NOW = "2026-08-30T00:00:00.000Z";
+const EXPIRES = "2099-08-30T00:00:00.000Z";
+
+function createEnv(session = "legacy") {
+  const values = new Map();
+  if (session === "legacy") values.set(`${ADMIN_SESSION_KEY_PREFIX}legacy`, "valid");
+  if (session === "registered") {
+    values.set(`${ADMIN_SESSION_KEY_PREFIX}registered`, JSON.stringify({
+      version: 1,
+      userId: "user-registered",
+      selectedWorkspaceId: "workspace-registered",
+      createdAt: NOW,
+      expiresAt: EXPIRES,
+    }));
+    values.set(USERS_KEY, JSON.stringify({
+      version: 1,
+      users: [{
+        id: "user-registered",
+        loginId: "registered",
+        displayName: "Registered User",
+        active: true,
+        createdAt: NOW,
+        updatedAt: NOW,
+      }],
+    }));
+  }
+  return {
+    THREADS_KV: {
+      async get(key, type) {
+        const value = values.get(key);
+        if (value === undefined) return null;
+        return type === "json" ? JSON.parse(value) : value;
+      },
+    },
+  };
+}
+
+function request(method = "POST", body = undefined, session = "legacy") {
+  return new Request("https://example.test/admin/maintenance/workspace-clone", {
+    method,
+    headers: {
+      ...(session === "none" ? {} : { cookie: `admin_session=${session}` }),
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+function validInput(overrides = {}) {
+  return {
+    sourceWorkspaceId: "default-workspace",
+    destinationWorkspaceId: "workspace-next",
+    confirm: "CLONE_WORKSPACE",
+    ...overrides,
+  };
+}
+
+test("workspace clone route rejects unauthenticated and registered sessions without calling the clone core", async () => {
+  let calls = 0;
+  const clone = async () => { calls += 1; };
+
+  const unauthenticated = await handleAdminWorkspaceClone(request("POST", validInput(), "none"), createEnv("none"), { clone });
+  const registered = await handleAdminWorkspaceClone(request("POST", validInput(), "registered"), createEnv("registered"), { clone });
+
+  assert.equal(unauthenticated.status, 401);
+  assert.equal(registered.status, 403);
+  assert.equal(calls, 0);
+});
+
+test("workspace clone route is POST-only and rejects invalid confirmation or required ids without mutation", async () => {
+  let calls = 0;
+  const clone = async () => { calls += 1; };
+  const env = createEnv();
+
+  const get = await handleAdminWorkspaceClone(request("GET", undefined), env, { clone });
+  const wrongConfirmation = await handleAdminWorkspaceClone(request("POST", validInput({ confirm: "wrong" })), env, { clone });
+  const missingSource = await handleAdminWorkspaceClone(request("POST", validInput({ sourceWorkspaceId: "" })), env, { clone });
+  const missingDestination = await handleAdminWorkspaceClone(request("POST", validInput({ destinationWorkspaceId: null })), env, { clone });
+  const extraInput = await handleAdminWorkspaceClone(request("POST", validInput({ userId: "untrusted" })), env, { clone });
+
+  assert.equal(get.status, 405);
+  assert.equal(wrongConfirmation.status, 400);
+  assert.equal(missingSource.status, 400);
+  assert.equal(missingDestination.status, 400);
+  assert.equal(extraInput.status, 400);
+  assert.equal(calls, 0);
+});
+
+test("legacy admin session passes exact ids to the clone core and receives only sanitized result data", async () => {
+  let received = null;
+  const response = await handleAdminWorkspaceClone(request("POST", validInput()), createEnv(), {
+    clone: async (env, input) => {
+      received = { env, input };
+      return {
+        sourceWorkspaceId: input.sourceWorkspaceId,
+        destinationWorkspaceId: input.destinationWorkspaceId,
+        operationId: "workspace_clone_safe",
+        created: {
+          promptProfilePersisted: true,
+          productIds: ["product-safe"],
+          mediaIds: ["media-safe"],
+          contentPoolIds: ["pool-safe"],
+          objectKeys: ["media/clone/safe"],
+          authRef: "threads_auth",
+          credential: "secret",
+        },
+      };
+    },
+  });
+  const payload = await response.json();
+
+  assert.deepEqual(received.input, {
+    sourceWorkspaceId: "default-workspace",
+    destinationWorkspaceId: "workspace-next",
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual(payload.created, {
+    promptProfilePersisted: true,
+    productIds: ["product-safe"],
+    mediaIds: ["media-safe"],
+    contentPoolIds: ["pool-safe"],
+    objectKeys: ["media/clone/safe"],
+  });
+  assert.equal(JSON.stringify(payload).includes("threads_auth"), false);
+  assert.equal(JSON.stringify(payload).includes("secret"), false);
+  assert.equal(JSON.stringify(payload).includes("session"), false);
+});
+
+test("workspace clone route sanitizes preflight and partial clone errors", async () => {
+  const preflight = await handleAdminWorkspaceClone(request("POST", validInput()), createEnv(), {
+    clone: async () => {
+      throw new WorkspaceCloneError("raw detail", {
+        code: "workspace_clone_destination_not_empty",
+        stage: "preflight",
+      });
+    },
+  });
+  const partial = await handleAdminWorkspaceClone(request("POST", validInput()), createEnv(), {
+    clone: async () => {
+      throw new WorkspaceCloneError("raw detail", {
+        code: "workspace_clone_partial",
+        stage: "r2_copy",
+        created: {
+          promptProfilePersisted: true,
+          productIds: ["product-safe"],
+          mediaIds: ["media-safe"],
+          contentPoolIds: ["pool-safe"],
+          objectKeys: ["media/clone/safe"],
+          authRef: "threads_auth",
+        },
+      });
+    },
+  });
+
+  assert.deepEqual(await preflight.json(), {
+    ok: false,
+    error: "Workspace clone failed",
+    code: "workspace_clone_destination_not_empty",
+    stage: "preflight",
+  });
+  const partialPayload = await partial.json();
+  assert.equal(partial.status, 500);
+  assert.equal(partialPayload.stage, "r2_copy");
+  assert.deepEqual(partialPayload.created.objectKeys, ["media/clone/safe"]);
+  assert.equal(JSON.stringify(partialPayload).includes("threads_auth"), false);
+  assert.equal(JSON.stringify(partialPayload).includes("raw detail"), false);
+});
