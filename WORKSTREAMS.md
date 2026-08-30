@@ -28,7 +28,7 @@ PM / coordination account plus parallel worker:
 
 Current parallel workstream:
 
-**WAITING FOR NEXT TASK**
+**WAITING / NEXT = ARCH-01-I3C — ConnectedAccount credential/runtime resolution**
 
 The two ChatGPT accounts do not share conversation memory.
 
@@ -131,7 +131,7 @@ Must remain authoritative:
 - validation
 - output
 - post-format enforcement
-- `recent_signature_repeated`
+- semantic duplicate protection and code-owned text validation
 - factual verification
 - forbidden claims
 - Product Review disclosure/link safety
@@ -185,11 +185,7 @@ Likely areas:
 
 ### Codex A should avoid
 
-Files being actively changed by Codex B for R11D, especially:
-
-- `/app/write` target selector UI
-- write client target selection logic
-- target-app UI tests
+No Codex B implementation files are active at this checkpoint.
 
 If both tasks require the same file:
 
@@ -207,15 +203,15 @@ Merge one workstream first, sync the other, then continue.
 
 Status:
 
-**WAITING FOR NEXT TASK**
+**WAITING / NEXT = ARCH-01-I3C — ConnectedAccount credential/runtime resolution**
 
 Last completed task:
 
-**ARCH-01-I2B — Workspace-Aware Products Storage Foundation — COMPLETE / MERGED**
+**PROJECT2-ASSET-CLEANUP-01 — FINAL APPROVED / MERGED**
 
 Merged application checkpoint:
 
-`d3282b085cfca1a7221cc7c0dc0b31d820c1d247`
+`4eceeb09a661c1c618489f6da3d1e70316c39d5a`
 
 ### Completed checkpoints
 
@@ -224,11 +220,19 @@ Merged application checkpoint:
 - AUTO-PV1 read-only verification complete: **NOT VERIFIABLE**.
 - MEDIA-02-D design verification complete.
 - MEDIA-02-I merged: optional `experienceTags` / `experienceNote` upload hints.
+- ARCH-01-I2C merged: Workspace-aware Media Library and Content Pool storage.
+- ARCH-01-I3A, I3B1, I3B2, and I3B3 merged: Connected Account, trusted execution context, Workspace propagation, and Product Review candidate foundations.
+- LOGIN-01-I1/I2/I3 plus registered User/Workspace provisioning validation merged.
+- WCLONE-I1/I1.1 and temporary WCLONE-I2 runner merged; clone execution remains HOLD.
+- AUTO-PROMPT-01-I1 and AUTO-DIAG-02-I1 merged.
+- MEDIA-02-U and PROJECT2-ASSET-CLEANUP-01 merged.
 - ADMIN-01-D legacy `/admin` retirement inventory analysis complete; no route was removed.
 
 ARCH-01-I2A is complete. It preserves the Default Workspace legacy profile key and isolates non-default Workspace prompt profiles without migration.
 
 ARCH-01-I2B is complete. It scopes Product service reads and mutations by Workspace while retaining `content_products`, Default Workspace legacy compatibility, and no-migration behavior.
+
+Next main implementation direction: **ARCH-01-I3C — ConnectedAccount credential/runtime resolution**. Codex B is waiting for this assignment; do not start implementation in this documentation task.
 
 ### R11D completion
 
@@ -299,17 +303,11 @@ Do not allow target changes after publication.
 
 ## 10. Codex B Preferred File Ownership
 
-Codex B should primarily own:
-
-- `/app/write` page UI
-- `/app/write` browser/client logic
-- target selection presentation
-- Post API/storage validation only if targetApp support is genuinely missing
-- R11D-focused tests
+For the next approved ARCH-01-I3C tranche, Codex B should primarily own ConnectedAccount credential/runtime resolution files and focused tests.
 
 ### Codex B should avoid
 
-Prompt-generation files owned by R13A.
+Prompt-generation files remain protected unless the PM explicitly assigns a prompt task.
 
 Do not modify:
 
@@ -368,7 +366,7 @@ R11D is merged in commit:
 
 ARCH-01-I2A merged in `c81e037a138ef454b50be74f330153413f637bf7` before R13A resumed. R13A then merged in `4840261f3b3343cf1055bdc652e50b0df6a3e2d4` and `84509f055ef4e49549c163e762cbcb5819ca3836`.
 
-ARCH-01-I2B merged in `d3282b085cfca1a7221cc7c0dc0b31d820c1d247`, establishing Workspace-aware Product service storage without route, UI, or runtime Workspace propagation.
+ARCH-01-I2B merged in `d3282b085cfca1a7221cc7c0dc0b31d820c1d247`, followed by I2C, I3A, I3B1, I3B2, I3B3, LOGIN-01, WCLONE, AUTO diagnostics, media metadata, and PROJECT2 asset cleanup. The current application checkpoint is `4eceeb09a661c1c618489f6da3d1e70316c39d5a`.
 
 Both workstreams are complete. Future work must still use the shared working-tree collision checks and rerun relevant regression before commit approval.
 
@@ -423,6 +421,7 @@ Do not manually:
 - execute General AUTO
 - generate Product Review
 - publish Threads content
+- run `wrangler deploy`
 
 unless a PM task explicitly requires it.
 
@@ -435,7 +434,8 @@ Preserve:
 - successful 2026-08-29 11:30 KST General AUTO path
 - General AUTO TEXT/IMAGE adapter route
 - General AUTO VIDEO exclusion
-- exact-repeat format protection
+- semantic duplicate and code-owned text validation
+- General AUTO structural format advisory behavior
 - Product Review candidate-only workflow
 - R8 operator duplicate-publish protection
 - app registry credential separation
@@ -480,11 +480,11 @@ Then continue only the workstream assigned to that account.
 
 Latest shared repository checkpoint before this documentation commit:
 
-`d3282b085cfca1a7221cc7c0dc0b31d820c1d247`
+`4eceeb09a661c1c618489f6da3d1e70316c39d5a`
 
 Latest application implementation checkpoint:
 
-`d3282b085cfca1a7221cc7c0dc0b31d820c1d247` — ARCH-01-I2B Workspace-Aware Products Storage Foundation complete.
+`4eceeb09a661c1c618489f6da3d1e70316c39d5a` — PROJECT2-ASSET-CLEANUP-01 final approved.
 
 Before relying on this hash, use the default local switch check; verify `origin/main` only when remote synchronization is required.
 
@@ -502,24 +502,21 @@ WAITING FOR NEXT TASK. R13A is complete.
 
 ### Codex B
 
-WAITING FOR NEXT TASK. ARCH-01-I2B is complete.
+WAITING / NEXT = **ARCH-01-I3C — ConnectedAccount credential/runtime resolution**.
 
 ---
 
 ## 20. Pending PM Action Items
 
-- **UI-01 — `/app/prompts` UI/UX cleanup**
-  - fix broken/awkward alignment
-  - clean up page hierarchy/layout and responsive behavior
-  - preserve functional prompt semantics
 - **MEDIA-02-AI — provenance-labeled AI generation context for user experience hints**
   - preserve `USER_EXPERIENCE` as distinct from observation and fact context
 - **MEDIA-02-R — optional future external research use**
   - preserve `USER_EXPERIENCE` vs `EXTERNAL_FACT` distinction
-- **ARCH-01 next scope direction**
-  - Media and Content Pool Workspace scope
-  - account-scoped credentials, history, and diversity
-  - simple User login and Workspace selection
-  - actual second Threads account activation
+- **AUTO-PROVENANCE-01 — later simple generation/media basis display**
+  - generation basis: `PERSONA`, `CURRENT_TOPIC`, `CONTENT_POOL`
+  - media basis: `NONE`, `DAILY_IMAGE`, `DAILY_VIDEO`
+  - no persona text/version snapshot requirement
+- **ARCH-01-I3C — ConnectedAccount credential/runtime resolution**
+  - after I3C: second Threads account, account-level schedules/history/analytics, and later SNS expansion
 
 These are pending PM decisions and are not assigned to Codex B.

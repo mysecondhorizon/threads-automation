@@ -32,13 +32,13 @@ Do not run:
 
 Latest shared repository checkpoint before this documentation commit:
 
-`d3282b085cfca1a7221cc7c0dc0b31d820c1d247`
+`4eceeb09a661c1c618489f6da3d1e70316c39d5a`
 
 Latest application implementation checkpoint:
 
-`d3282b085cfca1a7221cc7c0dc0b31d820c1d247`
+`4eceeb09a661c1c618489f6da3d1e70316c39d5a`
 
-**ARCH-01-I2B — Workspace-Aware Products Storage Foundation complete**
+**PROJECT2-ASSET-CLEANUP-01 — FINAL APPROVED**
 
 Historical milestone reference:
 
@@ -98,7 +98,7 @@ Existing Cloudflare Cron expressions:
 
 ## 4. Production Verification
 
-### General AUTO format incident
+### General AUTO format and diagnostics
 
 Previous production failures:
 
@@ -119,14 +119,12 @@ Root cause:
 - exact-repeat failure did not force target reselection;
 - regeneration could retry the same effective target/pattern.
 
-Fix now protected:
+Current behavior:
 
-- `recent_signature_repeated` remains strict;
-- exact repeat triggers target reselection;
-- failed target/pattern is excluded where possible;
-- exact-window constraints are considered during selection;
-- Product Review uses the shared safe format-diversity policy;
-- exhausted format space fails closed rather than publishing repetitive content.
+- Structural format is advisory for General AUTO generation.
+- Paragraph, sentence, opening, and ending structure alone do not block an otherwise valid General AUTO post.
+- Semantic duplicate protection and code-owned text/content validation remain blocking.
+- Bounded diagnostics record failed drafts, retries, and the Current Topic decision without persisting raw prompts.
 
 ### Confirmed production success
 
@@ -146,6 +144,13 @@ Do not weaken or remove the current diversity safeguards without explicit PM app
 - No production write or manual trigger was performed.
 - Code-level scheduler owner remains `LEGACY_ACTIVE_RUNTIME_PREPARING` and runtime execution remains disabled by the current ownership mode.
 - Do not claim runtime diversity safeguards were re-verified.
+
+### TOPIC-VERIFY-01 — Current Topic Production Verification
+
+- Result: **NOT_YET_VERIFIABLE**.
+- The authenticated production diagnostic payload was unavailable in the read-only verification environment.
+- This is not evidence of a Current Topic functional failure.
+- No production write, manual trigger, or diagnostic refresh was performed.
 
 ---
 
@@ -193,6 +198,49 @@ Prompt Profile scope is complete across Manual AI generation, General AUTO, Gene
 - The same `productKey` may exist in different Workspaces; cross-Workspace ID mutation is blocked.
 - Mutations preserve raw records belonging to other Workspaces, and the capacity remains 50 per Workspace.
 - No bulk migration and no route, UI, or runtime Workspace propagation were introduced.
+
+### ARCH-01-I2C — Workspace-Aware Media and Content Pool Storage
+**COMPLETE / MERGED**
+
+- Media Library and Content Pool records are Workspace-scoped with Default Workspace legacy compatibility and no bulk migration.
+- Cross-Workspace media/content-pool mutations are blocked while foreign raw records are preserved.
+
+### ARCH-01-I3A / I3B1 / I3B2 / I3B3
+**COMPLETE / MERGED**
+
+- Connected Account credential resolution, trusted execution context, Workspace business-data propagation, and Product Review candidate storage foundations are complete.
+- Connected Account credential/runtime publishing activation remains the next implementation direction.
+
+### LOGIN-01-I1 / I2 / I3 and registered User provisioning
+**COMPLETE / MERGED**
+
+- Minimal registered User login, logout, Workspace selection, and PM-controlled provisioning are available.
+- A registered session with a selected non-default Workspace is fail-closed from existing unscoped app/API paths.
+
+### WCLONE-I1 / I1.1 / I2
+**COMPLETE / HOLD**
+
+- Clone preflight is zero-write and R2 body handling is bounded in memory.
+- The temporary legacy-admin-only runner remains on hold until explicit clone approval, verification, and a separate removal task.
+
+### AUTO-PROMPT-01-I1 / AUTO-DIAG-02-I1
+**COMPLETE / MERGED**
+
+- General AUTO structural format is advisory while semantic/text validation remains blocking.
+- Recent General AUTO status includes bounded failed-attempt and Current Topic diagnostics.
+
+### MEDIA-02-U — Media Experience Metadata View/Edit
+**COMPLETE / MERGED**
+
+- Daily and Product asset operator views support `experienceTags` and `experienceNote` without changing asset-domain separation.
+
+### PROJECT2-ASSET-CLEANUP-01
+**FINAL APPROVED / MERGED**
+
+- `/app/daily` is the independent Daily asset domain; `/app/media` remains a 302 compatibility redirect.
+- Daily and Product asset domains each support IMAGE/VIDEO plus description, tags, `experienceTags`, and `experienceNote`.
+- Product external/business link remains supported; price is not part of the active PROJECT2 operator model.
+- PROJECT2 operator flows do not use, expose, require, or depend on `media.productId`.
 
 ### R13A — Shared Operator Prompt Scope
 **COMPLETE / MERGED**
@@ -390,8 +438,8 @@ Code-owned and not operator-editable:
 
 - validation rules
 - output rules
-- post-format enforcement
-- exact-repeat protection
+- semantic duplicate/repetition protection
+- code-owned output/format constraints
 - verified-facts constraints
 - forbidden-claims constraints
 - Current Topic factual safety
@@ -416,9 +464,9 @@ R13A is complete and merged in `84509f055ef4e49549c163e762cbcb5819ca3836`.
 
 ### Codex B
 
-**WAITING FOR NEXT TASK**
+**WAITING / NEXT = ARCH-01-I3C — ConnectedAccount credential/runtime resolution**
 
-ARCH-01-I2B is complete and merged in `d3282b085cfca1a7221cc7c0dc0b31d820c1d247`.
+The latest application implementation checkpoint is `4eceeb09a661c1c618489f6da3d1e70316c39d5a` (PROJECT2-ASSET-CLEANUP-01). Do not begin I3C in this documentation-only task.
 
 ---
 
@@ -455,8 +503,8 @@ Unless a task explicitly changes them, preserve:
 - first-comment behavior
 - Threads authentication storage
 - Publisher Adapter architecture
-- `recent_signature_repeated` strict validation
-- failed target/pattern exclusion
+- semantic duplicate protection and code-owned text validation
+- General AUTO structural format advisory behavior
 - Product Review candidate-only behavior
 - Product Review valid-link/disclosure behavior
 - legacy scheduler production ownership
@@ -468,12 +516,8 @@ Unless a task explicitly changes them, preserve:
 
 Major remaining work includes:
 
-- UI-01 `/app/prompts` UI/UX cleanup
-  - broken/awkward alignment
-  - page hierarchy/layout cleanup
-  - responsive cleanup
-  - functional prompt semantics must remain unchanged
 - additional General AUTO production verification when evidence access becomes available
+- AUTO-PROVENANCE-01 — later show simple generation basis: `PERSONA`, `CURRENT_TOPIC`, or `CONTENT_POOL`; show media basis separately as `NONE`, `DAILY_IMAGE`, or `DAILY_VIDEO`. No persona text/version snapshot is required.
 - MEDIA-02-AI — consume user experience hints as provenance-labeled AI generation context
 - MEDIA-02-R — optional future external research use, preserving `USER_EXPERIENCE` vs `EXTERNAL_FACT` distinction
 - Runtime Scheduler final production ownership cutover
@@ -484,6 +528,7 @@ Major remaining work includes:
 - whole-collection KV scalability
 - stronger global exactly-once guarantees
 - optional future General AUTO video support only if explicitly approved
+- Workspace clone execution remains **HOLD** until explicit approval, post-clone verification, and temporary-runner removal planning.
 
 ### ARCH-01 — Multi-Account / Multi-Platform Workspace Architecture
 
@@ -493,7 +538,7 @@ Status: **FOUNDATION IN PROGRESS**
 
 Architecture direction:
 
-`User → Workspace → Connected Account`
+`User → Workspace → ConnectedAccount`
 
 - **User** is login identity only for small personal/family usage.
 - **Workspace** has `ownerUserId` and is the brand, system, and business-data isolation unit.
@@ -519,18 +564,17 @@ Data scope direction:
 **WORKSPACE**
 
 - Products
-- Media
-- base Prompt / Brand context
-- user experience media hints
-- other shared brand context
+- Daily assets
+- Product assets
+- Prompt / Profile
+- Content Pool
+- Product Review candidates
 
 **CONNECTED_ACCOUNT**
 
-- platform credentials
-- account-specific publishing history
-- account-specific schedules where applicable
-- analytics
-- account-specific preferences/context
+- platform/account identity
+- credential / `authRef` direction
+- future account-specific schedules, history, and analytics
 
 Long-term AI context composition:
 
@@ -550,8 +594,13 @@ Completed ARCH-01 checkpoints:
 - ARCH-01-I2A
 - ARCH-01-I2B-D
 - ARCH-01-I2B
+- ARCH-01-I2C
+- ARCH-01-I3A
+- ARCH-01-I3B1
+- ARCH-01-I3B2
+- ARCH-01-I3B3
 
-ARCH-01 now has compatibility and storage foundations only. User login, Workspace selection, and Connected Account activation are not current functionality.
+ARCH-01 now includes User login/Workspace selection and business-data propagation foundations. The next active direction is ConnectedAccount credential/runtime resolution; second Threads account activation, account-level schedule/history/analytics, and later SNS expansion follow I3C.
 
 #### ARCH-01-D — Multi-Account / Multi-Platform Storage & Scope Design Verification
 
@@ -566,10 +615,10 @@ Review examples:
 
 Next direction:
 
-- Media and Content Pool Workspace scope
-- account-scoped credentials, history, and diversity
-- simple User login and Workspace selection
-- actual second Threads account activation
+- ConnectedAccount credential/runtime resolution (ARCH-01-I3C)
+- second Threads account activation
+- account-level schedules, history, analytics, and diversity
+- later SNS/platform expansion
 
 ---
 
