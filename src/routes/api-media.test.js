@@ -31,28 +31,18 @@ const image = {
 };
 const video = { ...image, id: "video-1", mediaKind: "video" };
 const product = { ...image, id: "product-1", sourceType: "product" };
-const catalogProduct = { id: "catalog-product-1", name: "Catalog Product", productKey: "catalog-product" };
-const linkedProductMedia = { ...product, id: "product-linked", productId: catalogProduct.id };
-const staleProductMedia = { ...product, id: "product-stale", productId: "missing-product" };
 
 const unauthorized = await handleOperatorMediaCollection(request("https://example.test/api/media", "GET", undefined, false), env(false));
 assert.equal(unauthorized.status, 401);
 let listOptions = null;
 const listed = await handleOperatorMediaCollection(request("https://example.test/api/media", "GET", undefined, true), env(), {
-  list: async (_env, options) => { listOptions = options; return [image, video, product, linkedProductMedia, staleProductMedia]; },
-  products: async () => [catalogProduct],
+  list: async (_env, options) => { listOptions = options; return [image, video]; },
 });
-const listedBody = await listed.json();
-const listedMedia = listedBody.media;
-assert.deepEqual(listOptions, {});
-assert.equal(listedMedia.length, 5);
+const listedMedia = (await listed.json()).media;
+assert.deepEqual(listOptions, { sourceType: "general" });
+assert.equal(listedMedia.length, 2);
 assert.equal(listedMedia[0].previewUrl, "/media/image-1");
 assert.equal(listedMedia[1].previewUrl, "/media/video-1");
-assert.equal(listedMedia[2].sourceType, "product");
-assert.equal(listedMedia[2].linkedProduct, null);
-assert.deepEqual(listedMedia[3].linkedProduct, catalogProduct);
-assert.deepEqual(listedMedia[4].linkedProduct, { id: "missing-product", missing: true });
-assert.deepEqual(listedBody.products, [catalogProduct]);
 assert.deepEqual(listedMedia[0].experienceTags, []);
 assert.equal(listedMedia[0].experienceNote, "");
 assert.equal(Object.hasOwn(listedMedia[0], "objectKey"), false);
@@ -90,173 +80,22 @@ assert.deepEqual(productUpdate, {
 });
 assert.equal((await productPatch.json()).media.sourceType, "product");
 
-let linkedProductUpdate = null;
-let linkedProductWorkspaceId = null;
-const linked = await handleOperatorMediaById(request("https://example.test/api/media/product-1", "PATCH", {
-  productId: catalogProduct.id,
-}), env(), "product-1", {
-  get: async () => product,
-  getProduct: async (_env, id, workspaceId) => {
-    linkedProductWorkspaceId = workspaceId;
-    return id === catalogProduct.id ? catalogProduct : null;
-  },
-  update: async (_env, id, value, workspaceId) => {
-    linkedProductUpdate = value;
-    assert.equal(workspaceId, "default-workspace");
-    return { ...product, id, ...value };
-  },
-});
-assert.equal(linked.status, 200);
-assert.deepEqual(linkedProductUpdate, { productId: catalogProduct.id });
-assert.equal(linkedProductWorkspaceId, "default-workspace");
-
-const workspaceAMedia = { ...product, id: "product-media-a", workspaceId: "workspace-a" };
-let workspaceAProductLookup = null;
-const sameWorkspaceLink = await handleOperatorMediaById(request("https://example.test/api/media/product-media-a", "PATCH", {
-  productId: "product-a",
-}), env(), "product-media-a", {
-  get: async () => workspaceAMedia,
-  getProduct: async (_env, id, workspaceId) => {
-    workspaceAProductLookup = { id, workspaceId };
-    return id === "product-a" && workspaceId === "workspace-a"
-      ? { id, name: "Workspace A Product", productKey: "workspace-a" }
-      : null;
-  },
-  update: async (_env, id, value, workspaceId) => {
-    assert.equal(workspaceId, "workspace-a");
-    return { ...workspaceAMedia, id, ...value };
-  },
-});
-assert.equal(sameWorkspaceLink.status, 200);
-assert.deepEqual(workspaceAProductLookup, { id: "product-a", workspaceId: "workspace-a" });
-
-const workspaceBMedia = { ...product, id: "product-media-b", workspaceId: "workspace-b" };
-const workspaceBSameLink = await handleOperatorMediaById(request("https://example.test/api/media/product-media-b", "PATCH", {
-  productId: "product-b",
-}), env(), "product-media-b", {
-  get: async () => workspaceBMedia,
-  getProduct: async (_env, id, workspaceId) => {
-    assert.equal(workspaceId, "workspace-b");
-    return id === "product-b" ? { id, name: "Workspace B Product", productKey: "workspace-b" } : null;
-  },
-  update: async (_env, id, value, workspaceId) => {
-    assert.equal(workspaceId, "workspace-b");
-    return { ...workspaceBMedia, id, ...value };
-  },
-});
-assert.equal(workspaceBSameLink.status, 200);
-
-const workspaceBDefaultLink = await handleOperatorMediaById(request("https://example.test/api/media/product-media-b", "PATCH", {
-  productId: "catalog-product-1",
-}), env(), "product-media-b", {
-  get: async () => workspaceBMedia,
-  getProduct: async (_env, _id, workspaceId) => {
-    assert.equal(workspaceId, "workspace-b");
-    return null;
-  },
-  update: async () => { throw new Error("must not update"); },
-});
-assert.equal(workspaceBDefaultLink.status, 404);
-
-const workspaceACrossLink = await handleOperatorMediaById(request("https://example.test/api/media/product-media-a", "PATCH", {
-  productId: "product-b",
-}), env(), "product-media-a", {
-  get: async () => workspaceAMedia,
-  getProduct: async (_env, _id, workspaceId) => {
-    assert.equal(workspaceId, "workspace-a");
-    return null;
-  },
-  update: async () => { throw new Error("must not update"); },
-});
-assert.equal(workspaceACrossLink.status, 404);
-
-const changed = await handleOperatorMediaById(request("https://example.test/api/media/product-1", "PATCH", {
-  productId: "catalog-product-2",
-}), env(), "product-1", {
-  get: async () => ({ ...product, productId: catalogProduct.id }),
-  getProduct: async (_env, id) => id === "catalog-product-2" ? { id, name: "Second Product", productKey: "second" } : null,
-  update: async (_env, id, value) => ({ ...product, id, ...value }),
-});
-assert.equal(changed.status, 200);
-
-const unlinked = await handleOperatorMediaById(request("https://example.test/api/media/product-1", "PATCH", {
-  productId: null,
-}), env(), "product-1", {
-  get: async () => ({ ...product, productId: catalogProduct.id }),
-  update: async (_env, id, value) => ({ ...product, id, ...value }),
-});
-assert.equal(unlinked.status, 200);
-assert.equal((await unlinked.json()).media.linkedProduct, null);
-
-const generalProductLink = await handleOperatorMediaById(request("https://example.test/api/media/image-1", "PATCH", {
-  productId: catalogProduct.id,
-}), env(), "image-1", {
-  get: async () => image,
-  update: async () => { throw new Error("must not update"); },
-});
-assert.equal(generalProductLink.status, 400);
-
-const unknownProduct = await handleOperatorMediaById(request("https://example.test/api/media/product-1", "PATCH", {
-  productId: "unknown-product",
-}), env(), "product-1", {
-  get: async () => product,
-  getProduct: async () => null,
-  update: async () => { throw new Error("must not update"); },
-});
-assert.equal(unknownProduct.status, 404);
-
-const crossWorkspaceProduct = await handleOperatorMediaById(request("https://example.test/api/media/product-1", "PATCH", {
-  productId: "workspace-b-product",
-}), env(), "product-1", {
-  get: async () => product,
-  getProduct: async () => null,
-  update: async () => { throw new Error("must not update"); },
-});
-assert.equal(crossWorkspaceProduct.status, 404);
-
-const malformedProductId = await handleOperatorMediaById(request("https://example.test/api/media/product-1", "PATCH", {
-  productId: ["not-valid"],
-}), env(), "product-1", { get: async () => product });
-assert.equal(malformedProductId.status, 400);
-
-for (const productId of ["", "   ", "https://example.test/product", "product id", "x".repeat(129)]) {
-  let productLookupCalled = false;
-  const response = await handleOperatorMediaById(request("https://example.test/api/media/product-1", "PATCH", {
-    productId,
-  }), env(), "product-1", {
-    get: async () => product,
-    getProduct: async () => { productLookupCalled = true; return catalogProduct; },
-    update: async (_env, id, value) => ({ ...product, id, ...value }),
-  });
-  assert.equal(response.status, productId.trim() ? 400 : 200);
-  assert.equal(productLookupCalled, false);
-}
-
-const objectProductId = await handleOperatorMediaById(request("https://example.test/api/media/product-1", "PATCH", {
-  productId: { id: "product-1" },
-}), env(), "product-1", { get: async () => product });
-assert.equal(objectProductId.status, 400);
-
 const uploadForm = new FormData();
 uploadForm.append("files", new Blob(["image"], { type: "image/jpeg" }), "photo.jpg");
 const uploadRequest = new Request("https://example.test/api/media/upload", { method: "POST", headers: { cookie: "admin_session=session-1" }, body: uploadForm });
 let uploadInput = null;
-let uploadWorkspaceId = null;
 const upload = await handleOperatorMediaUpload(uploadRequest, env(), {
-  batchUpload: async (_env, input, workspaceId) => {
+  batchUpload: async (_env, input) => {
     uploadInput = input;
-    uploadWorkspaceId = workspaceId;
     return { results: [{ fileName: "photo.jpg", status: "success", media: image }] };
   },
 });
 assert.equal(upload.status, 200);
 assert.deepEqual(uploadInput.defaults, {
   sourceType: "general",
-  productId: null,
   experienceTags: "",
   experienceNote: "",
 });
-assert.equal(uploadWorkspaceId, "default-workspace");
 assert.equal(uploadInput.createPoolItems, true);
 assert.equal((await upload.json()).results[0].media.previewUrl, "/media/image-1");
 
@@ -282,7 +121,6 @@ await handleOperatorMediaUpload(
 assert.equal(hintedUploadInput.files.length, 2);
 assert.deepEqual(hintedUploadInput.defaults, {
   sourceType: "general",
-  productId: null,
   experienceTags: "출근길, 비 오는 날",
   experienceNote: "비 오는 날 출퇴근할 때 사용.",
 });
@@ -300,7 +138,7 @@ for (const [field, value, expected] of [
     env(),
     { batchUpload: async (_env, input) => { optionalInput = input; return { results: [] }; } }
   );
-  assert.deepEqual(optionalInput.defaults, { sourceType: "general", productId: null, ...expected });
+  assert.deepEqual(optionalInput.defaults, { sourceType: "general", ...expected });
 }
 
 const videoUploadForm = new FormData();
@@ -320,99 +158,10 @@ assert.equal(videoUpload.status, 200);
 assert.equal(videoUploadInput.files[0].type, "video/mp4");
 assert.deepEqual(videoUploadInput.defaults, {
   sourceType: "general",
-  productId: null,
   experienceTags: "",
   experienceNote: "",
 });
 assert.equal((await videoUpload.json()).results[0].media.kind, "video");
-
-const productUploadForm = new FormData();
-productUploadForm.append("files", new Blob(["image"], { type: "image/jpeg" }), "product-linked.jpg");
-productUploadForm.append("sourceType", "product");
-productUploadForm.append("productId", catalogProduct.id);
-let productUploadInput = null;
-let productLookupWorkspaceId = null;
-const productUpload = await handleOperatorMediaUpload(
-  new Request("https://example.test/api/media/upload", { method: "POST", headers: { cookie: "admin_session=session-1" }, body: productUploadForm }),
-  env(),
-  {
-    getProduct: async (_env, productId, workspaceId) => {
-      productLookupWorkspaceId = workspaceId;
-      return productId === catalogProduct.id ? catalogProduct : null;
-    },
-    batchUpload: async (_env, input, workspaceId) => {
-      assert.equal(workspaceId, "default-workspace");
-      productUploadInput = input;
-      return { results: [{ fileName: "product-linked.jpg", status: "success", media: { ...product, productId: catalogProduct.id } }] };
-    },
-  }
-);
-assert.equal(productUpload.status, 200);
-assert.equal(productLookupWorkspaceId, "default-workspace");
-assert.deepEqual(productUploadInput.defaults, {
-  sourceType: "product",
-  productId: catalogProduct.id,
-  experienceTags: "",
-  experienceNote: "",
-});
-
-for (const [productId, expectedStatus] of [
-  ["", 200],
-  ["https://example.test/product", 400],
-  ["x".repeat(129), 400],
-]) {
-  const form = new FormData();
-  form.append("files", new Blob(["image"], { type: "image/jpeg" }), "product-optional.jpg");
-  form.append("sourceType", "product");
-  form.append("productId", productId);
-  let lookupCalled = false;
-  let receivedDefaults = null;
-  const response = await handleOperatorMediaUpload(
-    new Request("https://example.test/api/media/upload", { method: "POST", headers: { cookie: "admin_session=session-1" }, body: form }),
-    env(),
-    {
-      getProduct: async () => { lookupCalled = true; return null; },
-      batchUpload: async (_env, input) => {
-        receivedDefaults = input.defaults;
-        return { results: [{ fileName: "product-optional.jpg", status: "success", media: { ...product, ...input.defaults } }] };
-      },
-    }
-  );
-  assert.equal(response.status, expectedStatus);
-  assert.equal(lookupCalled, false);
-  if (!productId) assert.equal(receivedDefaults.productId, null);
-}
-
-const crossWorkspaceUploadForm = new FormData();
-crossWorkspaceUploadForm.append("files", new Blob(["image"], { type: "image/jpeg" }), "product-cross.jpg");
-crossWorkspaceUploadForm.append("sourceType", "product");
-crossWorkspaceUploadForm.append("productId", "workspace-b-product");
-let crossWorkspaceBatchCalled = false;
-const crossWorkspaceUpload = await handleOperatorMediaUpload(
-  new Request("https://example.test/api/media/upload", { method: "POST", headers: { cookie: "admin_session=session-1" }, body: crossWorkspaceUploadForm }),
-  env(),
-  {
-    getProduct: async (_env, _productId, workspaceId) => {
-      assert.equal(workspaceId, "default-workspace");
-      return null;
-    },
-    batchUpload: async () => { crossWorkspaceBatchCalled = true; return { results: [] }; },
-  }
-);
-assert.equal(crossWorkspaceUpload.status, 404);
-assert.equal(crossWorkspaceBatchCalled, false);
-
-const generalProductIdForm = new FormData();
-generalProductIdForm.append("files", new Blob(["image"], { type: "image/jpeg" }), "general.jpg");
-generalProductIdForm.append("productId", catalogProduct.id);
-let generalProductIdBatchCalled = false;
-const generalProductId = await handleOperatorMediaUpload(
-  new Request("https://example.test/api/media/upload", { method: "POST", headers: { cookie: "admin_session=session-1" }, body: generalProductIdForm }),
-  env(),
-  { batchUpload: async () => { generalProductIdBatchCalled = true; return { results: [] }; } }
-);
-assert.equal(generalProductId.status, 400);
-assert.equal(generalProductIdBatchCalled, false);
 
 const unauthenticatedUpload = await handleOperatorMediaUpload(
   new Request("https://example.test/api/media/upload", { method: "POST", body: new FormData() }),

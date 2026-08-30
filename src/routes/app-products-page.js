@@ -79,13 +79,13 @@ function renderProductsPageContent() {
       </form>
     </section>
     <section class="app-products-panel" aria-labelledby="product-media-heading">
-      <h2 id="product-media-heading">제품 이미지</h2>
-      <p class="app-products-copy">여기서 업로드한 이미지는 제품용 미디어로 관리됩니다. 현재는 개별 제품과 이미지를 직접 연결하지 않습니다.</p>
-      <form id="operator-product-media-upload-form" class="app-products-upload-form" style="margin-top:16px;"><input id="product-media-files" class="app-products-file" name="files" type="file" accept="image/jpeg,image/png,image/webp" multiple required><button id="operator-product-media-upload" class="app-products-button primary" type="submit">이미지 업로드</button></form>
+      <h2 id="product-media-heading">제품 에셋</h2>
+      <p class="app-products-copy">여기서 업로드한 이미지와 동영상은 제품용 에셋으로 관리됩니다. Daily 에셋과는 별도로 관리됩니다.</p>
+      <form id="operator-product-media-upload-form" class="app-products-upload-form" style="margin-top:16px;"><input id="product-media-files" class="app-products-file" name="files" type="file" accept="image/jpeg,image/png,image/webp,video/mp4" multiple required><button id="operator-product-media-upload" class="app-products-button primary" type="submit">에셋 업로드</button></form>
       <div class="app-products-media-hints">
         <label>&#52404;&#54744; &#53468;&#44536; <input id="product-media-experience-tags" name="experienceTags" form="operator-product-media-upload-form" type="text" placeholder="&#52636;&#44540;&#44592;, &#48708; &#50724;&#45716; &#45216;, &#50724;&#47000; &#44152;&#51020;"></label>
         <label>&#52404;&#54744; &#47700;&#47784; <textarea id="product-media-experience-note" name="experienceNote" form="operator-product-media-upload-form" placeholder="&#49324;&#50857; &#49345;&#54889;&#44284; &#51665;&#51217; &#44221;&#54744;&#51012; &#44036;&#45800;&#55176; &#51201;&#50612; &#51452;&#49464;&#50836."></textarea></label>
-        <p>&#46160; &#54637;&#47785;&#51008; &#49440;&#53469; &#51077;&#47141;&#51077;&#45768;&#45796;. &#49440;&#53469;&#54620; &#47784;&#46304; &#51060;&#48120;&#51648;&#50640; &#46041;&#51068;&#54616;&#44172; &#51201;&#50857;&#46121;&#45768;&#45796;.</p>
+        <p>&#46160; &#54637;&#47785;&#51008; &#49440;&#53469; &#51077;&#47141;&#51077;&#45768;&#45796;. &#49440;&#53469;&#54620; &#47784;&#46304; &#51060;&#48120;&#51648;&#50752; &#46041;&#50689;&#49345;&#50640; &#46041;&#51068;&#54616;&#44172; &#51201;&#50857;&#46121;&#45768;&#45796;.</p>
       </div>
       <p id="operator-product-media-status" class="app-products-feedback" role="status" aria-live="polite"></p>
       <div id="operator-product-media-list" class="app-products-media-grid"></div>

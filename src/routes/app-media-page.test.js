@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { getMediaUpdateRequest } from "./app-media-client.js";
-import { handleAppMediaPage } from "./app-media-page.js";
+import { handleAppDailyPage, handleAppMediaPage } from "./app-media-page.js";
 
 const env = {
   THREADS_KV: {
@@ -8,19 +8,17 @@ const env = {
   },
 };
 
-const response = await handleAppMediaPage(
-  new Request("https://example.test/app/media", { headers: { cookie: "admin_session=session-1" } }),
+const response = await handleAppDailyPage(
+  new Request("https://example.test/app/daily", { headers: { cookie: "admin_session=session-1" } }),
   env
 );
 const page = await response.text();
 assert.equal(response.status, 200);
+assert.match(page, /<h1>Daily<\/h1>/u);
 assert.match(page, /id="media-upload-form"/u);
 assert.match(page, /id="media-files"/u);
 assert.match(page, /id="media-experience-tags"/u);
 assert.match(page, /id="media-experience-note"/u);
-assert.match(page, /id="media-source-type"/u);
-assert.match(page, /id="media-upload-product-field" hidden/u);
-assert.match(page, /id="media-upload-product" name="productId" form="media-upload-form"/u);
 assert.match(page, /name="experienceTags" form="media-upload-form"/u);
 assert.match(page, /name="experienceNote" form="media-upload-form"/u);
 assert.match(page, /id="operator-media-list"/u);
@@ -33,13 +31,7 @@ assert.match(page, /experienceTags/u);
 assert.match(page, /experienceNote/u);
 assert.match(page, /labels\.noExperienceTags/u);
 assert.match(page, /labels\.noExperienceNote/u);
-assert.match(page, /media\.sourceType === "product"/u);
-assert.match(page, /if \(media\.sourceType !== "product"\) return null/u);
-assert.match(page, /linkedProduct\?\.name/u);
-assert.match(page, /payload\.productId = productLink\.select\.value \|\| null/u);
-assert.match(page, /sourceTypeInput\.value === "product"/u);
-assert.match(page, /setUploadProducts\(products\)/u);
-assert.match(page, /uploadProductField\.hidden = !productMedia/u);
+assert.doesNotMatch(page, /linkedProduct|productId|addProductLinkControl/u);
 assert.doesNotMatch(page, /innerHTML/u);
 assert.doesNotMatch(page, /objectKey|content_media_library|THREADS_MEDIA/u);
 assert.deepEqual(getMediaUpdateRequest("media-1", { active: false }), {
@@ -55,6 +47,9 @@ assert.deepEqual(getMediaUpdateRequest("media-1", {
   method: "PATCH",
   payload: { experienceTags: ["weekend"], experienceNote: "Long walk" },
 });
-const unauthenticated = await handleAppMediaPage(new Request("https://example.test/app/media"), env);
+const compatibility = await handleAppMediaPage(new Request("https://example.test/app/media"), env);
+assert.equal(compatibility.status, 302);
+assert.equal(compatibility.headers.get("location"), "https://example.test/app/daily");
+const unauthenticated = await handleAppDailyPage(new Request("https://example.test/app/daily"), env);
 assert.equal(unauthenticated.status, 302);
 console.log("app media page fixture passed");

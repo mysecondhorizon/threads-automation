@@ -29,20 +29,20 @@ assert.equal(homeResponse.status, 200);
 assert.match(homePage, /운영 홈/u);
 assert.match(homePage, /class="app-nav-link is-active" href="\/app" aria-current="page"/u);
 
-for (const path of ["/app/write", "/app/media", "/app/products", "/app/prompts", "/app/activity", "/app/schedules", "/app/apps"]) {
+for (const path of ["/app/write", "/app/daily", "/app/products", "/app/prompts", "/app/activity", "/app/schedules", "/app/apps"]) {
   assert.match(homePage, new RegExp(`href="${path}"`, "u"));
 }
 
 const placeholderResponse = await handleAppPlaceholderPage(
-  authenticatedRequest("/app/media"),
+  authenticatedRequest("/app/daily"),
   createEnv(),
-  "/app/media"
+  "/app/daily"
 );
 const placeholderPage = await placeholderResponse.text();
 assert.equal(placeholderResponse.status, 200);
-assert.match(placeholderPage, /미디어/u);
+assert.match(placeholderPage, /Daily/u);
 assert.match(placeholderPage, /준비 중/u);
-assert.match(placeholderPage, /class="app-nav-link is-active" href="\/app\/media" aria-current="page"/u);
+assert.match(placeholderPage, /class="app-nav-link is-active" href="\/app\/daily" aria-current="page"/u);
 
 const unauthenticatedResponse = await handleAppHome(
   new Request("https://example.test/app"),
@@ -60,7 +60,7 @@ assert.equal(legacyResponse.status, 200);
 assert.match(legacyPage, /Second Horizon Admin/u);
 
 const indexSource = await readFile(new URL("../index.js", import.meta.url), "utf8");
-for (const path of ["/app", "/app/write", "/app/media", "/app/products", "/app/prompts", "/app/activity", "/app/schedules", "/app/apps"]) {
+for (const path of ["/app", "/app/write", "/app/daily", "/app/media", "/app/products", "/app/prompts", "/app/activity", "/app/schedules", "/app/apps"]) {
   assert.match(indexSource, new RegExp(`"${path}"`, "u"));
 }
 

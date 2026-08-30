@@ -15,7 +15,7 @@ function request(method, body, authenticated = true) {
 
 const productImage = {
   id: "product-image-1", sourceType: "product", mediaKind: "image", objectKey: "private/product.jpg",
-  description: "제품 이미지", tags: ["제품"], active: true, createdAt: "2026-08-01", updatedAt: "2026-08-02",
+  description: "제품 이미지", tags: ["제품"], experienceTags: ["주말"], experienceNote: "제품 사용 메모", active: true, createdAt: "2026-08-01", updatedAt: "2026-08-02",
 };
 const generalImage = { ...productImage, id: "general-image-1", sourceType: "general" };
 const productVideo = { ...productImage, id: "product-video-1", mediaKind: "video" };
@@ -27,8 +27,11 @@ const listed = await handleOperatorProductMedia(request("GET"), env(), {
 });
 assert.deepEqual(listOptions, { sourceType: "product" });
 const listedBody = await listed.json();
-assert.deepEqual(listedBody.media.map((item) => item.id), ["product-image-1"]);
+assert.deepEqual(listedBody.media.map((item) => item.id), ["product-image-1", "product-video-1"]);
 assert.equal(listedBody.media[0].previewUrl, "/media/product-image-1");
+assert.equal(listedBody.media[1].kind, "video");
+assert.deepEqual(listedBody.media[0].experienceTags, ["주말"]);
+assert.equal(listedBody.media[0].experienceNote, "제품 사용 메모");
 assert.equal(Object.hasOwn(listedBody.media[0], "objectKey"), false);
 
 const form = new FormData();
@@ -48,7 +51,7 @@ assert.deepEqual(uploadInput.defaults, {
 });
 assert.equal(uploadInput.createPoolItems, true);
 assert.deepEqual((await uploaded.json()).media[0], {
-  id: "product-image-1", kind: "image", description: "제품 이미지", tags: ["제품"], active: true,
+  id: "product-image-1", kind: "image", description: "제품 이미지", tags: ["제품"], experienceTags: ["주말"], experienceNote: "제품 사용 메모", active: true,
   createdAt: "2026-08-01", updatedAt: "2026-08-02", previewUrl: "/media/product-image-1",
 });
 
@@ -76,6 +79,14 @@ assert.deepEqual(hintedInput.defaults, {
 
 const videoForm = new FormData();
 videoForm.append("files", new Blob(["video"], { type: "video/mp4" }), "product.mp4");
-const rejectedVideo = await handleOperatorProductMedia(request("POST", videoForm), env());
-assert.equal(rejectedVideo.status, 400);
+let videoUploadInput = null;
+const uploadedVideo = await handleOperatorProductMedia(request("POST", videoForm), env(), {
+  batchUpload: async (_env, input) => {
+    videoUploadInput = input;
+    return { results: [{ status: "success", media: productVideo }] };
+  },
+});
+assert.equal(uploadedVideo.status, 200);
+assert.equal(videoUploadInput.files[0].type, "video/mp4");
+assert.equal((await uploadedVideo.json()).media[0].kind, "video");
 console.log("operator product media API fixture passed");

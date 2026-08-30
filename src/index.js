@@ -113,6 +113,7 @@ import {
 } from "./routes/app-write-page.js";
 
 import {
+  handleAppDailyPage,
   handleAppMediaPage,
 } from "./routes/app-media-page.js";
 
@@ -290,6 +291,10 @@ export default {
 
     if (pathname === "/app/write" && method === "GET") {
       return handleAppWritePage(request, env);
+    }
+
+    if (pathname === "/app/daily" && method === "GET") {
+      return handleAppDailyPage(request, env);
     }
 
     if (pathname === "/app/media" && method === "GET") {

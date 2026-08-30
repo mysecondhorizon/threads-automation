@@ -174,13 +174,8 @@ const productMedia = await createMedia(env, {
   sourceType: "product",
   productId: "product-default-1",
   objectKey: "media/product/default-1.jpg",
-  description: "Original product media description",
-  tags: ["original", "product"],
   experienceTags: ["before"],
   experienceNote: "Before update",
-  maxUses: 4,
-  usedCount: 2,
-  lastUsedAt: "2026-08-21T00:00:00.000Z",
 });
 const editedProductMedia = await updateMedia(env, productMedia.id, {
   experienceTags: ["weekend", "weekend", "with family"],
@@ -194,19 +189,6 @@ assert.equal(
   (await rawRecords(kv)).find((item) => item.id === productMedia.id).productId,
   "product-default-1"
 );
-const relinkedProductMedia = await updateMedia(env, productMedia.id, {
-  productId: "product-default-2",
-});
-assert.equal(relinkedProductMedia.productId, "product-default-2");
-assert.deepEqual(relinkedProductMedia.experienceTags, ["weekend", "with family"]);
-assert.equal(relinkedProductMedia.experienceNote, "Updated product media experience");
-assert.equal(relinkedProductMedia.objectKey, "media/product/default-1.jpg");
-assert.equal(relinkedProductMedia.active, true);
-assert.equal(relinkedProductMedia.description, "Original product media description");
-assert.deepEqual(relinkedProductMedia.tags, ["original", "product"]);
-assert.equal(relinkedProductMedia.maxUses, 4);
-assert.equal(relinkedProductMedia.usedCount, 2);
-assert.equal(relinkedProductMedia.lastUsedAt, "2026-08-21T00:00:00.000Z");
 await assert.rejects(
   updateMedia(env, productMedia.id, { experienceNote: "x".repeat(1001) }),
   /experience_note is too long/u

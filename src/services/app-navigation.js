@@ -10,9 +10,9 @@ export const APP_NAVIGATION = [
     description: "게시글을 작성하거나 AI 초안을 만듭니다.",
   },
   {
-    label: "미디어",
-    path: "/app/media",
-    description: "사진과 동영상을 업로드하고 관리합니다.",
+    label: "Daily",
+    path: "/app/daily",
+    description: "일상 사진과 동영상을 업로드하고 관리합니다.",
   },
   {
     label: "제품",
