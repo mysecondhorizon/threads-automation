@@ -19,45 +19,68 @@ function response(payload, status) {
   });
 }
 
-function failure(error, status) {
-  return response({ ok: false, error }, status);
+function failure(error, status, extra = {}) {
+  return response({ ok: false, error, ...extra }, status);
 }
 
-function normalizeInput(loginId, password, confirm) {
+function normalizeBrowserInput(loginId, password) {
   if (
     typeof loginId !== "string" ||
-    typeof password !== "string" ||
-    typeof confirm !== "string"
+    typeof password !== "string"
   ) {
     return null;
   }
 
   const normalizedLoginId = loginId.trim();
-  const normalizedConfirm = confirm.trim();
-  if (!normalizedLoginId || normalizedConfirm !== CONFIRMATION) return null;
+  if (!normalizedLoginId || !password) return null;
 
   return { loginId: normalizedLoginId, password };
+}
+
+function normalizeJsonInput(loginId, password, confirm) {
+  const input = normalizeBrowserInput(loginId, password);
+  if (!input || typeof confirm !== "string" || confirm.trim() !== CONFIRMATION) return null;
+  return input;
 }
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function getContentTypeKind(contentType) {
+  if (contentType.includes("application/x-www-form-urlencoded")) return "urlencoded";
+  if (contentType.includes("multipart/form-data")) return "multipart";
+  if (contentType.includes("application/json")) return "json";
+  return "other";
+}
+
+function formDiagnostic(contentTypeKind, formParseSucceeded, fields = {}) {
+  const loginId = fields.loginId;
+  const password = fields.password;
+  return {
+    contentTypeKind,
+    formParseSucceeded,
+    loginIdPresent: loginId !== null && loginId !== undefined,
+    loginIdIsString: typeof loginId === "string",
+    passwordPresent: password !== null && password !== undefined,
+    passwordIsString: typeof password === "string",
+  };
+}
+
 async function parseInput(request) {
   const contentType = request.headers.get("content-type") || "";
-  if (
-    contentType.includes("application/x-www-form-urlencoded") ||
-    contentType.includes("multipart/form-data")
-  ) {
+  const contentTypeKind = getContentTypeKind(contentType);
+  if (contentTypeKind === "urlencoded" || contentTypeKind === "multipart") {
     try {
       const formData = await request.formData();
-      return normalizeInput(
-        formData.get("loginId"),
-        formData.get("password"),
-        formData.get("confirm"),
-      );
+      const fields = {
+        loginId: formData.get("loginId"),
+        password: formData.get("password"),
+      };
+      const input = normalizeBrowserInput(fields.loginId, fields.password);
+      return { input, diagnostic: input ? null : formDiagnostic(contentTypeKind, true, fields) };
     } catch {
-      return null;
+      return { input: null, diagnostic: formDiagnostic(contentTypeKind, false) };
     }
   }
 
@@ -65,14 +88,14 @@ async function parseInput(request) {
   try {
     input = await request.json();
   } catch {
-    return null;
+    return { input: null, diagnostic: null };
   }
 
   if (!isPlainObject(input) || Object.keys(input).some((key) => !ALLOWED_INPUT_KEYS.has(key))) {
-    return null;
+    return { input: null, diagnostic: null };
   }
 
-  return normalizeInput(input.loginId, input.password, input.confirm);
+  return { input: normalizeJsonInput(input.loginId, input.password, input.confirm), diagnostic: null };
 }
 
 async function resolveTargetUser(env, input) {
@@ -99,7 +122,6 @@ export async function handleAdminPasswordResetPage(request, env) {
 <body><main><h1>Reset User Password</h1><form method="post" action="/admin/maintenance/password-reset">
 <label>Login ID <input name="loginId" autocomplete="username" required></label>
 <label>New password <input type="password" name="password" autocomplete="new-password" required></label>
-<label>Confirmation <input name="confirm" placeholder="RESET_USER_PASSWORD" required></label>
 <button type="submit">Reset password</button>
 </form></main></body></html>`);
 }
@@ -112,14 +134,18 @@ export async function handleAdminPasswordReset(request, env) {
   const denied = await requireLegacyAdminSession(request, env);
   if (denied) return denied;
 
-  const input = await parseInput(request);
-  if (!input) return failure("Invalid password reset request", 400);
+  const parsed = await parseInput(request);
+  if (!parsed.input) {
+    return failure("Invalid password reset request", 400, parsed.diagnostic ? {
+      diagnostic: parsed.diagnostic,
+    } : {});
+  }
 
-  const user = await resolveTargetUser(env, input);
+  const user = await resolveTargetUser(env, parsed.input);
   if (!user) return failure("Password reset failed", 404);
 
   try {
-    await setUserPassword(env, user.id, input.password);
+    await setUserPassword(env, user.id, parsed.input.password);
   } catch {
     return failure("Password reset failed", 400);
   }
