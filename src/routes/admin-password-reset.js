@@ -1,6 +1,5 @@
 import { resolveCurrentSession } from "../middleware/auth.js";
 import {
-  getUserById,
   getUserByLoginId,
   setUserPassword,
 } from "../services/login-foundation.js";
@@ -8,7 +7,6 @@ import { html } from "../utils/response.js";
 
 const CONFIRMATION = "RESET_USER_PASSWORD";
 const ALLOWED_INPUT_KEYS = new Set([
-  "userId",
   "loginId",
   "password",
   "confirm",
@@ -44,24 +42,23 @@ async function parseInput(request) {
   if (
     !isPlainObject(input) ||
     Object.keys(input).some((key) => !ALLOWED_INPUT_KEYS.has(key)) ||
-    input.confirm !== CONFIRMATION ||
-    typeof input.password !== "string"
+    typeof input.loginId !== "string" ||
+    typeof input.password !== "string" ||
+    typeof input.confirm !== "string"
   ) {
     return null;
   }
 
-  const hasUserId = typeof input.userId === "string" && input.userId.trim().length > 0;
-  const hasLoginId = typeof input.loginId === "string" && input.loginId.trim().length > 0;
-  if (hasUserId === hasLoginId) return null;
+  const loginId = input.loginId.trim();
+  const confirm = input.confirm.trim();
+  if (!loginId || confirm !== CONFIRMATION) return null;
 
-  return input;
+  return { loginId, password: input.password };
 }
 
 async function resolveTargetUser(env, input) {
   try {
-    return input.userId
-      ? await getUserById(env, input.userId)
-      : await getUserByLoginId(env, input.loginId);
+    return await getUserByLoginId(env, input.loginId);
   } catch {
     return null;
   }
@@ -81,8 +78,7 @@ export async function handleAdminPasswordResetPage(request, env) {
   return html(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reset User Password</title></head>
 <body><main><h1>Reset User Password</h1><form method="post" action="/admin/maintenance/password-reset">
-<label>User ID <input name="userId" autocomplete="off"></label>
-<label>or login ID <input name="loginId" autocomplete="username"></label>
+<label>Login ID <input name="loginId" autocomplete="username" required></label>
 <label>New password <input type="password" name="password" autocomplete="new-password" required></label>
 <label>Confirmation <input name="confirm" placeholder="RESET_USER_PASSWORD" required></label>
 <button type="submit">Reset password</button>

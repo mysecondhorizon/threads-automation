@@ -9,6 +9,7 @@ import {
   createUser,
   createWorkspace,
   setUserPassword,
+  verifyUserPassword,
 } from "../services/login-foundation.js";
 import {
   handleAdminPasswordReset,
@@ -138,15 +139,21 @@ test("password reset page is legacy-admin-only and posts a password form without
 
   assert.equal(page.status, 200);
   assert.match(body, /method="post" action="\/admin\/maintenance\/password-reset"/u);
-  assert.match(body, /name="userId"/u);
   assert.match(body, /name="loginId"/u);
+  assert.doesNotMatch(body, /name="userId"/u);
   assert.match(body, /type="password" name="password"/u);
   assert.match(body, /name="confirm"/u);
   assert.doesNotMatch(body, /value="[^"]+"[^>]*name="password"/u);
 
-  const post = await handleAdminPasswordReset(formRequest(validInput()), env);
+  const post = await handleAdminPasswordReset(formRequest(validInput({
+    loginId: "  OPERATOR@EXAMPLE.TEST  ",
+    password: "  replacement-password  ",
+    confirm: "  RESET_USER_PASSWORD  ",
+  })), env);
   assert.equal(post.status, 200);
   assert.equal(JSON.parse(values.get(`${USER_AUTH_KEY_PREFIX}${user.id}`)).iterations, 100_000);
+  assert.equal(await verifyUserPassword(env, user.id, "  replacement-password  "), true);
+  assert.equal(await verifyUserPassword(env, user.id, "replacement-password"), false);
 
   assert.equal((await handleAdminPasswordResetPage(request("GET", undefined, "none"), env)).status, 401);
   assert.equal((await handleAdminPasswordResetPage(request("GET", undefined, "registered"), createEnv("registered").env)).status, 403);
@@ -159,11 +166,13 @@ test("password reset rejects non-legacy, unauthenticated, unknown, invalid, and 
   const registered = await handleAdminPasswordReset(request("POST", validInput(), "registered"), createEnv("registered").env);
   const unknown = await handleAdminPasswordReset(request("POST", validInput({ loginId: "missing@example.test" })), env);
   const wrongConfirm = await handleAdminPasswordReset(request("POST", validInput({ confirm: "wrong" })), env);
+  const userId = await handleAdminPasswordReset(request("POST", validInput({ userId: "user-operator" })), env);
   const get = await handleAdminPasswordReset(request("GET", undefined), env);
 
   assert.equal(unauthenticated.status, 401);
   assert.equal(registered.status, 403);
   assert.equal(unknown.status, 404);
   assert.equal(wrongConfirm.status, 400);
+  assert.equal(userId.status, 400);
   assert.equal(get.status, 405);
 });
