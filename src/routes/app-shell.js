@@ -44,11 +44,17 @@ function renderWorkspaceContext(appContext) {
         <button type="submit">Select</button>
       </form>`
     : "";
+  const threadsConnection = currentWorkspace
+    ? `<form class="app-workspace-form" method="POST" action="/app/connected-accounts/threads/start">
+        <button type="submit">Connect Threads account</button>
+      </form>`
+    : "";
 
   return `<section class="app-workspace-context" aria-label="Current workspace">
     <strong>${escapeHtml(user.displayName)}</strong>
     <p>${workspaceStatus}</p>
     ${selector}
+    ${threadsConnection}
   </section>`;
 }
 
@@ -133,10 +139,16 @@ export async function handleAppHome(request, env) {
   if (!auth.ok) return auth.response;
 
   const appContext = await resolveCurrentAppContext(request, env);
+  const connectionResult = new URL(request.url).searchParams.get("threadsConnection");
+  const connectionFeedback = connectionResult === "success"
+    ? `<p class="app-empty" role="status">Threads account connection completed.</p>`
+    : connectionResult === "failed"
+      ? `<p class="app-empty" role="status">Threads account connection could not be completed.</p>`
+      : "";
   const cards = APP_NAVIGATION
     .filter((item) => item.path !== "/app")
     .map((item) => `<a class="app-card" href="${item.path}"><h2>${escapeHtml(item.label)}</h2><p>${escapeHtml(item.description)}</p></a>`)
-    .join("");
+    .join("") + connectionFeedback;
 
   return renderAppShell({
     activePath: "/app",

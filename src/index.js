@@ -70,6 +70,7 @@ import {
   handleConnectPage,
   handleOAuthStart,
   handleOAuthCallback,
+  handleConnectedAccountOAuthStart,
 } from "./routes/oauth.js";
 
 import {
@@ -241,6 +242,7 @@ export default {
       method === "GET"
     ) {
       return handleOAuthCallback(
+        request,
         url,
         env
       );
@@ -280,6 +282,13 @@ export default {
 
     if (pathname === "/app/workspace" && method === "POST") {
       return handleAppWorkspaceSelection(request, env);
+    }
+
+    if (
+      pathname === "/app/connected-accounts/threads/start" &&
+      method === "POST"
+    ) {
+      return handleConnectedAccountOAuthStart(request, env);
     }
 
     if (pathname.startsWith("/app/") && method === "GET") {

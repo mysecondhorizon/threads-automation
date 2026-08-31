@@ -1,5 +1,6 @@
 import {
   getJson,
+  putJson,
 } from "./kv.js";
 
 import {
@@ -22,7 +23,7 @@ const LEGACY_ACCOUNT_MARKER =
 const AUTH_REF_PATTERN =
   /^connected_account_auth:[A-Za-z0-9_-]+$/u;
 
-function getExpectedCredentialRef(
+export function getExpectedCredentialRef(
   accountId
 ) {
   return `connected_account_auth:${accountId}`;
@@ -112,6 +113,43 @@ function isIsoTimestamp(
     );
 }
 
+function timestampNow(now) {
+  const value = now instanceof Date
+    ? now
+    : new Date(now ?? Date.now());
+  if (!Number.isFinite(value.getTime())) {
+    fail(
+      "Connected Account timestamp is invalid",
+      "connected_account_timestamp_invalid"
+    );
+  }
+  return value.toISOString();
+}
+
+function sanitizeConnectedAccount(account) {
+  return {
+    id: account.id,
+    workspaceId: account.workspaceId,
+    platform: account.platform,
+    displayName: account.displayName,
+    active: account.active,
+  };
+}
+
+function normalizeThreadsDisplayName(value) {
+  if (
+    typeof value !== "string" ||
+    !value.trim() ||
+    value.trim().length > 120
+  ) {
+    fail(
+      "Connected Account profile is invalid",
+      "connected_account_profile_invalid"
+    );
+  }
+  return value.trim();
+}
+
 function normalizeStoredAccount(
   value
 ) {
@@ -195,6 +233,84 @@ async function readConnectedAccounts(
   return stored.records
     .map(normalizeStoredAccount)
     .filter(Boolean);
+}
+
+async function readMutableConnectedAccountRegistry(env) {
+  const stored = await getJson(env, CONNECTED_ACCOUNTS_KEY);
+  if (stored === null || stored === undefined) {
+    return {
+      version: STORE_VERSION,
+      records: [],
+    };
+  }
+
+  if (
+    !stored ||
+    typeof stored !== "object" ||
+    Array.isArray(stored) ||
+    stored.version !== STORE_VERSION ||
+    !Array.isArray(stored.records)
+  ) {
+    fail(
+      "Connected Account registry is invalid",
+      "connected_account_registry_invalid"
+    );
+  }
+
+  return stored;
+}
+
+async function getPendingThreadsConnectedAccount(
+  env,
+  {
+    workspaceId,
+    connectedAccountId,
+  } = {}
+) {
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
+  const resolvedAccountId = normalizeAccountId(
+    connectedAccountId,
+    resolvedWorkspaceId
+  );
+  const matches = (await readConnectedAccounts(env)).filter(
+    (account) => account.id === resolvedAccountId
+  );
+
+  if (matches.length !== 1) {
+    fail(
+      "Connected Account was not found",
+      matches.length > 1
+        ? "connected_account_ambiguous"
+        : "connected_account_not_found"
+    );
+  }
+
+  const account = matches[0];
+  if (account.workspaceId !== resolvedWorkspaceId) {
+    fail(
+      "Connected Account was not found",
+      "connected_account_not_found"
+    );
+  }
+  if (account.platform !== "THREADS") {
+    fail(
+      "Connected Account platform is not supported",
+      "connected_account_platform_unsupported"
+    );
+  }
+  if (account.active) {
+    fail(
+      "Connected Account is already active",
+      "connected_account_not_pending"
+    );
+  }
+  if (resolveCredentialRef(account) !== getExpectedCredentialRef(account.id)) {
+    fail(
+      "Connected Account credential is not configured",
+      "connected_account_auth_unconfigured"
+    );
+  }
+  return account;
 }
 
 function createLegacyConnectedAccount() {
@@ -329,6 +445,154 @@ export function resolveCredentialRef(
   }
 
   return authRef;
+}
+
+/**
+ * Creates an inactive, server-owned Threads account record for an OAuth
+ * connection attempt. It deliberately does not create or read credentials.
+ */
+export async function createPendingThreadsConnectedAccount(
+  env,
+  {
+    workspaceId,
+  } = {},
+  {
+    now,
+    createConnectedAccountId = () => `threads_${crypto.randomUUID()}`,
+  } = {}
+) {
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
+  if (resolvedWorkspaceId === DEFAULT_WORKSPACE_ID) {
+    fail(
+      "Legacy Workspace cannot create a pending Connected Account",
+      "connected_account_workspace_invalid"
+    );
+  }
+
+  const registry = await readMutableConnectedAccountRegistry(env);
+  const id = normalizeAccountId(
+    createConnectedAccountId(),
+    resolvedWorkspaceId
+  );
+  if (id === BUILT_IN_THREADS_APP_ID) {
+    fail(
+      "Connected Account id is invalid",
+      "connected_account_id_invalid"
+    );
+  }
+  if (
+    registry.records.some(
+      (record) => record && typeof record === "object" && record.id === id
+    )
+  ) {
+    fail(
+      "Connected Account id already exists",
+      "connected_account_id_duplicate"
+    );
+  }
+
+  const createdAt = timestampNow(now);
+  const account = {
+    id,
+    workspaceId: resolvedWorkspaceId,
+    platform: "THREADS",
+    displayName: "Pending Threads connection",
+    active: false,
+    authRef: getExpectedCredentialRef(id),
+    createdAt,
+    updatedAt: createdAt,
+  };
+
+  await putJson(env, CONNECTED_ACCOUNTS_KEY, {
+    ...registry,
+    version: STORE_VERSION,
+    updatedAt: createdAt,
+    records: [...registry.records, account],
+  });
+
+  return sanitizeConnectedAccount(account);
+}
+
+/**
+ * Resolves only a server-created inactive Threads account. This is purpose
+ * specific: normal publishing resolution continues to require active records.
+ */
+export async function resolvePendingThreadsConnectedAccount(
+  env,
+  options = {}
+) {
+  return getPendingThreadsConnectedAccount(env, options);
+}
+
+/**
+ * Activates a verified pending Threads account without exposing authRef or a
+ * credential to callers. The credential write is intentionally performed by
+ * the OAuth boundary before this transition.
+ */
+export async function activatePendingThreadsConnectedAccount(
+  env,
+  {
+    workspaceId,
+    connectedAccountId,
+    displayName,
+  } = {},
+  { now } = {}
+) {
+  const pending = await getPendingThreadsConnectedAccount(env, {
+    workspaceId,
+    connectedAccountId,
+  });
+  const normalizedDisplayName = normalizeThreadsDisplayName(displayName);
+  const registry = await readMutableConnectedAccountRegistry(env);
+  const matchingIndexes = registry.records
+    .map((record, index) => ({ record: normalizeStoredAccount(record), index }))
+    .filter(({ record }) => record?.id === pending.id);
+
+  if (matchingIndexes.length !== 1) {
+    fail(
+      "Connected Account was not found",
+      matchingIndexes.length > 1
+        ? "connected_account_ambiguous"
+        : "connected_account_not_found"
+    );
+  }
+
+  const match = matchingIndexes[0];
+  if (
+    match.record.workspaceId !== pending.workspaceId ||
+    match.record.platform !== "THREADS" ||
+    match.record.active ||
+    resolveCredentialRef(match.record) !== getExpectedCredentialRef(pending.id)
+  ) {
+    fail(
+      "Connected Account is no longer pending",
+      "connected_account_not_pending"
+    );
+  }
+
+  const updatedAt = timestampNow(now);
+  const activated = {
+    ...registry.records[match.index],
+    displayName: normalizedDisplayName,
+    active: true,
+    updatedAt,
+  };
+
+  await putJson(env, CONNECTED_ACCOUNTS_KEY, {
+    ...registry,
+    version: STORE_VERSION,
+    updatedAt,
+    records: registry.records.map((record, index) =>
+      index === match.index ? activated : record
+    ),
+  });
+
+  return sanitizeConnectedAccount({
+    ...match.record,
+    displayName: normalizedDisplayName,
+    active: true,
+    updatedAt,
+  });
 }
 
 export async function getThreadsCredentialForAccount(

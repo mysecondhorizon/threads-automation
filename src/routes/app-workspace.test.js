@@ -88,6 +88,7 @@ test("registered Workspace app home shows trusted User and owned active Workspac
   assert.doesNotMatch(page, /workspace-foreign/u);
   assert.doesNotMatch(page, /workspace-inactive/u);
   assert.match(page, /Current Workspace/u);
+  assert.match(page, /action="\/app\/connected-accounts\/threads\/start"/u);
 });
 
 test("app home safely represents null selection and no active Workspace states", async () => {
@@ -141,4 +142,14 @@ test("legacy and registered Default Workspace API behavior remains available", a
 
   const registeredDefault = createEnv("default-workspace");
   assert.equal((await requireAdminApiSession(request("/api/products"), registeredDefault.env)).ok, true);
+});
+
+test("app home shows only safe Threads connection feedback", async () => {
+  const { env } = createEnv("workspace-a");
+  const successPage = await (await handleAppHome(
+    request("/app?threadsConnection=success"),
+    env,
+  )).text();
+  assert.match(successPage, /Threads account connection completed/u);
+  assert.doesNotMatch(successPage, /access_token|authRef|threads_auth/iu);
 });

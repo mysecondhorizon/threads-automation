@@ -4,9 +4,13 @@ import test from "node:test";
 import {
   CONNECTED_ACCOUNTS_KEY,
   ConnectedAccountError,
+  activatePendingThreadsConnectedAccount,
+  createPendingThreadsConnectedAccount,
   getThreadsCredentialForAccount,
+  getExpectedCredentialRef,
   resolveConnectedAccount,
   resolveCredentialRef,
+  resolvePendingThreadsConnectedAccount,
 } from "./connected-accounts.js";
 
 import {
@@ -434,5 +438,67 @@ test("workspace validation fails explicitly", async () => {
       workspaceId: " ",
     }),
     "connected_account_workspace_invalid"
+  );
+});
+
+test("pending Threads accounts are server-owned, Workspace-bound, and activate only after verification", async () => {
+  const { env, values } = createEnv({
+    [CONNECTED_ACCOUNTS_KEY]: {
+      version: 1,
+      records: [{ invalid: "preserved" }],
+    },
+  });
+
+  const pending = await createPendingThreadsConnectedAccount(env, {
+    workspaceId: "workspace-a",
+  }, {
+    now: TIMESTAMP,
+    createConnectedAccountId: () => "threads-new-account",
+  });
+
+  assert.deepEqual(pending, {
+    id: "threads-new-account",
+    workspaceId: "workspace-a",
+    platform: "THREADS",
+    displayName: "Pending Threads connection",
+    active: false,
+  });
+  assert.equal(pending.authRef, undefined);
+
+  const raw = JSON.parse(values.get(CONNECTED_ACCOUNTS_KEY));
+  assert.deepEqual(raw.records[0], { invalid: "preserved" });
+  assert.equal(raw.records[1].authRef, getExpectedCredentialRef(pending.id));
+
+  await expectCode(
+    () => resolvePendingThreadsConnectedAccount(env, {
+      workspaceId: "workspace-b",
+      connectedAccountId: pending.id,
+    }),
+    "connected_account_not_found",
+  );
+
+  const activated = await activatePendingThreadsConnectedAccount(env, {
+    workspaceId: "workspace-a",
+    connectedAccountId: pending.id,
+    displayName: "Verified Threads",
+  }, { now: "2026-08-29T01:00:00.000Z" });
+
+  assert.deepEqual(activated, {
+    ...pending,
+    displayName: "Verified Threads",
+    active: true,
+  });
+  const activatedRaw = JSON.parse(values.get(CONNECTED_ACCOUNTS_KEY));
+  assert.equal(activatedRaw.records[1].active, true);
+  assert.equal(activatedRaw.records[1].authRef, getExpectedCredentialRef(pending.id));
+});
+
+test("pending account creation never targets the synthetic Default Workspace", async () => {
+  const { env } = createEnv();
+  await expectCode(
+    () => createPendingThreadsConnectedAccount(env, {
+      workspaceId: DEFAULT_WORKSPACE_ID,
+    }),
+    "connected_account_workspace_invalid",
   );
 });
