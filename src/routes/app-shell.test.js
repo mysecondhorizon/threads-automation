@@ -60,6 +60,7 @@ assert.equal(legacyResponse.status, 200);
 assert.match(legacyPage, /Second Horizon Admin/u);
 
 const indexSource = await readFile(new URL("../index.js", import.meta.url), "utf8");
+assert.doesNotMatch(indexSource, /admin\/maintenance\/password-reset/u);
 for (const path of ["/app", "/app/write", "/app/daily", "/app/media", "/app/products", "/app/prompts", "/app/activity", "/app/schedules", "/app/apps"]) {
   assert.match(indexSource, new RegExp(`"${path}"`, "u"));
 }

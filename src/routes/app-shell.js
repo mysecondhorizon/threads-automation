@@ -31,11 +31,11 @@ function renderWorkspaceContext(appContext) {
 
   const { user, currentWorkspace, workspaces } = appContext;
   const workspaceStatus = currentWorkspace
-    ? `Current Workspace: <strong>${escapeHtml(currentWorkspace.name)}</strong>`
+    ? `<span class="app-workspace-label">Current Workspace</span><strong class="app-workspace-name">${escapeHtml(currentWorkspace.name)}</strong>`
     : workspaces.length
       ? "Select a workspace to establish your app context."
       : "No workspace available.";
-  const selector = workspaces.length
+  const selector = workspaces.length >= 2
     ? `<form class="app-workspace-form" method="POST" action="/app/workspace">
         <label for="app-workspace-id">Workspace</label>
         <select id="app-workspace-id" name="workspaceId">
@@ -75,6 +75,8 @@ function renderStyles() {
     .app-navigation { display: grid; gap: 4px; }
     .app-workspace-context { display:grid; gap:8px; margin:0 0 18px; padding:12px; border:1px solid #d9e2f5; border-radius:10px; background:#f7f9ff; color:#344054; font-size:13px; line-height:1.45; }
     .app-workspace-context strong, .app-workspace-context p { margin:0; }
+    .app-workspace-label { color:#667085; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+    .app-workspace-name { color:#1d3d7a; font-size:15px; }
     .app-workspace-form { display:grid; gap:7px; }
     .app-workspace-form select, .app-workspace-form button { width:100%; border:1px solid #cfd6e2; border-radius:7px; background:#fff; color:#344054; font:inherit; padding:8px; }
     .app-workspace-form button { cursor:pointer; font-weight:700; }

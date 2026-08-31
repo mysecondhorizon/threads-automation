@@ -88,6 +88,23 @@ test("registered Workspace app home shows trusted User and owned active Workspac
   assert.doesNotMatch(page, /workspace-foreign/u);
   assert.doesNotMatch(page, /workspace-inactive/u);
   assert.match(page, /Current Workspace/u);
+  assert.match(page, /action="\/app\/workspace"/u);
+  assert.match(page, /action="\/app\/connected-accounts\/threads\/start"/u);
+  assert.match(page, /action="\/app\/logout"/u);
+});
+
+test("single selectable Workspace remains visible without a selector", async () => {
+  const { env, values } = createEnv("workspace-a");
+  const stored = JSON.parse(values.get(WORKSPACES_KEY));
+  values.set(WORKSPACES_KEY, JSON.stringify({
+    ...stored,
+    workspaces: stored.workspaces.filter((workspace) => workspace.id === "workspace-a"),
+  }));
+
+  const page = await (await handleAppHome(request("/app"), env)).text();
+  assert.match(page, /Current Workspace/u);
+  assert.match(page, /Workspace A/u);
+  assert.doesNotMatch(page, /action="\/app\/workspace"/u);
   assert.match(page, /action="\/app\/connected-accounts\/threads\/start"/u);
   assert.match(page, /action="\/app\/logout"/u);
 });

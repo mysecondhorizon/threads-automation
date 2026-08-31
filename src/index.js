@@ -81,10 +81,6 @@ import {
   handleAdminPost,
 } from "./routes/admin.js";
 import { handleAdminWorkspaceClone } from "./routes/admin-workspace-clone.js";
-import {
-  handleAdminPasswordReset,
-  handleAdminPasswordResetPage,
-} from "./routes/admin-password-reset.js";
 
 import {
   handleAdminHomePage,
@@ -284,14 +280,6 @@ export default {
 
     if (pathname === "/admin/maintenance/workspace-clone") {
       return handleAdminWorkspaceClone(request, env);
-    }
-
-    if (pathname === "/admin/maintenance/password-reset" && method === "GET") {
-      return handleAdminPasswordResetPage(request, env);
-    }
-
-    if (pathname === "/admin/maintenance/password-reset") {
-      return handleAdminPasswordReset(request, env);
     }
 
     if (pathname === "/app" && method === "GET") {
