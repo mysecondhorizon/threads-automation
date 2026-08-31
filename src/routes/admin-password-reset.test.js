@@ -149,11 +149,28 @@ test("password reset page is legacy-admin-only and posts a password form without
     loginId: "  OPERATOR@EXAMPLE.TEST  ",
     password: "  replacement-password  ",
     confirm: "  RESET_USER_PASSWORD  ",
+    harmlessField: "ignored",
   })), env);
   assert.equal(post.status, 200);
   assert.equal(JSON.parse(values.get(`${USER_AUTH_KEY_PREFIX}${user.id}`)).iterations, 100_000);
   assert.equal(await verifyUserPassword(env, user.id, "  replacement-password  "), true);
   assert.equal(await verifyUserPassword(env, user.id, "replacement-password"), false);
+
+  assert.equal((await handleAdminPasswordReset(formRequest({
+    password: "replacement-password",
+    confirm: "RESET_USER_PASSWORD",
+  }), env)).status, 400);
+  assert.equal((await handleAdminPasswordReset(formRequest({
+    loginId: "operator@example.test",
+    confirm: "RESET_USER_PASSWORD",
+  }), env)).status, 400);
+  assert.equal((await handleAdminPasswordReset(formRequest({
+    loginId: "operator@example.test",
+    password: "replacement-password",
+  }), env)).status, 400);
+  assert.equal((await handleAdminPasswordReset(formRequest(validInput({
+    confirm: "wrong",
+  })), env)).status, 400);
 
   assert.equal((await handleAdminPasswordResetPage(request("GET", undefined, "none"), env)).status, 401);
   assert.equal((await handleAdminPasswordResetPage(request("GET", undefined, "registered"), createEnv("registered").env)).status, 403);

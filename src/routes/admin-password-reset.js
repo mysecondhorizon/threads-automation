@@ -23,37 +23,56 @@ function failure(error, status) {
   return response({ ok: false, error }, status);
 }
 
+function normalizeInput(loginId, password, confirm) {
+  if (
+    typeof loginId !== "string" ||
+    typeof password !== "string" ||
+    typeof confirm !== "string"
+  ) {
+    return null;
+  }
+
+  const normalizedLoginId = loginId.trim();
+  const normalizedConfirm = confirm.trim();
+  if (!normalizedLoginId || normalizedConfirm !== CONFIRMATION) return null;
+
+  return { loginId: normalizedLoginId, password };
+}
+
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 async function parseInput(request) {
+  const contentType = request.headers.get("content-type") || "";
+  if (
+    contentType.includes("application/x-www-form-urlencoded") ||
+    contentType.includes("multipart/form-data")
+  ) {
+    try {
+      const formData = await request.formData();
+      return normalizeInput(
+        formData.get("loginId"),
+        formData.get("password"),
+        formData.get("confirm"),
+      );
+    } catch {
+      return null;
+    }
+  }
+
   let input;
   try {
-    const contentType = request.headers.get("content-type") || "";
-    input = contentType.includes("application/x-www-form-urlencoded") ||
-      contentType.includes("multipart/form-data")
-      ? Object.fromEntries(await request.formData())
-      : await request.json();
+    input = await request.json();
   } catch {
     return null;
   }
 
-  if (
-    !isPlainObject(input) ||
-    Object.keys(input).some((key) => !ALLOWED_INPUT_KEYS.has(key)) ||
-    typeof input.loginId !== "string" ||
-    typeof input.password !== "string" ||
-    typeof input.confirm !== "string"
-  ) {
+  if (!isPlainObject(input) || Object.keys(input).some((key) => !ALLOWED_INPUT_KEYS.has(key))) {
     return null;
   }
 
-  const loginId = input.loginId.trim();
-  const confirm = input.confirm.trim();
-  if (!loginId || confirm !== CONFIRMATION) return null;
-
-  return { loginId, password: input.password };
+  return normalizeInput(input.loginId, input.password, input.confirm);
 }
 
 async function resolveTargetUser(env, input) {
