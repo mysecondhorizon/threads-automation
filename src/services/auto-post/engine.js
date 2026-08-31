@@ -1087,7 +1087,9 @@ async function runExecution(
           enforceFormatValidation:
             !generalOnly,
 
-          ...SAFE_FORMAT_DIVERSITY_OPTIONS,
+          ...(!generalOnly
+            ? SAFE_FORMAT_DIVERSITY_OPTIONS
+            : {}),
 
           excludeInfeasibleTargets:
             !generalOnly,

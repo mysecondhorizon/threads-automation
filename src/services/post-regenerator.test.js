@@ -187,6 +187,31 @@ await assert.rejects(
 );
 assert.equal(validationGenerationCalls, 1);
 
+let contentValidationGenerationCalls = 0;
+await assert.rejects(
+  generateDistinctThreadPost(
+    env,
+    {
+      products: { productDetails: [] },
+      publishing: {
+        goal: "Content validation remains blocking",
+        publishSequence: 1,
+        targetFormat: repeatedTarget,
+      },
+      history: { recentFormats: [], recentSevenDayPosts: [] },
+    },
+    {
+      enforceFormatValidation: false,
+      generatePost: async () => {
+        contentValidationGenerationCalls += 1;
+        return { body: "```json\n{}\n```" };
+      },
+    }
+  ),
+  (error) => error?.code === "json_code_fence_detected"
+);
+assert.equal(contentValidationGenerationCalls, 1);
+
 let diagnosticFailureCalls = 0;
 let diagnosticFailure = null;
 await assert.rejects(
@@ -365,6 +390,11 @@ const advisoryExhaustionResult = await generateDistinctThreadPost(
 assert.equal(advisoryExhaustionGenerationCalls, 1);
 assert.equal(advisoryExhaustionResult.attempts, 1);
 assert.equal(advisoryExhaustionResult.regenerated, false);
+assert.deepEqual(
+  advisoryExhaustionResult.format.sentencePattern,
+  [4],
+  "advisory General AUTO generation must not impose a 2–3 sentence requirement"
+);
 
 console.log(
   "post regenerator fixtures passed"

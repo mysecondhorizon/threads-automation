@@ -330,11 +330,14 @@ export async function handleAutoPostPreview(
           maxAttempts:
             MAX_GENERATION_ATTEMPTS,
 
+          enforceFormatValidation:
+            false,
+
           reselectTargetOnRecentPatternConflict:
-            options.useCurrentTopic,
+            false,
 
           excludeInfeasibleTargets:
-            options.useCurrentTopic,
+            false,
         }
       );
 
