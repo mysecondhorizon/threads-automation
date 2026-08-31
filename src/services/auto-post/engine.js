@@ -327,6 +327,35 @@ export function buildCurrentTopicDiagnostic(decision) {
   };
 }
 
+export function buildGeneralAutoProvenance(
+  decision,
+  mediaSelection
+) {
+  if (!decision || typeof decision !== "object") {
+    return null;
+  }
+
+  const provenance = {
+    contentBasis:
+      decision.currentTopic
+        ? "CURRENT_TOPIC"
+        : "PERSONA",
+  };
+
+  if (!mediaSelection || typeof mediaSelection !== "object") {
+    return provenance;
+  }
+
+  provenance.mediaBasis =
+    mediaSelection.mode === "IMAGE"
+      ? "DAILY_IMAGE"
+      : mediaSelection.mode === "VIDEO"
+        ? "DAILY_VIDEO"
+        : "NONE";
+
+  return provenance;
+}
+
 function normalizeGenerationAttemptDiagnostics(value) {
   const attempts = Array.isArray(value?.attempts)
     ? value.attempts
@@ -962,6 +991,9 @@ async function runExecution(
   let currentTopicDecision =
     null;
 
+  let generalAutoProvenance =
+    null;
+
   let mainPublished =
     false;
 
@@ -1047,6 +1079,11 @@ async function runExecution(
         context,
         { source, generalOnly }
       );
+
+      generalAutoProvenance =
+        buildGeneralAutoProvenance(
+          currentTopicDecision
+        );
     }
 
     await updateExecution(
@@ -1063,6 +1100,8 @@ async function runExecution(
                 buildCurrentTopicDiagnostic(
                   currentTopicDecision
                 ),
+              provenance:
+                generalAutoProvenance,
               attempts: [],
             },
           }
@@ -1146,6 +1185,14 @@ async function runExecution(
       }
     }
 
+    if (generalOnly) {
+      generalAutoProvenance =
+        buildGeneralAutoProvenance(
+          currentTopicDecision,
+          mediaSelection
+        );
+    }
+
     const validation =
       generation.validation;
 
@@ -1177,6 +1224,20 @@ async function runExecution(
 
         similarity:
           similarityResult,
+
+        ...(generalOnly
+          ? {
+            diagnostic: {
+              currentTopic:
+                buildCurrentTopicDiagnostic(
+                  currentTopicDecision
+                ),
+              provenance:
+                generalAutoProvenance,
+              attempts: [],
+            },
+          }
+          : {}),
 
         firstComment: {
           requested:
@@ -1458,6 +1519,8 @@ async function runExecution(
                 buildCurrentTopicDiagnostic(
                   currentTopicDecision
                 ),
+              provenance:
+                generalAutoProvenance,
               attempts:
                 failedAttemptDiagnostics,
             },

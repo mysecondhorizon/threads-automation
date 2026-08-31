@@ -32,6 +32,16 @@ export function buildSchedulesDiagnosticsClientScript() {
       if (topic.mode === 'fallback') return 'fallback · ' + (topic.fallbackReason || '-');
       return 'everyday_personal';
     };
+    const contentBasisLabel = (basis) => ({
+      PERSONA: 'Persona',
+      CURRENT_TOPIC: 'Current Topic',
+      CONTENT_POOL: 'Content Pool',
+    })[basis] || '-';
+    const mediaBasisLabel = (basis) => ({
+      NONE: '없음',
+      DAILY_IMAGE: 'Daily Image',
+      DAILY_VIDEO: 'Daily Video',
+    })[basis] || '-';
     const renderAttempt = (attempt) => {
       const detail = document.createElement('article');
       detail.className = 'app-schedule-history-item';
@@ -70,6 +80,8 @@ export function buildSchedulesDiagnosticsClientScript() {
         add(item, '실패 단계', record.error?.code ? (record.step || '-') + ' · ' + record.error.code : '');
         add(item, '실패 사유', Array.isArray(record.error?.details?.reasons) ? record.error.details.reasons.join(', ') : '');
         add(item, 'Current Topic', topicLabel(record.diagnostic?.currentTopic));
+        add(item, '생성 기반', contentBasisLabel(record.diagnostic?.provenance?.contentBasis));
+        add(item, '미디어', mediaBasisLabel(record.diagnostic?.provenance?.mediaBasis));
         add(item, '시도 횟수', record.diagnostic?.attempts?.length || record.generation?.attempts || 0);
         const attempts = Array.isArray(record.diagnostic?.attempts) ? record.diagnostic.attempts : [];
         if (attempts.length) {

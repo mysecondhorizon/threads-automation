@@ -56,6 +56,11 @@ const failedExecution = {
       fallbackReason: null,
       authRef: "MUST_NOT_LEAK",
     },
+    provenance: {
+      contentBasis: "CURRENT_TOPIC",
+      mediaBasis: "DAILY_IMAGE",
+      authRef: "MUST_NOT_LEAK",
+    },
     attempts: [
       {
         attempt: 1,
@@ -112,6 +117,10 @@ const successfulExecution = {
       selectedAngle: null,
       fallbackReason: null,
     },
+    provenance: {
+      contentBasis: "PERSONA",
+      mediaBasis: "NONE",
+    },
     attempts: [],
   },
 };
@@ -138,6 +147,14 @@ assert.equal(
 );
 assert.equal(status.recentGeneralAutoExecutions[1].error, null);
 assert.deepEqual(status.recentGeneralAutoExecutions[1].diagnostic.attempts, []);
+assert.deepEqual(status.recentGeneralAutoExecutions[0].diagnostic.provenance, {
+  contentBasis: "CURRENT_TOPIC",
+  mediaBasis: "DAILY_IMAGE",
+});
+assert.deepEqual(status.recentGeneralAutoExecutions[1].diagnostic.provenance, {
+  contentBasis: "PERSONA",
+  mediaBasis: "NONE",
+});
 assert.equal(JSON.stringify(status).includes("RAW_SYSTEM_PROMPT_MUST_NOT_LEAK"), false);
 assert.equal(JSON.stringify(status).includes("MUST_NOT_LEAK"), false);
 

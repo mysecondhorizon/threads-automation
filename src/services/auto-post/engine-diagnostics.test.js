@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   buildCurrentTopicDiagnostic,
+  buildGeneralAutoProvenance,
 } from "./engine.js";
 
 assert.deepEqual(
@@ -46,5 +47,40 @@ assert.equal(
   }).mode,
   "everyday_personal"
 );
+
+assert.deepEqual(
+  buildGeneralAutoProvenance(
+    { currentTopic: null },
+    { mode: "TEXT" }
+  ),
+  {
+    contentBasis: "PERSONA",
+    mediaBasis: "NONE",
+  }
+);
+
+assert.deepEqual(
+  buildGeneralAutoProvenance(
+    { currentTopic: { topicId: "topic-1" } },
+    { mode: "IMAGE" }
+  ),
+  {
+    contentBasis: "CURRENT_TOPIC",
+    mediaBasis: "DAILY_IMAGE",
+  }
+);
+
+assert.deepEqual(
+  buildGeneralAutoProvenance(
+    { currentTopic: null },
+    { mode: "VIDEO" }
+  ),
+  {
+    contentBasis: "PERSONA",
+    mediaBasis: "DAILY_VIDEO",
+  }
+);
+
+assert.equal(buildGeneralAutoProvenance(null, { mode: "IMAGE" }), null);
 
 console.log("auto post engine diagnostic fixtures passed");

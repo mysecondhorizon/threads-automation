@@ -156,6 +156,23 @@ function normalizeDiagnostic(diagnostic) {
     ? diagnostic.attempts
     : [];
 
+  const provenance = diagnostic.provenance;
+  const contentBasis = [
+    "PERSONA",
+    "CURRENT_TOPIC",
+    "CONTENT_POOL",
+  ].includes(provenance?.contentBasis)
+    ? provenance.contentBasis
+    : null;
+
+  const mediaBasis = [
+    "NONE",
+    "DAILY_IMAGE",
+    "DAILY_VIDEO",
+  ].includes(provenance?.mediaBasis)
+    ? provenance.mediaBasis
+    : null;
+
   return {
     currentTopic: currentTopic && typeof currentTopic === "object"
       ? {
@@ -177,6 +194,12 @@ function normalizeDiagnostic(diagnostic) {
         fallbackReason:
           safeText(currentTopic.fallbackReason, 160) ||
           null,
+      }
+      : null,
+    provenance: contentBasis
+      ? {
+        contentBasis,
+        mediaBasis,
       }
       : null,
     attempts: attempts.slice(0, 2).map((attempt, index) => ({
