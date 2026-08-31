@@ -145,6 +145,18 @@ try {
   assert.equal(batch.results[0].status, "success");
   assert.equal(batch.results[0].media.workspaceId, "workspace-a");
   assert.equal(batch.results[0].contentPoolItem.workspaceId, "workspace-a");
+  assert.equal(batch.results[0].media.maxUses, null);
+  assert.equal(batch.results[0].contentPoolItem.maxUses, null);
+
+  const productFile = new Blob(["product-fixture"], { type: "image/jpeg" });
+  Object.defineProperty(productFile, "name", { value: "product-fixture.jpg" });
+  const productBatch = await batchUploadMedia(env, {
+    files: [productFile],
+    defaults: { sourceType: "product" },
+  }, "workspace-a");
+  assert.equal(productBatch.results[0].status, "success");
+  assert.equal(productBatch.results[0].media.maxUses, 1);
+  assert.equal(productBatch.results[0].contentPoolItem.maxUses, 1);
   assert.equal((await kv.get("content_media_library", "json")).records.some((item) => item.id === "foreign-media"), true);
   assert.equal((await kv.get("content_pool", "json")).items.some((item) => item.id === "foreign-pool"), true);
 } finally {

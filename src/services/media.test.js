@@ -8,7 +8,9 @@ import {
   createMedia,
   getMedia,
   getPublicMediaById,
+  isMediaAvailable,
   listMedia,
+  markMediaUsed,
   removeMedia,
   updateMedia,
 } from "./media.js";
@@ -193,5 +195,56 @@ await assert.rejects(
   updateMedia(env, productMedia.id, { experienceNote: "x".repeat(1001) }),
   /experience_note is too long/u
 );
+
+const unlimitedDaily = await createMedia(env, {
+  objectKey: "media/general/unlimited-daily.jpg",
+  maxUses: null,
+  cooldownDays: 0,
+});
+await markMediaUsed(env, unlimitedDaily.id, new Date("2026-08-01T00:00:00.000Z"));
+assert.equal(
+  isMediaAvailable(
+    await getMedia(env, unlimitedDaily.id),
+    new Date("2026-08-02T00:00:00.000Z")
+  ),
+  true
+);
+
+const oneUseDaily = await createMedia(env, {
+  objectKey: "media/general/one-use-daily.jpg",
+  maxUses: 1,
+});
+await markMediaUsed(env, oneUseDaily.id, new Date("2026-08-01T00:00:00.000Z"));
+assert.equal(isMediaAvailable(await getMedia(env, oneUseDaily.id)), false);
+
+const twoUseDaily = await createMedia(env, {
+  objectKey: "media/general/two-use-daily.jpg",
+  maxUses: 2,
+});
+await markMediaUsed(env, twoUseDaily.id, new Date("2026-08-01T00:00:00.000Z"));
+assert.equal(isMediaAvailable(await getMedia(env, twoUseDaily.id)), true);
+await markMediaUsed(env, twoUseDaily.id, new Date("2026-08-02T00:00:00.000Z"));
+assert.equal(isMediaAvailable(await getMedia(env, twoUseDaily.id)), false);
+
+const cooldownDaily = await createMedia(env, {
+  objectKey: "media/general/cooldown-daily.jpg",
+  maxUses: null,
+  cooldownDays: 2,
+});
+await markMediaUsed(env, cooldownDaily.id, new Date("2026-08-01T00:00:00.000Z"));
+assert.equal(
+  isMediaAvailable(
+    await getMedia(env, cooldownDaily.id),
+    new Date("2026-08-02T00:00:00.000Z")
+  ),
+  false
+);
+
+const inactiveDaily = await createMedia(env, {
+  objectKey: "media/general/inactive-daily.jpg",
+  maxUses: null,
+  active: false,
+});
+assert.equal(isMediaAvailable(inactiveDaily), false);
 
 console.log("workspace-aware media fixtures passed");

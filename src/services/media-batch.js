@@ -194,6 +194,9 @@ function buildInput(file, manifest, defaults, mediaKind) {
   const productId = sourceType === "product"
     ? text(manifest?.productId || defaults.productId) || null
     : null;
+  const defaultMaxUses = sourceType === "general"
+    ? null
+    : 1;
   return {
     file,
     mediaKind,
@@ -209,7 +212,7 @@ function buildInput(file, manifest, defaults, mediaKind) {
     topics: splitList(manifest?.topics || defaults.topics),
     allowedContentTypes: splitList(manifest?.allowedContentTypes || defaults.allowedContentTypes),
     priority: numberValue(manifest?.priority ?? defaults.priority, 0),
-    maxUses: numberValue(manifest?.maxUses ?? defaults.maxUses, 1),
+    maxUses: numberValue(manifest?.maxUses ?? defaults.maxUses, defaultMaxUses),
     cooldownDays: numberValue(manifest?.cooldownDays ?? defaults.cooldownDays, 0),
   };
 }

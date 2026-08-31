@@ -8,6 +8,7 @@ import {
   createContentPoolBatch,
   createContentPoolItem,
   getContentPoolItem,
+  isContentPoolItemAvailable,
   listContentPool,
   removeContentPoolItem,
   updateContentPoolItem,
@@ -107,6 +108,7 @@ const updatedLegacy = await updateContentPoolItem(env, legacyItem.id, {
 });
 assert.equal(updatedLegacy.id, legacyItem.id);
 assert.equal(updatedLegacy.workspaceId, DEFAULT_WORKSPACE_ID);
+assert.equal(updatedLegacy.maxUses, 1);
 assert.equal(
   (await rawItems(kv)).find((item) => item.id === legacyItem.id).workspaceId,
   DEFAULT_WORKSPACE_ID
@@ -147,6 +149,37 @@ const batch = await createContentPoolBatch(
 );
 assert.equal(batch.created.length, 1);
 assert.equal(batch.created[0].workspaceId, "workspace-a");
+
+const unlimitedPool = await createContentPoolItem(env, {
+  mediaIds: [mediaA.id],
+  maxUses: null,
+  usedCount: 1,
+  lastUsedAt: "2026-08-01T00:00:00.000Z",
+  cooldownDays: 0,
+}, "workspace-a");
+assert.equal(unlimitedPool.maxUses, null);
+assert.equal(
+  isContentPoolItemAvailable(
+    unlimitedPool,
+    new Date("2026-08-02T00:00:00.000Z")
+  ),
+  true
+);
+
+const cooldownPool = await createContentPoolItem(env, {
+  mediaIds: [mediaA.id],
+  maxUses: null,
+  usedCount: 1,
+  lastUsedAt: "2026-08-01T00:00:00.000Z",
+  cooldownDays: 2,
+}, "workspace-a");
+assert.equal(
+  isContentPoolItemAvailable(
+    cooldownPool,
+    new Date("2026-08-02T00:00:00.000Z")
+  ),
+  false
+);
 
 const capacityMedia = media("capacity-media", "workspace-capacity-a");
 const capacityForeignMedia = media("capacity-foreign-media", "workspace-capacity-b");
@@ -198,6 +231,17 @@ const productPool = await createContentPoolItem(productEnv, {
   productId: "product-default",
 });
 assert.equal(productPool.productId, "product-default");
+assert.equal(productPool.maxUses, 1);
+
+await assert.rejects(
+  createContentPoolItem(productEnv, {
+    type: "product",
+    mediaIds: [productMedia.id],
+    productId: "product-default",
+    maxUses: null,
+  }),
+  (error) => error?.code === "content_pool_max_uses_invalid"
+);
 
 await assert.rejects(
   createContentPoolItem(productEnv, {

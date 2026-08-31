@@ -149,7 +149,14 @@ function normalizeItem(input, existing = null, workspaceId = DEFAULT_WORKSPACE_I
     priority: integer(input?.priority, existing?.priority ?? 0, "priority"),
     availableFrom,
     availableUntil,
-    maxUses: integer(input?.maxUses, existing?.maxUses ?? 1, "max_uses", { min: 1 }),
+    maxUses: type === "general"
+      ? integer(input?.maxUses, existing?.maxUses ?? 1, "max_uses", {
+        min: 1,
+        nullable: true,
+      })
+      : integer(input?.maxUses, existing?.maxUses ?? 1, "max_uses", {
+        min: 1,
+      }),
     usedCount: integer(input?.usedCount, existing?.usedCount ?? 0, "used_count"),
     lastUsedAt: dateValue(input?.lastUsedAt, existing?.lastUsedAt ?? null),
     cooldownDays: integer(input?.cooldownDays, existing?.cooldownDays ?? 0, "cooldown_days"),
@@ -175,7 +182,11 @@ function hydrateItem(input) {
     priority: Number.isInteger(input?.priority) ? input.priority : 0,
     availableFrom: nullableText(input?.availableFrom),
     availableUntil: nullableText(input?.availableUntil),
-    maxUses: Number.isInteger(input?.maxUses) && input.maxUses > 0 ? input.maxUses : 1,
+    maxUses: type === "general" && input?.maxUses === null
+      ? null
+      : Number.isInteger(input?.maxUses) && input.maxUses > 0
+        ? input.maxUses
+        : 1,
     usedCount: Number.isInteger(input?.usedCount) && input.usedCount >= 0 ? input.usedCount : 0,
     lastUsedAt: nullableText(input?.lastUsedAt),
     cooldownDays: Number.isInteger(input?.cooldownDays) && input.cooldownDays >= 0
@@ -235,7 +246,7 @@ export function isContentPoolItemAvailable(item, at = new Date()) {
   if (!item?.active || Number.isNaN(now)) return false;
   if (item.availableFrom && new Date(item.availableFrom).getTime() > now) return false;
   if (item.availableUntil && new Date(item.availableUntil).getTime() < now) return false;
-  if (item.usedCount >= item.maxUses) return false;
+  if (item.maxUses !== null && item.usedCount >= item.maxUses) return false;
   if (item.lastUsedAt && item.cooldownDays > 0) {
     const nextUseAt = new Date(item.lastUsedAt).getTime() + item.cooldownDays * 86400000;
     if (nextUseAt > now) return false;
