@@ -1,4 +1,4 @@
-import { requireAdminSession } from "../middleware/auth.js";
+import { resolveCurrentSession } from "../middleware/auth.js";
 import {
   AppContextError,
   resolveCurrentAppContext,
@@ -49,12 +49,16 @@ function renderWorkspaceContext(appContext) {
         <button type="submit">Connect Threads account</button>
       </form>`
     : "";
+  const logout = `<form class="app-workspace-form" method="POST" action="/app/logout">
+      <button type="submit">Logout</button>
+    </form>`;
 
   return `<section class="app-workspace-context" aria-label="Current workspace">
     <strong>${escapeHtml(user.displayName)}</strong>
     <p>${workspaceStatus}</p>
     ${selector}
     ${threadsConnection}
+    ${logout}
   </section>`;
 }
 
@@ -131,7 +135,22 @@ export function renderAppShell({ activePath, title, description, content, appCon
 }
 
 async function requireAppSession(request, env) {
-  return requireAdminSession(request, env);
+  const current = await resolveCurrentSession(request, env);
+  if (!current) {
+    return {
+      ok: false,
+      response: Response.redirect(
+        new URL("/app/login", request.url).toString(),
+        302,
+      ),
+    };
+  }
+  return {
+    ok: true,
+    sessionId: current.sessionId,
+    session: current.session,
+    user: current.user,
+  };
 }
 
 export async function handleAppHome(request, env) {

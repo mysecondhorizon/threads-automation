@@ -93,6 +93,12 @@ import {
   renderAppWorkspaceUnavailable,
 } from "./routes/app-shell.js";
 import {
+  handleAppLogin,
+  handleAppLoginPage,
+  handleAppLogout,
+} from "./routes/app-auth.js";
+import { resolveCurrentSession } from "./middleware/auth.js";
+import {
   isUnscopedAppAccessBlocked,
   resolveCurrentAppContext,
 } from "./services/app-context.js";
@@ -280,6 +286,18 @@ export default {
       return handleAppHome(request, env);
     }
 
+    if (pathname === "/app/login" && method === "GET") {
+      return handleAppLoginPage();
+    }
+
+    if (pathname === "/app/login" && method === "POST") {
+      return handleAppLogin(request, env);
+    }
+
+    if (pathname === "/app/logout" && method === "POST") {
+      return handleAppLogout(request, env);
+    }
+
     if (pathname === "/app/workspace" && method === "POST") {
       return handleAppWorkspaceSelection(request, env);
     }
@@ -289,6 +307,14 @@ export default {
       method === "POST"
     ) {
       return handleConnectedAccountOAuthStart(request, env);
+    }
+
+    if (
+      (pathname === "/app" || pathname.startsWith("/app/")) &&
+      method === "GET" &&
+      !await resolveCurrentSession(request, env)
+    ) {
+      return Response.redirect(new URL("/app/login", request.url).toString(), 302);
     }
 
     if (pathname.startsWith("/app/") && method === "GET") {

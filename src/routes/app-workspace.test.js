@@ -89,6 +89,7 @@ test("registered Workspace app home shows trusted User and owned active Workspac
   assert.doesNotMatch(page, /workspace-inactive/u);
   assert.match(page, /Current Workspace/u);
   assert.match(page, /action="\/app\/connected-accounts\/threads\/start"/u);
+  assert.match(page, /action="\/app\/logout"/u);
 });
 
 test("app home safely represents null selection and no active Workspace states", async () => {

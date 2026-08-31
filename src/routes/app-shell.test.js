@@ -49,7 +49,7 @@ const unauthenticatedResponse = await handleAppHome(
   createEnv()
 );
 assert.equal(unauthenticatedResponse.status, 302);
-assert.equal(unauthenticatedResponse.headers.get("location"), "https://example.test/admin/login");
+assert.equal(unauthenticatedResponse.headers.get("location"), "https://example.test/app/login");
 
 const legacyResponse = await handleAdminHomePage(
   authenticatedRequest("/admin"),
