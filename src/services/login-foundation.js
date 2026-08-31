@@ -19,7 +19,9 @@ export const LEGACY_USER_ID = DEFAULT_WORKSPACE_OWNER_USER_ID;
 const STORE_VERSION = 1;
 const PASSWORD_AUTH_VERSION = 1;
 const PASSWORD_AUTH_ALGORITHM = "PBKDF2-SHA-256";
-const PASSWORD_AUTH_ITERATIONS = 310_000;
+// Cloudflare Workers WebCrypto rejects PBKDF2 iteration counts above 100,000.
+const PASSWORD_AUTH_ITERATIONS = 100_000;
+const LEGACY_PASSWORD_AUTH_ITERATIONS = 310_000;
 const PASSWORD_AUTH_KEY_LENGTH = 32;
 const PASSWORD_AUTH_SALT_LENGTH = 16;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,119}$/u;
@@ -326,7 +328,10 @@ function normalizePasswordAuthRecord(value) {
   }
   if (
     value.algorithm !== PASSWORD_AUTH_ALGORITHM ||
-    value.iterations !== PASSWORD_AUTH_ITERATIONS ||
+    ![
+      PASSWORD_AUTH_ITERATIONS,
+      LEGACY_PASSWORD_AUTH_ITERATIONS,
+    ].includes(value.iterations) ||
     value.derivedKeyLength !== PASSWORD_AUTH_KEY_LENGTH ||
     !isIsoTimestamp(value.updatedAt)
   ) {
@@ -345,7 +350,7 @@ function normalizePasswordAuthRecord(value) {
   return {
     version: PASSWORD_AUTH_VERSION,
     algorithm: PASSWORD_AUTH_ALGORITHM,
-    iterations: PASSWORD_AUTH_ITERATIONS,
+    iterations: value.iterations,
     derivedKeyLength: PASSWORD_AUTH_KEY_LENGTH,
     salt: value.salt,
     hash: value.hash,
@@ -426,6 +431,10 @@ export async function verifyUserPassword(env, userId, password) {
     await getJson(env, `${USER_AUTH_KEY_PREFIX}${normalizedUserId}`),
   );
   if (!record) return false;
+
+  // Keep known legacy metadata readable, but never call Workers WebCrypto with
+  // an iteration count it rejects. A legacy password must be reprovisioned.
+  if (record.iterations > PASSWORD_AUTH_ITERATIONS) return false;
 
   const salt = decodeBase64(record.salt);
   const storedHash = decodeBase64(record.hash);

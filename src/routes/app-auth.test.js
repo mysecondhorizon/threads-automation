@@ -9,6 +9,7 @@ import {
 import { handleAppHome } from "./app-shell.js";
 import {
   ADMIN_SESSION_KEY_PREFIX,
+  USER_AUTH_KEY_PREFIX,
   createUser,
   createWorkspace,
   setUserPassword,
@@ -121,6 +122,25 @@ test("invalid registered login and legacy ADMIN_KEY input fail generically", asy
   const bodies = await Promise.all(responses.map((response) => response.text()));
   assert.deepEqual(new Set(bodies), new Set(["Authentication failed."]));
   for (const response of responses) assert.equal(response.status, 401);
+  assert.equal([...values.keys()].filter((key) => key.startsWith(ADMIN_SESSION_KEY_PREFIX)).length, 0);
+});
+
+test("unsupported legacy PBKDF2 credentials fail generically instead of throwing", async () => {
+  const { env, values } = createEnv();
+  const user = await addRegisteredUser(env);
+  const authKey = `${USER_AUTH_KEY_PREFIX}${user.id}`;
+  values.set(authKey, JSON.stringify({
+    ...JSON.parse(values.get(authKey)),
+    iterations: 310_000,
+  }));
+
+  const response = await handleAppLogin(request("/app/login", {
+    method: "POST",
+    form: formData({ login_id: "operator@example.test", password: "correct-password" }),
+  }), env);
+
+  assert.equal(response.status, 401);
+  assert.equal(await response.text(), "Authentication failed.");
   assert.equal([...values.keys()].filter((key) => key.startsWith(ADMIN_SESSION_KEY_PREFIX)).length, 0);
 });
 

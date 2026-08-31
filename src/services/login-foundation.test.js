@@ -166,7 +166,7 @@ test("Password auth uses isolated salted PBKDF2 records and fails closed", async
   const second = await setUserPassword(env, "user-b", "correct horse battery staple", { now: NOW });
 
   assert.equal(first.algorithm, "PBKDF2-SHA-256");
-  assert.equal(first.iterations, 310_000);
+  assert.equal(first.iterations, 100_000);
   assert.equal(first.derivedKeyLength, 32);
   assert.notEqual(first.salt, second.salt);
   assert.notEqual(first.hash, second.hash);
@@ -175,6 +175,31 @@ test("Password auth uses isolated salted PBKDF2 records and fails closed", async
   assert.equal(values.get(`${USER_AUTH_KEY_PREFIX}user-a`).includes("correct horse battery staple"), false);
 
   values.set(`${USER_AUTH_KEY_PREFIX}user-a`, JSON.stringify({ version: 1, hash: "bad" }));
+  assert.equal(await verifyUserPassword(env, "user-a", "correct horse battery staple"), false);
+});
+
+test("legacy unsupported PBKDF2 metadata fails closed without verification", async () => {
+  const { env, values } = createEnv();
+  const current = await setUserPassword(env, "user-a", "correct horse battery staple", { now: NOW });
+  values.set(`${USER_AUTH_KEY_PREFIX}user-a`, JSON.stringify({
+    ...current,
+    iterations: 310_000,
+  }));
+
+  await assert.doesNotReject(
+    () => verifyUserPassword(env, "user-a", "correct horse battery staple"),
+  );
+  assert.equal(await verifyUserPassword(env, "user-a", "correct horse battery staple"), false);
+});
+
+test("password auth records preserve only known iteration metadata", async () => {
+  const { env, values } = createEnv();
+  const current = await setUserPassword(env, "user-a", "correct horse battery staple", { now: NOW });
+  values.set(`${USER_AUTH_KEY_PREFIX}user-a`, JSON.stringify({
+    ...current,
+    iterations: 99_999,
+  }));
+
   assert.equal(await verifyUserPassword(env, "user-a", "correct horse battery staple"), false);
 });
 
