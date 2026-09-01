@@ -7,7 +7,7 @@ const dependencies = {
   async getScheduleRuns(...args) {
     sourceReadArguments.schedules = args;
     return [
-      { id:"schedule-general", operation:"auto_general", status:"completed", scheduledTime:"2026-08-29T03:00:00.000Z", completedAt:"2026-08-29T03:01:00.000Z", postId:"auto-post" },
+      { id:"schedule-general", operation:"auto_general", status:"completed", scheduledTime:"2026-08-29T03:00:00.000Z", completedAt:"2026-08-29T03:01:00.000Z", postId:"auto-post", executionId:"execution-general" },
       { id:"schedule-review", operation:"product_review", status:"review_ready", completedAt:"2026-08-29T02:00:00.000Z", candidateId:"candidate-scheduled" },
       { id:"schedule-failure", operation:"auto_general", status:"failed", completedAt:"2026-08-29T01:00:00.000Z", error:{ code:"ai_generation_failed", step:"ai_generation", details:{ raw:rawFailure } } },
       { id:"schedule-skipped", operation:"auto_general", status:"skipped", completedAt:"2026-08-29T00:00:00.000Z", skipReason:{ raw:rawFailure } },
@@ -34,7 +34,23 @@ const dependencies = {
       { status:"published", created_at:"2026-08-29T06:30:00.000Z", post_id:"legacy-post", metadata:{}, text:rawFailure },
       { status:"published", created_at:"2026-08-29T04:30:00.000Z", post_id:"review-post", metadata:{ source:"manual_product_test" }, text:rawFailure },
       { status:"failed", created_at:"2026-08-29T03:30:00.000Z", step:"create_container", details:{ raw:rawFailure }, text:rawFailure },
+      { status:"failed", created_at:"2026-08-29T01:00:30.000Z", step:"ai_generation", details:{ raw:rawFailure }, metadata:{ source:"cron_auto_general" }, text:rawFailure },
     ];
+  },
+  async getAutoPostStatus(...args) {
+    sourceReadArguments.autoStatus = args;
+    return { recentGeneralAutoExecutions:[{
+      id:"execution-general",
+      diagnostic:{
+        currentTopic:{ subject:"SAFE_TOPIC" },
+        provenance:{ contentBasis:"CURRENT_TOPIC", mediaBasis:"DAILY_IMAGE" },
+        attempts:[{ attempt:1, draftText:"SAFE_DRAFT", stage:"similarity_validation", reasons:["semantic_similarity"] }],
+      },
+    },{
+      id:"execution-failure",
+      completedAt:"2026-08-29T01:00:10.000Z",
+      diagnostic:{ attempts:[{ attempt:1, stage:"ai_generation", errorCode:"ai_generation_failed" }] },
+    }] };
   },
 };
 
@@ -45,6 +61,7 @@ assert.equal(result.partial, false);
 assert.deepEqual(sourceReadArguments.schedules.slice(1), [50]);
 assert.deepEqual(sourceReadArguments.candidates.slice(1), [50]);
 assert.deepEqual(sourceReadArguments.logs.slice(1), []);
+assert.deepEqual(sourceReadArguments.autoStatus.slice(1), []);
 assert.deepEqual(result.items.map((activity) => activity.id), [
   "post-log:legacy-post",
   "operator-post:manual-post",
@@ -61,10 +78,14 @@ assert.equal(result.items.some((activity) => activity.id === "operator-post:manu
 assert.equal(result.items.some((activity) => activity.id === "product-review:candidate-scheduled:generated"), false);
 assert.equal(result.items.filter((activity) => activity.externalPostId === "manual-post").length, 1);
 assert.equal(result.items.filter((activity) => activity.externalPostId === "review-post").length, 1);
+assert.equal(result.items.filter((activity) => activity.type === "GENERAL_AUTO").length, 3);
+assert.equal(result.items.some((activity) => activity.id === "post-log:failed:2026-08-29T01:00:30.000Z:4"), false);
 assert.deepEqual(result.items.find((activity) => activity.id === "schedule:schedule-general"), {
   id:"schedule:schedule-general", occurredAt:"2026-08-29T03:01:00.000Z", type:"GENERAL_AUTO", status:"PUBLISHED", summary:"General AUTO 게시를 완료했습니다.", failure:null, externalPostId:"auto-post",
+  diagnostic:{ currentTopic:{ subject:"SAFE_TOPIC" }, provenance:{ contentBasis:"CURRENT_TOPIC", mediaBasis:"DAILY_IMAGE" }, attempts:[{ attempt:1, draftText:"SAFE_DRAFT", stage:"similarity_validation", reasons:["semantic_similarity"] }] },
 });
 assert.deepEqual(result.items.find((activity) => activity.id === "schedule:schedule-failure").failure, { stage:"AI_GENERATION", code:"ai_generation_failed", message:"AI 글 생성에 실패했습니다." });
+assert.equal(result.items.find((activity) => activity.id === "schedule:schedule-failure").diagnostic.attempts[0].errorCode, "ai_generation_failed");
 assert.deepEqual(result.items.find((activity) => activity.id.startsWith("post-log:failed")).failure, { stage:"PUBLISHING", code:"threads_publish_failed", message:"Threads 게시 처리에 실패했습니다." });
 assert.equal(JSON.stringify(result).includes(rawFailure), false);
 assert.equal(normalizeActivityLimit(undefined), 30);
@@ -74,7 +95,7 @@ assert.equal(normalizeActivityLimit(999), 50);
 const limited = await getOperatorActivity({}, { limit:1, dependencies });
 assert.equal(limited.items.length, 1);
 assert.equal(limited.hasMore, true);
-const empty = await getOperatorActivity({}, { dependencies:{ async getScheduleRuns(){return[]}, async listProductReviewCandidates(){return[]}, async listPosts(){return[]}, async getPostLogs(){return[]} } });
+const empty = await getOperatorActivity({}, { dependencies:{ async getScheduleRuns(){return[]}, async listProductReviewCandidates(){return[]}, async listPosts(){return[]}, async getPostLogs(){return[]}, async getAutoPostStatus(){return{recentGeneralAutoExecutions:[]}} } });
 assert.deepEqual(empty.items, []);
 const unsafeId = "https://example.com/secret?token=abc";
 const oversizedId = "x".repeat(300);
@@ -83,6 +104,7 @@ const unsafeResult = await getOperatorActivity({}, { dependencies:{
   async listProductReviewCandidates(){return[{ id:oversizedId, status:"pending_review", createdAt:"2026-08-29T09:00:00.000Z" }]},
   async listPosts(){return[{ id:unsafeId, status:"PUBLISHED", publishedAt:"2026-08-29T08:00:00.000Z", publishedPostId:"manual-safe" }]},
   async getPostLogs(){return[{ status:"published", created_at:"2026-08-29T07:00:00.000Z", post_id:unsafeId, metadata:{} }]},
+  async getAutoPostStatus(){return{recentGeneralAutoExecutions:[]}},
 } });
 assert.equal(JSON.stringify(unsafeResult).includes(unsafeId), false);
 assert.equal(JSON.stringify(unsafeResult).includes(oversizedId), false);
@@ -94,7 +116,7 @@ const partial = await getOperatorActivity({}, { dependencies:{ ...dependencies, 
 assert.equal(partial.partial, true);
 assert.equal(partial.items.some((activity) => activity.type === "GENERAL_AUTO"), true);
 await assert.rejects(
-  () => getOperatorActivity({}, { dependencies:{ async getScheduleRuns(){throw new Error()}, async listProductReviewCandidates(){throw new Error()}, async listPosts(){throw new Error()}, async getPostLogs(){throw new Error()} } }),
+  () => getOperatorActivity({}, { dependencies:{ async getScheduleRuns(){throw new Error()}, async listProductReviewCandidates(){throw new Error()}, async listPosts(){throw new Error()}, async getPostLogs(){throw new Error()}, async getAutoPostStatus(){return{recentGeneralAutoExecutions:[]}} } }),
   /All activity sources are unavailable/
 );
 console.log("activity service fixture passed");

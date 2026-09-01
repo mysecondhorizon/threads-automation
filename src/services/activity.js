@@ -2,6 +2,7 @@ import { getPostLogs } from "./logger.js";
 import { listPosts } from "./posts.js";
 import { listProductReviewCandidates } from "./product-review.js";
 import { getScheduleRuns } from "./auto-post/schedule-store.js";
+import { getAutoPostStatus } from "./auto-post/status.js";
 import { normalizeScheduleFailure } from "./schedule-operations.js";
 
 const DEFAULT_LIMIT = 30;
@@ -33,11 +34,13 @@ function activityId(source, sourceId, occurredAt, index = 0, suffix = "") {
   return safeIdentifier(`${source}:${safeSourceId || fallback}${suffix}`);
 }
 
-function item({ id, occurredAt, type, status, summary, failure = null, externalPostId = null }) {
+function item({ id, occurredAt, type, status, summary, failure = null, externalPostId = null, diagnostic = null }) {
   const timestamp = iso(occurredAt);
   const safeId = safeIdentifier(id);
   if (!safeId || !timestamp) return null;
-  return { id: safeId, occurredAt: timestamp, type, status, summary, failure, externalPostId: externalPostId ? externalPostId : null };
+  const normalized = { id: safeId, occurredAt: timestamp, type, status, summary, failure, externalPostId: externalPostId ? externalPostId : null };
+  if (diagnostic) normalized.diagnostic = diagnostic;
+  return normalized;
 }
 
 export function normalizeActivityLimit(value) {
@@ -128,15 +131,40 @@ export async function getOperatorActivity(env, { limit, dependencies = {} } = {}
   const readCandidates = dependencies.listProductReviewCandidates || listProductReviewCandidates;
   const readPosts = dependencies.listPosts || listPosts;
   const readLogs = dependencies.getPostLogs || getPostLogs;
+  const readAutoStatus = dependencies.getAutoPostStatus || getAutoPostStatus;
   const reads = await Promise.allSettled([
     readSchedules(env, MAX_LIMIT),
     readCandidates(env, MAX_LIMIT),
     readPosts(env, { status: "PUBLISHED" }),
     readLogs(env),
+    readAutoStatus(env),
   ]);
-  if (reads.every((result) => result.status === "rejected")) throw new Error("All activity sources are unavailable");
-  const [runs, candidates, posts, logs] = reads.map((result) => result.status === "fulfilled" ? result.value : []);
+  if (reads.slice(0, 4).every((result) => result.status === "rejected")) throw new Error("All activity sources are unavailable");
+  const [runs, candidates, posts, logs, autoStatus] = reads.map((result) => result.status === "fulfilled" ? result.value : []);
   const partial = reads.some((result) => result.status === "rejected");
+
+  const generalAutoExecutions = (Array.isArray(autoStatus?.recentGeneralAutoExecutions) ? autoStatus.recentGeneralAutoExecutions : [])
+    .filter((execution) => safeIdentifier(execution?.id) && execution?.diagnostic);
+  const diagnosticsByExecutionId = new Map(generalAutoExecutions.map((execution) => [execution.id, execution.diagnostic]));
+  const matchedExecutionIds = new Set();
+
+  function generalAutoDiagnostic(run) {
+    const executionId = safeIdentifier(run?.executionId);
+    if (executionId && diagnosticsByExecutionId.has(executionId)) {
+      matchedExecutionIds.add(executionId);
+      return diagnosticsByExecutionId.get(executionId);
+    }
+    const runAt = Date.parse(run?.completedAt || run?.startedAt || run?.scheduledTime || "");
+    if (!Number.isFinite(runAt)) return null;
+    const closest = generalAutoExecutions
+      .filter((execution) => !matchedExecutionIds.has(execution.id))
+      .map((execution) => ({ execution, difference: Math.abs(Date.parse(execution.completedAt || execution.updatedAt || execution.startedAt || "") - runAt) }))
+      .filter(({ difference }) => Number.isFinite(difference) && difference <= 15 * 60 * 1000)
+      .sort((left, right) => left.difference - right.difference)[0]?.execution;
+    if (!closest) return null;
+    matchedExecutionIds.add(closest.id);
+    return closest.diagnostic;
+  }
 
   const items = [];
   const externalPostIds = new Set();
@@ -144,7 +172,8 @@ export async function getOperatorActivity(env, { limit, dependencies = {} } = {}
   for (const [index, run] of (Array.isArray(runs) ? runs : []).entries()) {
     const normalized = normalizeScheduleActivity(run, index);
     if (!normalized) continue;
-    items.push(normalized);
+    const diagnostic = normalized.type === "GENERAL_AUTO" ? generalAutoDiagnostic(run) : null;
+    items.push(diagnostic ? { ...normalized, diagnostic } : normalized);
     const externalPostId = normalized.externalPostId;
     if (externalPostId) externalPostIds.add(externalPostId);
     if (run?.status === "review_ready" && text(run?.candidateId)) generatedCandidateIds.add(text(run.candidateId));
@@ -167,6 +196,7 @@ export async function getOperatorActivity(env, { limit, dependencies = {} } = {}
   }
   for (const [index, log] of (Array.isArray(logs) ? logs : []).entries()) {
     const normalized = normalizePostLogActivity(log, index);
+    if (normalized?.type === "GENERAL_AUTO") continue;
     if (!normalized || (normalized.externalPostId && externalPostIds.has(normalized.externalPostId))) continue;
     items.push(normalized);
     if (normalized.externalPostId) externalPostIds.add(normalized.externalPostId);
