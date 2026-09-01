@@ -142,6 +142,8 @@ function relevanceAssessment(poolItem, media, context) {
   const poolTopicMatches = matchingTerms(sourceTerms, poolItem.topics);
   const mediaTagMatches = matchingTerms(sourceTerms, media.tags);
   const descriptionMatches = matchingTerms(sourceTerms, [media.altText, media.description]);
+  const experienceTagMatches = matchingTerms(sourceTerms, [media.experienceTags]);
+  const experienceNoteMatches = matchingTerms(sourceTerms, [media.experienceNote]);
   const exactPhraseMatch = hasExactPhraseMatch(sourceValues, [
     poolItem.topics,
     media.tags,
@@ -157,6 +159,8 @@ function relevanceAssessment(poolItem, media, context) {
     score: (poolTopicMatches.size * 60)
       + (mediaTagMatches.size * 45)
       + (descriptionMatches.size * 15)
+      + (experienceTagMatches.size * 25)
+      + (experienceNoteMatches.size * 10)
       + (exactPhraseMatch ? 30 : 0),
     strongMatch,
   };
