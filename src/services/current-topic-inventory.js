@@ -11,8 +11,9 @@ export const CURRENT_TOPIC_INVENTORY_KEY =
   "current_topic_inventory:v1";
 
 const INVENTORY_VERSION = 1;
-const DEFAULT_TTL_HOURS = 36;
+const DEFAULT_TTL_HOURS = 14 * 24;
 const MAX_TOPICS = 12;
+const MAX_DISCOVERY_CANDIDATES = 24;
 const MAX_FACTS = 3;
 const MAX_TALKING_POINTS = 3;
 const MAX_ANGLES = 4;
@@ -129,7 +130,7 @@ function validDate(value) {
 
 function isFresh(topic, at) {
   const expiresAt = validDate(topic?.expiresAt);
-  return Boolean(expiresAt && expiresAt.getTime() > at.getTime());
+  return Boolean(expiresAt && expiresAt.getTime() >= at.getTime());
 }
 
 function countSignals(value, signals, { points, maximum }) {
@@ -175,9 +176,9 @@ function freshnessScore(topic, at) {
     (at.getTime() - capturedAt.getTime()) / (60 * 60 * 1000)
   );
 
-  if (ageHours <= 6) return 12;
-  if (ageHours <= 18) return 9;
-  if (ageHours <= 36) return 6;
+  if (ageHours <= 24) return 12;
+  if (ageHours <= 3 * 24) return 9;
+  if (ageHours <= 7 * 24) return 6;
   return 3;
 }
 
@@ -376,7 +377,7 @@ function discoverySchema() {
     properties: {
       topics: {
         type: "array",
-        maxItems: MAX_TOPICS,
+        maxItems: MAX_DISCOVERY_CANDIDATES,
         items: {
           type: "object",
           additionalProperties: false,
@@ -443,7 +444,7 @@ export async function discoverCurrentTopics(env, { at = new Date(), requestJson 
       "Separate facts from persona relevance and allowedAngles. Do not invent personal use, experience, numbers, dates, launch details, or certainty beyond the sources.",
       "Provide only source URLs and titles used for factual traceability; do not quote article bodies.",
     ].join(" "),
-    input: `Find up to ${MAX_TOPICS} current topic candidates as of ${now.toISOString()}.`,
+    input: `Find up to ${MAX_DISCOVERY_CANDIDATES} current topic candidates as of ${now.toISOString()}.`,
     name: "current_topic_inventory",
     schema: discoverySchema(),
     tools: [{ type: "web_search" }],
