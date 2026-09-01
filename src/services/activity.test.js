@@ -8,6 +8,7 @@ const dependencies = {
     sourceReadArguments.schedules = args;
     return [
       { id:"schedule-general", operation:"auto_general", status:"completed", scheduledTime:"2026-08-29T03:00:00.000Z", completedAt:"2026-08-29T03:01:00.000Z", postId:"auto-post", executionId:"execution-general" },
+      { id:"schedule-provenance-only", operation:"auto_general", status:"completed", completedAt:"2026-08-29T01:30:00.000Z", provenance:{ contentBasis:"PERSONA", mediaBasis:"NONE" } },
       { id:"schedule-review", operation:"product_review", status:"review_ready", completedAt:"2026-08-29T02:00:00.000Z", candidateId:"candidate-scheduled" },
       { id:"schedule-failure", operation:"auto_general", status:"failed", completedAt:"2026-08-29T01:00:00.000Z", error:{ code:"ai_generation_failed", step:"ai_generation", details:{ raw:rawFailure } } },
       { id:"schedule-skipped", operation:"auto_general", status:"skipped", completedAt:"2026-08-29T00:00:00.000Z", skipReason:{ raw:rawFailure } },
@@ -69,6 +70,7 @@ assert.deepEqual(result.items.map((activity) => activity.id), [
   "post-log:failed:2026-08-29T03:30:00.000Z:3",
   "schedule:schedule-general",
   "schedule:schedule-review",
+  "schedule:schedule-provenance-only",
   "schedule:schedule-failure",
   "schedule:schedule-skipped",
   "product-review:candidate-published:generated",
@@ -78,11 +80,16 @@ assert.equal(result.items.some((activity) => activity.id === "operator-post:manu
 assert.equal(result.items.some((activity) => activity.id === "product-review:candidate-scheduled:generated"), false);
 assert.equal(result.items.filter((activity) => activity.externalPostId === "manual-post").length, 1);
 assert.equal(result.items.filter((activity) => activity.externalPostId === "review-post").length, 1);
-assert.equal(result.items.filter((activity) => activity.type === "GENERAL_AUTO").length, 3);
+assert.equal(result.items.filter((activity) => activity.type === "GENERAL_AUTO").length, 4);
 assert.equal(result.items.some((activity) => activity.id === "post-log:failed:2026-08-29T01:00:30.000Z:4"), false);
 assert.deepEqual(result.items.find((activity) => activity.id === "schedule:schedule-general"), {
   id:"schedule:schedule-general", occurredAt:"2026-08-29T03:01:00.000Z", type:"GENERAL_AUTO", status:"PUBLISHED", summary:"General AUTO 게시를 완료했습니다.", failure:null, externalPostId:"auto-post",
   diagnostic:{ currentTopic:{ subject:"SAFE_TOPIC" }, provenance:{ contentBasis:"CURRENT_TOPIC", mediaBasis:"DAILY_IMAGE" }, attempts:[{ attempt:1, draftText:"SAFE_DRAFT", stage:"similarity_validation", reasons:["semantic_similarity"] }] },
+  contentBasis:"CURRENT_TOPIC", mediaBasis:"DAILY_IMAGE",
+});
+assert.deepEqual(result.items.find((activity) => activity.id === "schedule:schedule-provenance-only"), {
+  id:"schedule:schedule-provenance-only", occurredAt:"2026-08-29T01:30:00.000Z", type:"GENERAL_AUTO", status:"SUCCESS", summary:"General AUTO 실행을 완료했습니다.", failure:null, externalPostId:null,
+  contentBasis:"PERSONA", mediaBasis:"NONE",
 });
 assert.deepEqual(result.items.find((activity) => activity.id === "schedule:schedule-failure").failure, { stage:"AI_GENERATION", code:"ai_generation_failed", message:"AI 글 생성에 실패했습니다." });
 assert.equal(result.items.find((activity) => activity.id === "schedule:schedule-failure").diagnostic.attempts[0].errorCode, "ai_generation_failed");

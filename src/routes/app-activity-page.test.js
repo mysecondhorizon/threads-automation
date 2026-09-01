@@ -13,6 +13,8 @@ assert.match(page, /id="activity-list" class="app-activity-list"/u);
 assert.match(page, /GENERAL_AUTO:'General AUTO'/u);
 assert.match(page, /General AUTO 상세 진단/u);
 assert.match(page, /Current Topic|생성 기반|미디어 기반|시도 횟수|Semantic similarity 점수|일치 게시물/u);
+assert.match(page, /contentBasis\[activity\.contentBasis\]|mediaBasis\[activity\.mediaBasis\]/u);
+assert.match(page, /PERSONA:'Persona'|CURRENT_TOPIC:'Current Topic'|NONE:'없음'|DAILY_IMAGE:'Daily Image'/u);
 assert.match(page, /document\.createElement\('details'\)/u);
 assert.match(page, /textContent=/u);
 assert.doesNotMatch(page, /innerHTML|JSON\.stringify/u);

@@ -27,6 +27,17 @@ function safeExternalPostId(value) {
   return safeIdentifier(value);
 }
 
+function safeGeneralAutoProvenance(value) {
+  if (!value || typeof value !== "object") return null;
+  const contentBasis = ["PERSONA", "CURRENT_TOPIC", "CONTENT_POOL"].includes(value.contentBasis)
+    ? value.contentBasis
+    : null;
+  const mediaBasis = ["NONE", "DAILY_IMAGE", "DAILY_VIDEO"].includes(value.mediaBasis)
+    ? value.mediaBasis
+    : null;
+  return contentBasis || mediaBasis ? { contentBasis, mediaBasis } : null;
+}
+
 function activityId(source, sourceId, occurredAt, index = 0, suffix = "") {
   const safeSourceId = safeIdentifier(sourceId);
   const safeTime = iso(occurredAt)?.replace(/[^a-zA-Z0-9._:-]/gu, "-") || "unknown";
@@ -173,7 +184,17 @@ export async function getOperatorActivity(env, { limit, dependencies = {} } = {}
     const normalized = normalizeScheduleActivity(run, index);
     if (!normalized) continue;
     const diagnostic = normalized.type === "GENERAL_AUTO" ? generalAutoDiagnostic(run) : null;
-    items.push(diagnostic ? { ...normalized, diagnostic } : normalized);
+    const provenance = normalized.type === "GENERAL_AUTO"
+      ? safeGeneralAutoProvenance(diagnostic?.provenance)
+        || safeGeneralAutoProvenance(run?.provenance)
+        || safeGeneralAutoProvenance(run?.generation?.provenance)
+      : null;
+    items.push(diagnostic || provenance ? {
+      ...normalized,
+      ...(diagnostic ? { diagnostic } : {}),
+      ...(provenance?.contentBasis ? { contentBasis: provenance.contentBasis } : {}),
+      ...(provenance?.mediaBasis ? { mediaBasis: provenance.mediaBasis } : {}),
+    } : normalized);
     const externalPostId = normalized.externalPostId;
     if (externalPostId) externalPostIds.add(externalPostId);
     if (run?.status === "review_ready" && text(run?.candidateId)) generatedCandidateIds.add(text(run.candidateId));
