@@ -3,6 +3,9 @@
   "name": "mysecondhorizon-threads",
   "main": "src/index.js",
   "compatibility_date": "2026-08-02",
+  "vars": {
+    "OPENAI_MODEL": "gpt-5.6-luna"
+  },
   "observability": {
     "enabled": true
   },
