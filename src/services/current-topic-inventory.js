@@ -18,6 +18,7 @@ const MAX_TALKING_POINTS = 3;
 const MAX_ANGLES = 4;
 const MAX_CLAIMS = 5;
 const MAX_SOURCES = 3;
+const MAX_TOPICS_PER_NARROW_DOMAIN = 3;
 
 const ALLOWED_CATEGORIES = new Set([
   "ai_digital",
@@ -44,6 +45,21 @@ const CATEGORY_RELATABILITY = {
   seasonal_life: 14,
   light_culture: 8,
 };
+
+const CATEGORY_MASS_INTEREST = {
+  ai_digital: 6,
+  apps_services: 8,
+  devices: 7,
+  work_productivity: 10,
+  consumer_lifestyle: 15,
+  seasonal_life: 13,
+  light_culture: 10,
+};
+
+const EXCLUDED_TOPIC_SIGNALS = [
+  "politics", "election", "crime", "disaster", "war", "conflict", "scandal",
+  "정치", "선거", "범죄", "사건사고", "재난", "전쟁", "분쟁", "스캔들",
+];
 
 const DAILY_LIFE_SIGNALS = [
   "daily", "life", "work", "office", "home", "shopping", "price",
@@ -131,6 +147,25 @@ function topicSearchText(topic) {
   ].join(" ");
 }
 
+function narrowDomain(topic) {
+  const source = topicSearchText(topic).toLowerCase();
+  if (topic.category === "ai_digital" || topic.category === "apps_services" || topic.category === "devices") return "digital_life";
+  if (/(?:food|cafe|restaurant|coffee|음식|외식|카페|커피)/u.test(source)) return "food_cafe";
+  if (/(?:travel|trip|outing|hotel|여행|나들이|숙소)/u.test(source)) return "travel_outing";
+  if (/(?:shopping|purchase|price|delivery|쇼핑|구매|가격|배송|소비)/u.test(source)) return "shopping_consumer";
+  if (/(?:commute|car|transport|mobility|출퇴근|자동차|이동|교통)/u.test(source)) return "mobility";
+  if (/(?:exercise|hobby|fitness|운동|취미)/u.test(source)) return "hobby_health";
+  if (topic.category === "light_culture" || /(?:ott|movie|drama|content|콘텐츠|영화|드라마)/u.test(source)) return "light_culture";
+  if (topic.category === "seasonal_life") return "seasonal_life";
+  if (topic.category === "work_productivity") return "work_productivity";
+  return "daily_life";
+}
+
+function isExcludedTopic(topic) {
+  const source = topicSearchText(topic).toLowerCase();
+  return EXCLUDED_TOPIC_SIGNALS.some((signal) => source.includes(signal));
+}
+
 function freshnessScore(topic, at) {
   const capturedAt = validDate(topic?.capturedAt);
   if (!capturedAt) return 0;
@@ -170,6 +205,11 @@ export function scoreCurrentTopicThreadsWorthiness(topic, { at = new Date() } = 
     20
   );
   const timeliness = freshnessScore(normalized, now);
+  const massInterest = Math.min(
+    (CATEGORY_MASS_INTEREST[normalized.category] || 0) +
+      countSignals(sourceText, DAILY_LIFE_SIGNALS, { points: 2, maximum: 10 }),
+    20
+  );
   const practicalHookPotential = countSignals(sourceText, PRACTICAL_HOOK_SIGNALS, {
     points: 3,
     maximum: 18,
@@ -187,6 +227,7 @@ export function scoreCurrentTopicThreadsWorthiness(topic, { at = new Date() } = 
     maximum: 28,
   });
   const score =
+    massInterest +
     relatability +
     conversationPotential +
     personaFit +
@@ -199,6 +240,9 @@ export function scoreCurrentTopicThreadsWorthiness(topic, { at = new Date() } = 
   return {
     score,
     scoreBreakdown: {
+      massInterest,
+      dailyRelevance: relatability,
+      talkability: conversationPotential,
       relatability,
       conversationPotential,
       personaFit,
@@ -209,6 +253,32 @@ export function scoreCurrentTopicThreadsWorthiness(topic, { at = new Date() } = 
       abstractPolicyPenalty,
     },
   };
+}
+
+export function prioritizeCurrentTopics(topics, { at = new Date() } = {}) {
+  const now = validDate(at);
+  if (!now) return [];
+
+  const ranked = (Array.isArray(topics) ? topics : [])
+    .map((topic) => normalizeCurrentTopic(topic, topic))
+    .filter(Boolean)
+    .filter((topic) => isFresh(topic, now) && !isExcludedTopic(topic))
+    .filter((topic, index, values) => values.findIndex((item) => item.id === topic.id) === index)
+    .map((topic) => ({ topic, worthiness: scoreCurrentTopicThreadsWorthiness(topic, { at: now }) }))
+    .filter(({ worthiness }) => Boolean(worthiness))
+    .sort((left, right) => right.worthiness.score - left.worthiness.score || left.topic.id.localeCompare(right.topic.id));
+
+  const domains = new Map();
+  const result = [];
+  for (const { topic } of ranked) {
+    const domain = narrowDomain(topic);
+    const count = domains.get(domain) || 0;
+    if (count >= MAX_TOPICS_PER_NARROW_DOMAIN) continue;
+    domains.set(domain, count + 1);
+    result.push(topic);
+    if (result.length >= MAX_TOPICS) break;
+  }
+  return result;
 }
 
 function topicId(category, subject) {
@@ -361,9 +431,12 @@ export async function discoverCurrentTopics(env, { at = new Date(), requestJson 
 
   const result = await requestJson(env, {
     instructions: [
-      "Discover current, lightweight Korean-relevant topics for a Threads persona: a practical office worker in their late 30s interested in daily life, digital services, devices, and small consumer choices.",
-      "This is topic inventory research, not a Threads post. Use web search for current information.",
+      "Discover current Korean-relevant conversation topics for a practical office worker in their late 30s. The purpose is not recent-news collection: find subjects ordinary people can naturally connect to their own daily experience or opinion on SNS.",
+      "This is topic inventory research, not a Threads post. Use web search for current information and evidence, including current events and current life signals.",
       "Only return categories ai_digital, apps_services, devices, work_productivity, consumer_lifestyle, seasonal_life, or light_culture.",
+      "Balance candidates across daily life, food/cafes, travel/outings, shopping/consumer choices, smartphones/digital services, practical AI use, work/productivity, mobility, hobbies/exercise, light OTT/content/culture, and seasonal or holiday life changes. AI, digital, and devices are allowed but must not dominate the inventory.",
+      "Prefer high mass interest, daily relevance to money/time/life/consumption/hobby/mobility/family, talkability for a short personal opinion, timeliness, and realistic persona fit. Do not elevate a corporate announcement, naming change, industry update, or product specification unless it has a clear everyday impact such as a price, subscription, travel, family, commute, photo, or work-use situation.",
+      "A current life signal is valid when web sources establish why it is timely: seasonal routines, holiday preparation, subscription cleanup, weekend outings, eating out, shopping choices, or travel-photo organization are examples.",
       "Exclude politics, elections, crime, disasters, wars, divisive controversy, medical or legal advice, financial recommendations, and serious social conflict.",
       "Return only facts supported by the web sources. Keep verifiedFacts to one to three concise factual statements.",
       "For each topic, also return one to three talkingPoints: short everyday Korean expressions that are safe to use as the factual part of a Threads post. They must stay strictly within verifiedFacts, preserve a forecast, plan, or possibility as uncertain, and remove unnecessary press-release structure, organization names, official terms, causes, and background. Do not write a headline, news summary, or a full Threads post.",
@@ -376,14 +449,12 @@ export async function discoverCurrentTopics(env, { at = new Date(), requestJson 
     tools: [{ type: "web_search" }],
   });
 
-  return (Array.isArray(result?.topics) ? result.topics : [])
+  return prioritizeCurrentTopics((Array.isArray(result?.topics) ? result.topics : [])
     .map((topic) => normalizeCurrentTopic(topic, {
       capturedAt: now,
       expiresAt: new Date(now.getTime() + DEFAULT_TTL_HOURS * 60 * 60 * 1000),
     }))
-    .filter(Boolean)
-    .filter((topic, index, topics) => topics.findIndex((item) => item.id === topic.id) === index)
-    .slice(0, MAX_TOPICS);
+    .filter((topic) => topic?.sourceReferences?.length), { at: now });
 }
 
 export async function saveCurrentTopicInventory(env, topics, { at = new Date() } = {}) {
