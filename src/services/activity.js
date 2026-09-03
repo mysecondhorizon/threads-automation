@@ -137,6 +137,36 @@ function sortNewest(items) {
   return items.sort((left, right) => Date.parse(right.occurredAt) - Date.parse(left.occurredAt) || left.id.localeCompare(right.id));
 }
 
+export function summarizeGeneralAutoActivity(items) {
+  const summary = {
+    totalExecutions: 0,
+    successfulPublishes: 0,
+    failedExecutions: 0,
+    textCount: 0,
+    imageCount: 0,
+    personaCount: 0,
+    currentTopicCount: 0,
+    imageUsagePercent: null,
+  };
+
+  for (const activity of Array.isArray(items) ? items : []) {
+    if (activity?.type !== "GENERAL_AUTO") continue;
+    summary.totalExecutions += 1;
+    if (activity.status === "PUBLISHED") summary.successfulPublishes += 1;
+    if (activity.status === "FAILED") summary.failedExecutions += 1;
+    if (activity.contentBasis === "PERSONA") summary.personaCount += 1;
+    if (activity.contentBasis === "CURRENT_TOPIC") summary.currentTopicCount += 1;
+    if (activity.mediaBasis === "NONE") summary.textCount += 1;
+    if (activity.mediaBasis === "DAILY_IMAGE") summary.imageCount += 1;
+  }
+
+  const knownTextOrImage = summary.textCount + summary.imageCount;
+  if (knownTextOrImage) {
+    summary.imageUsagePercent = Math.round((summary.imageCount / knownTextOrImage) * 100);
+  }
+  return summary;
+}
+
 export async function getOperatorActivity(env, { limit, dependencies = {} } = {}) {
   const readSchedules = dependencies.getScheduleRuns || getScheduleRuns;
   const readCandidates = dependencies.listProductReviewCandidates || listProductReviewCandidates;
@@ -225,5 +255,13 @@ export async function getOperatorActivity(env, { limit, dependencies = {} } = {}
 
   const safeLimit = normalizeActivityLimit(limit);
   const sorted = sortNewest(items);
-  return { items: sorted.slice(0, safeLimit), limit: safeLimit, hasMore: sorted.length > safeLimit, generatedAt: new Date().toISOString(), partial };
+  const recentItems = sorted.slice(0, safeLimit);
+  return {
+    items: recentItems,
+    generalAutoSummary: summarizeGeneralAutoActivity(recentItems),
+    limit: safeLimit,
+    hasMore: sorted.length > safeLimit,
+    generatedAt: new Date().toISOString(),
+    partial,
+  };
 }

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { getOperatorActivity, normalizeActivityLimit } from "./activity.js";
+import { getOperatorActivity, normalizeActivityLimit, summarizeGeneralAutoActivity } from "./activity.js";
 
 const rawFailure = "RAW_PROVIDER_PAYLOAD_MUST_NOT_LEAK";
 const sourceReadArguments = {};
@@ -82,6 +82,16 @@ assert.equal(result.items.filter((activity) => activity.externalPostId === "manu
 assert.equal(result.items.filter((activity) => activity.externalPostId === "review-post").length, 1);
 assert.equal(result.items.filter((activity) => activity.type === "GENERAL_AUTO").length, 4);
 assert.equal(result.items.some((activity) => activity.id === "post-log:failed:2026-08-29T01:00:30.000Z:4"), false);
+assert.deepEqual(result.generalAutoSummary, {
+  totalExecutions:4,
+  successfulPublishes:1,
+  failedExecutions:1,
+  textCount:1,
+  imageCount:1,
+  personaCount:1,
+  currentTopicCount:1,
+  imageUsagePercent:50,
+});
 assert.deepEqual(result.items.find((activity) => activity.id === "schedule:schedule-general"), {
   id:"schedule:schedule-general", occurredAt:"2026-08-29T03:01:00.000Z", type:"GENERAL_AUTO", status:"PUBLISHED", summary:"General AUTO 게시를 완료했습니다.", failure:null, externalPostId:"auto-post",
   diagnostic:{ currentTopic:{ subject:"SAFE_TOPIC" }, provenance:{ contentBasis:"CURRENT_TOPIC", mediaBasis:"DAILY_IMAGE" }, attempts:[{ attempt:1, draftText:"SAFE_DRAFT", stage:"similarity_validation", reasons:["semantic_similarity"] }] },
@@ -104,6 +114,31 @@ assert.equal(limited.items.length, 1);
 assert.equal(limited.hasMore, true);
 const empty = await getOperatorActivity({}, { dependencies:{ async getScheduleRuns(){return[]}, async listProductReviewCandidates(){return[]}, async listPosts(){return[]}, async getPostLogs(){return[]}, async getAutoPostStatus(){return{recentGeneralAutoExecutions:[]}} } });
 assert.deepEqual(empty.items, []);
+assert.deepEqual(empty.generalAutoSummary, {
+  totalExecutions:0,
+  successfulPublishes:0,
+  failedExecutions:0,
+  textCount:0,
+  imageCount:0,
+  personaCount:0,
+  currentTopicCount:0,
+  imageUsagePercent:null,
+});
+assert.deepEqual(summarizeGeneralAutoActivity([
+  { type:"GENERAL_AUTO", status:"PUBLISHED", contentBasis:"CURRENT_TOPIC", mediaBasis:"DAILY_IMAGE" },
+  { type:"GENERAL_AUTO", status:"FAILED" },
+  { type:"PRODUCT_REVIEW", status:"PUBLISHED", contentBasis:"PERSONA", mediaBasis:"NONE" },
+  { type:"MANUAL_PUBLISH", status:"PUBLISHED", contentBasis:"PERSONA", mediaBasis:"NONE" },
+]), {
+  totalExecutions:2,
+  successfulPublishes:1,
+  failedExecutions:1,
+  textCount:0,
+  imageCount:1,
+  personaCount:0,
+  currentTopicCount:1,
+  imageUsagePercent:100,
+});
 const unsafeId = "https://example.com/secret?token=abc";
 const oversizedId = "x".repeat(300);
 const unsafeResult = await getOperatorActivity({}, { dependencies:{
