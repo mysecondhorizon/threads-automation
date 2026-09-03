@@ -182,6 +182,39 @@ function freshnessScore(topic, at) {
   return 3;
 }
 
+function seoulOperationalTime(at) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    weekday: "short",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(at);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return {
+    hour: Number(values.hour),
+    weekend: values.weekday === "Sat" || values.weekday === "Sun",
+  };
+}
+
+function operationalTimeFit(topic, at) {
+  const { hour, weekend } = seoulOperationalTime(at);
+  const domain = narrowDomain(topic);
+  const weekendDomains = new Set([
+    "food_cafe", "travel_outing", "shopping_consumer", "hobby_health", "light_culture", "seasonal_life",
+  ]);
+  const eveningDomains = new Set([
+    "food_cafe", "travel_outing", "hobby_health", "light_culture", "seasonal_life",
+  ]);
+  const daytimeDomains = new Set([
+    "work_productivity", "shopping_consumer", "daily_life", "food_cafe", "digital_life",
+  ]);
+
+  if (weekend) return weekendDomains.has(domain) ? 8 : 0;
+  if (hour >= 18 || hour < 6) return eveningDomains.has(domain) ? 8 : 0;
+  if (hour >= 9 && hour < 18) return daytimeDomains.has(domain) ? 6 : 0;
+  return 0;
+}
+
 export function scoreCurrentTopicThreadsWorthiness(topic, { at = new Date() } = {}) {
   const now = validDate(at);
   const normalized = normalizeCurrentTopic(topic, topic);
@@ -227,12 +260,14 @@ export function scoreCurrentTopicThreadsWorthiness(topic, { at = new Date() } = 
     points: 7,
     maximum: 28,
   });
+  const operationalTimeFitScore = operationalTimeFit(normalized, now);
   const score =
     massInterest +
     relatability +
     conversationPotential +
     personaFit +
     timeliness +
+    operationalTimeFitScore +
     practicalHookPotential -
     pressReleasePenalty -
     newsSummaryRisk -
@@ -248,6 +283,7 @@ export function scoreCurrentTopicThreadsWorthiness(topic, { at = new Date() } = 
       conversationPotential,
       personaFit,
       timeliness,
+      operationalTimeFit: operationalTimeFitScore,
       practicalHookPotential,
       pressReleasePenalty,
       newsSummaryRisk,

@@ -103,12 +103,20 @@ const experienceTagSelection = selectFromRecords(
   [dailyMedia("media-tag-match", { experienceTags:["commute", "coffee"] }), dailyMedia("media-tag-other")]
 );
 assert.equal(experienceTagSelection.mediaId, "media-tag-match");
+assert.deepEqual(experienceTagSelection.generationImageContext, {
+  experienceTags:["commute", "coffee"],
+  experienceNote:null,
+});
 
 const experienceNoteSelection = selectFromRecords(
   [poolItem("pool-note-match", "media-note-match"), poolItem("pool-note-other", "media-note-other")],
   [dailyMedia("media-note-match", { experienceNote:"commute coffee office routine" }), dailyMedia("media-note-other")]
 );
 assert.equal(experienceNoteSelection.mediaId, "media-note-match");
+assert.deepEqual(experienceNoteSelection.generationImageContext, {
+  experienceTags:[],
+  experienceNote:"commute coffee office routine",
+});
 
 const existingSignalSelection = selectFromRecords(
   [poolItem("pool-existing", "media-existing"), poolItem("pool-unrelated-experience", "media-unrelated-experience")],

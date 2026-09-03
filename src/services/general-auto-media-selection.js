@@ -210,6 +210,16 @@ function textSelection(reason, candidateCount, eligibleCount) {
   };
 }
 
+function generationImageContext(media) {
+  const experienceTags = Array.isArray(media?.experienceTags)
+    ? media.experienceTags.map(text).filter(Boolean).slice(0, 12)
+    : [];
+  const experienceNote = text(media?.experienceNote).slice(0, 500);
+
+  if (!experienceTags.length && !experienceNote) return null;
+  return { experienceTags, experienceNote: experienceNote || null };
+}
+
 export function selectGeneralAutoMediaFromRecords(
   {
     poolItems = [],
@@ -289,6 +299,7 @@ export function selectGeneralAutoMediaFromRecords(
     score: selected.relevance,
     candidateCount,
     eligibleCount,
+    generationImageContext: generationImageContext(selected.media),
   };
 }
 

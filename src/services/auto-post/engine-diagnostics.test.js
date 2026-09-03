@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildCurrentTopicDiagnostic,
   buildGeneralAutoProvenance,
+  applySelectedDailyImageContext,
 } from "./engine.js";
 
 assert.deepEqual(
@@ -82,5 +83,18 @@ assert.deepEqual(
 );
 
 assert.equal(buildGeneralAutoProvenance(null, { mode: "IMAGE" }), null);
+
+const imageContextTarget = {};
+assert.deepEqual(
+  applySelectedDailyImageContext(imageContextTarget, {
+    mode:"IMAGE",
+    generationImageContext:{ experienceTags:["cafe"], experienceNote:"quiet setting" },
+  }),
+  { experienceTags:["cafe"], experienceNote:"quiet setting" }
+);
+assert.deepEqual(imageContextTarget.dailyImageContext, {
+  experienceTags:["cafe"], experienceNote:"quiet setting",
+});
+assert.equal(applySelectedDailyImageContext({}, { mode:"IMAGE" }), null);
 
 console.log("auto post engine diagnostic fixtures passed");

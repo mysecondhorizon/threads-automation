@@ -123,6 +123,32 @@ assert.ok(systemPrompts[0].includes("CUSTOM_OPERATOR_WRITING_GUIDANCE"));
 assert.ok(systemPrompts[0].includes(THREADS_VALIDATION_PROMPT));
 assert.ok(systemPrompts[0].includes(THREADS_OUTPUT_PROMPT));
 
+let dailyImageContextSeen = null;
+await generateDistinctThreadPost(
+  env,
+  {
+    products: { productDetails: [] },
+    dailyImageContext: {
+      experienceTags:["cafe", "quiet"],
+      experienceNote:"A peaceful cafe setting",
+    },
+    publishing: { goal:"Daily image context", publishSequence:1, targetFormat:repeatedTarget },
+    history: { recentFormats:[], recentSevenDayPosts:[] },
+  },
+  {
+    maxAttempts:1,
+    enforceFormatValidation:false,
+    generatePost: async (_env, context) => {
+      dailyImageContextSeen = context.dailyImageContext;
+      return { body:"A quiet cafe setting makes a small pause feel enough." };
+    },
+  }
+);
+assert.deepEqual(dailyImageContextSeen, {
+  experienceTags:["cafe", "quiet"],
+  experienceNote:"A peaceful cafe setting",
+});
+
 let similarityGenerationCalls = 0;
 const similarityTargetIds = [];
 const duplicateBody = bodyForPattern([1, 1]);

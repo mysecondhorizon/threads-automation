@@ -674,6 +674,20 @@ function normalizeCurrentTopicForContext(value) {
   };
 }
 
+function normalizeDailyImageContext(value) {
+  const experienceTags = Array.isArray(value?.experienceTags)
+    ? value.experienceTags
+      .filter((item) => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 12)
+    : [];
+  const experienceNote = String(value?.experienceNote || "").trim().slice(0, 500);
+  return experienceTags.length || experienceNote
+    ? { experienceTags, ...(experienceNote ? { experienceNote } : {}) }
+    : null;
+}
+
 function buildAiContextData(
   context
 ) {
@@ -701,6 +715,7 @@ function buildAiContextData(
     normalizeCurrentTopicForContext(
       context?.currentTopic
     );
+  const dailyImageContext = normalizeDailyImageContext(context?.dailyImageContext);
 
   return {
     meta: {
@@ -972,10 +987,13 @@ function buildAiContextData(
     ...(currentTopic
       ? { currentTopic }
       : {}),
+    ...(dailyImageContext
+      ? { dailyImageContext }
+      : {}),
   };
 }
 
-function buildGenerationInput(
+export function buildGenerationInput(
   {
     topic,
     tone,
@@ -991,7 +1009,7 @@ function buildGenerationInput(
     `작성 목표: ${topic}`,
     `기본 톤: ${tone}`,
     targetFormatIsAdvisory
-      ? "SNS에서 읽기 쉽도록 짧고 간결하게 작성하세요. publishing.targetFormat은 참고사항일 뿐이며, 보통 2~3개의 짧은 문장이 자연스럽지만 상황에 따라 더 적거나 많아도 됩니다."
+      ? "SNS에서 읽기 쉽도록 짧고 간결하게 작성하세요. 각 문장이나 생각 단위는 같은 말을 바꿔 반복하지 말고 다음 정보를 더해야 합니다. publishing.targetFormat은 참고사항일 뿐이며, 보통 2~3개의 짧은 문장이 자연스럽지만 상황에 따라 더 적거나 많아도 됩니다."
       : "세 초안 모두 publishing.targetFormat 범위 안에서 작성하되 세부 표현과 도입부는 서로 겹치지 않게 작성하세요.",
     "각 초안의 text에는 실제 게시할 본문만 작성하세요.",
     "제품 링크나 추가 안내가 필요한 경우에만 firstComment를 작성하세요.",
@@ -1038,9 +1056,18 @@ function buildGenerationInput(
       lines.push(
         "",
         "currentTopic is a factual basis for a natural persona observation, not a news summary.",
+        "Keep the currentTopic subject's core anchor clear enough that readers can understand what the post is about. Use a natural equivalent when appropriate; do not reduce a specific subject to a vague generic word.",
         "verifiedFacts are the factual boundary, not source sentences to copy. Prefer one talkingPoint when available as the everyday factual wording; otherwise use only the smallest needed verifiedFacts fragment. Use at most one fact naturally, and do not invent numbers, dates, launch details, product features, or certainty.",
         "Do not claim direct use, attendance, or personal experience. Do not start as a news report or say you saw it in the news.",
         "Use personaRelevance as everyday context and selectedAngle as the main angle. Follow forbiddenClaims and keep facts, curiosity, and preference clearly distinct."
+      );
+    }
+
+    if (contextData.dailyImageContext) {
+      lines.push(
+        "",
+        "dailyImageContext describes the Daily image selected for this post. Keep the body compatible with these grounded visual-context cues when using them.",
+        "Do not invent a visit, purchase, meal, office connection, time of day, menu, taste, ownership, or any other fact that dailyImageContext does not support."
       );
     }
   }

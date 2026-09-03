@@ -356,6 +356,16 @@ export function buildGeneralAutoProvenance(
   return provenance;
 }
 
+export function applySelectedDailyImageContext(context, mediaSelection) {
+  const imageContext = mediaSelection?.mode === "IMAGE"
+    ? mediaSelection.generationImageContext
+    : null;
+
+  if (!imageContext) return null;
+  context.dailyImageContext = imageContext;
+  return imageContext;
+}
+
 function normalizeGenerationAttemptDiagnostics(value) {
   const attempts = Array.isArray(value?.attempts)
     ? value.attempts
@@ -1109,6 +1119,40 @@ async function runExecution(
       }
     );
 
+    let plannedMediaSelection =
+      textMediaSelection();
+
+    if (
+      shouldSelectGeneralAutoMedia(
+        source,
+        generalOnly
+      ) &&
+      context.currentTopic
+    ) {
+      try {
+        plannedMediaSelection =
+          await selectGeneralAutoMedia(
+            env,
+            {
+              generatedPost: {
+                topic: context.currentTopic.subject,
+                contentType: "TEXT",
+              },
+              currentTopic: context.currentTopic,
+            }
+          );
+        applySelectedDailyImageContext(
+          context,
+          plannedMediaSelection
+        );
+      } catch {
+        plannedMediaSelection =
+          textMediaSelection(
+            "media_selection_unavailable"
+          );
+      }
+    }
+
     const generation =
       await generateDistinctThreadPost(
         env,
@@ -1150,9 +1194,13 @@ async function runExecution(
     }
 
     let mediaSelection =
-      textMediaSelection();
+      plannedMediaSelection?.mode === "IMAGE" &&
+      plannedMediaSelection?.generationImageContext
+        ? plannedMediaSelection
+        : textMediaSelection();
 
     if (
+      mediaSelection.mode === "TEXT" &&
       shouldSelectGeneralAutoMedia(
         source,
         generalOnly
@@ -1169,6 +1217,17 @@ async function runExecution(
                 null,
             }
           );
+
+        if (
+          mediaSelection.mode === "IMAGE" &&
+          mediaSelection.generationImageContext &&
+          !context.dailyImageContext
+        ) {
+          mediaSelection =
+            textMediaSelection(
+              "image_context_unavailable"
+            );
+        }
       } catch (error) {
         console.warn(
           "General AUTO media selection unavailable",

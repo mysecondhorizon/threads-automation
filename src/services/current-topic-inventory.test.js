@@ -52,6 +52,19 @@ const eligible = getEligibleCurrentTopics({ topics:[
 ] }, { at });
 assert.equal(eligible[0].subject, "OTT subscription price change affects monthly spending");
 
+const eveningAt = new Date("2026-09-01T11:00:00.000Z");
+const daytimeAt = new Date("2026-09-01T02:00:00.000Z");
+const timeFitTopics = [
+  topic({ category:"light_culture", subject:"OTT drama discussion after work" }),
+  topic({ category:"work_productivity", subject:"work calendar and lunch routine" }),
+];
+assert.equal(getEligibleCurrentTopics({ topics:timeFitTopics }, { at:eveningAt })[0].category, "light_culture");
+assert.equal(getEligibleCurrentTopics({ topics:timeFitTopics }, { at:daytimeAt })[0].category, "work_productivity");
+assert.equal(
+  getEligibleCurrentTopics({ topics:[topic({ category:"light_culture", subject:"OTT after work discussion", personaRelevance:"daily routine" })] }, { at:daytimeAt }).length,
+  1
+);
+
 const risky = prioritizeCurrentTopics([
   topic({ subject:"politics election debate" }),
   topic({ subject:"coffee price and commute routine" }),
