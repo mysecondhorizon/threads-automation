@@ -144,9 +144,11 @@ export function summarizeGeneralAutoActivity(items) {
     failedExecutions: 0,
     textCount: 0,
     imageCount: 0,
+    videoCount: 0,
     personaCount: 0,
     currentTopicCount: 0,
     imageUsagePercent: null,
+    videoUsagePercent: null,
   };
 
   for (const activity of Array.isArray(items) ? items : []) {
@@ -158,11 +160,13 @@ export function summarizeGeneralAutoActivity(items) {
     if (activity.contentBasis === "CURRENT_TOPIC") summary.currentTopicCount += 1;
     if (activity.mediaBasis === "NONE") summary.textCount += 1;
     if (activity.mediaBasis === "DAILY_IMAGE") summary.imageCount += 1;
+    if (activity.mediaBasis === "DAILY_VIDEO") summary.videoCount += 1;
   }
 
-  const knownTextOrImage = summary.textCount + summary.imageCount;
-  if (knownTextOrImage) {
-    summary.imageUsagePercent = Math.round((summary.imageCount / knownTextOrImage) * 100);
+  const knownMediaBasis = summary.textCount + summary.imageCount + summary.videoCount;
+  if (knownMediaBasis) {
+    summary.imageUsagePercent = Math.round((summary.imageCount / knownMediaBasis) * 100);
+    summary.videoUsagePercent = Math.round((summary.videoCount / knownMediaBasis) * 100);
   }
   return summary;
 }

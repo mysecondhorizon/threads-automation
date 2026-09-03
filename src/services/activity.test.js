@@ -88,9 +88,11 @@ assert.deepEqual(result.generalAutoSummary, {
   failedExecutions:1,
   textCount:1,
   imageCount:1,
+  videoCount:0,
   personaCount:1,
   currentTopicCount:1,
   imageUsagePercent:50,
+  videoUsagePercent:0,
 });
 assert.deepEqual(result.items.find((activity) => activity.id === "schedule:schedule-general"), {
   id:"schedule:schedule-general", occurredAt:"2026-08-29T03:01:00.000Z", type:"GENERAL_AUTO", status:"PUBLISHED", summary:"General AUTO 게시를 완료했습니다.", failure:null, externalPostId:"auto-post",
@@ -120,24 +122,30 @@ assert.deepEqual(empty.generalAutoSummary, {
   failedExecutions:0,
   textCount:0,
   imageCount:0,
+  videoCount:0,
   personaCount:0,
   currentTopicCount:0,
   imageUsagePercent:null,
+  videoUsagePercent:null,
 });
 assert.deepEqual(summarizeGeneralAutoActivity([
   { type:"GENERAL_AUTO", status:"PUBLISHED", contentBasis:"CURRENT_TOPIC", mediaBasis:"DAILY_IMAGE" },
+  { type:"GENERAL_AUTO", status:"SUCCESS", contentBasis:"PERSONA", mediaBasis:"DAILY_VIDEO" },
+  { type:"GENERAL_AUTO", status:"SUCCESS", mediaBasis:"NONE" },
   { type:"GENERAL_AUTO", status:"FAILED" },
   { type:"PRODUCT_REVIEW", status:"PUBLISHED", contentBasis:"PERSONA", mediaBasis:"NONE" },
   { type:"MANUAL_PUBLISH", status:"PUBLISHED", contentBasis:"PERSONA", mediaBasis:"NONE" },
 ]), {
-  totalExecutions:2,
+  totalExecutions:4,
   successfulPublishes:1,
   failedExecutions:1,
-  textCount:0,
+  textCount:1,
   imageCount:1,
-  personaCount:0,
+  videoCount:1,
+  personaCount:1,
   currentTopicCount:1,
-  imageUsagePercent:100,
+  imageUsagePercent:33,
+  videoUsagePercent:33,
 });
 const unsafeId = "https://example.com/secret?token=abc";
 const oversizedId = "x".repeat(300);
