@@ -79,7 +79,7 @@ function normalizeMediaSelection(
   return {
     mode,
     mediaId,
-    contentPoolId: mode === "IMAGE" ? contentPoolId : null,
+    contentPoolId: contentPoolId || null,
     reason:
       mediaSelection.reason ||
       null,
@@ -408,13 +408,6 @@ export async function publishGeneralAutoPost(
   }
 ) {
   const selection = normalizeMediaSelection(mediaSelection);
-  if (selection.mode === "VIDEO") {
-    throw new AutoPostEngineError(
-      "General AUTO does not support video publishing",
-      { code: "FORMAT_NOT_SUPPORTED", status: 400, step: "publishing" }
-    );
-  }
-
   let published;
   try {
     published = await publishWithResolvedApp({
@@ -473,16 +466,18 @@ export async function publishGeneralAutoPost(
     recordTrackingWarning(trackingWarnings, publishResult.postId, "post_success_log_failed");
   }
 
-  if (selection.mode === "IMAGE") {
+  if (selection.mode === "IMAGE" || selection.mode === "VIDEO") {
     try {
       await markUsed(env, selection.mediaId);
     } catch (error) {
       recordTrackingWarning(trackingWarnings, publishResult.postId, "media_usage_update_failed");
     }
-    try {
-      await markPoolUsed(env, selection.contentPoolId);
-    } catch (error) {
-      recordTrackingWarning(trackingWarnings, publishResult.postId, "content_pool_usage_update_failed");
+    if (selection.contentPoolId) {
+      try {
+        await markPoolUsed(env, selection.contentPoolId);
+      } catch (error) {
+        recordTrackingWarning(trackingWarnings, publishResult.postId, "content_pool_usage_update_failed");
+      }
     }
   }
 

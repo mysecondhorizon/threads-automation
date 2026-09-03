@@ -1,7 +1,7 @@
 import {
   getThreadsCredentialForAccount,
 } from "../connected-accounts.js";
-import { getThreadsProfile, publishImagePost, publishTextPost } from "../threads.js";
+import { getThreadsProfile, publishImagePost, publishTextPost, publishVideoPost } from "../threads.js";
 
 export class ThreadsPublisherError extends Error {
   constructor(message, { code = "PUBLISH_FAILED", status = 400 } = {}) {
@@ -34,9 +34,10 @@ export const threadsPublisher = {
       getThreadsCredentialForAccount;
     const loadProfile = dependencies.getThreadsProfile || getThreadsProfile;
     const publishImage = dependencies.publishImagePost || publishImagePost;
+    const publishVideo = dependencies.publishVideoPost || publishVideoPost;
     const publishText = dependencies.publishTextPost || publishTextPost;
     const mediaSelection = context.mediaSelection || { mode: "TEXT", mediaId: null };
-    if (mediaSelection.mode !== "TEXT" && mediaSelection.mode !== "IMAGE") {
+    if (mediaSelection.mode !== "TEXT" && mediaSelection.mode !== "IMAGE" && mediaSelection.mode !== "VIDEO") {
       throw new ThreadsPublisherError("This media mode is not supported by Threads", {
         code: "FORMAT_NOT_SUPPORTED",
       });
@@ -73,6 +74,8 @@ export const threadsPublisher = {
       const profile = await loadProfile(auth.access_token);
       const published = mediaSelection.mode === "IMAGE"
         ? await publishImage(env, auth.access_token, profile.id, content, mediaSelection.mediaId)
+        : mediaSelection.mode === "VIDEO"
+          ? await publishVideo(env, auth.access_token, profile.id, content, mediaSelection.mediaId)
         : await publishText(auth.access_token, profile.id, content);
       return {
         provider: "THREADS",

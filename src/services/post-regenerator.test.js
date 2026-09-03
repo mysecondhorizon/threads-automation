@@ -123,12 +123,12 @@ assert.ok(systemPrompts[0].includes("CUSTOM_OPERATOR_WRITING_GUIDANCE"));
 assert.ok(systemPrompts[0].includes(THREADS_VALIDATION_PROMPT));
 assert.ok(systemPrompts[0].includes(THREADS_OUTPUT_PROMPT));
 
-let dailyImageContextSeen = null;
+let dailyMediaContextSeen = null;
 await generateDistinctThreadPost(
   env,
   {
     products: { productDetails: [] },
-    dailyImageContext: {
+    dailyMediaContext: {
       experienceTags:["cafe", "quiet"],
       experienceNote:"A peaceful cafe setting",
     },
@@ -139,12 +139,12 @@ await generateDistinctThreadPost(
     maxAttempts:1,
     enforceFormatValidation:false,
     generatePost: async (_env, context) => {
-      dailyImageContextSeen = context.dailyImageContext;
+      dailyMediaContextSeen = context.dailyMediaContext;
       return { body:"A quiet cafe setting makes a small pause feel enough." };
     },
   }
 );
-assert.deepEqual(dailyImageContextSeen, {
+assert.deepEqual(dailyMediaContextSeen, {
   experienceTags:["cafe", "quiet"],
   experienceNote:"A peaceful cafe setting",
 });

@@ -210,7 +210,7 @@ function textSelection(reason, candidateCount, eligibleCount) {
   };
 }
 
-function generationImageContext(media) {
+function generationMediaContext(media) {
   const experienceTags = Array.isArray(media?.experienceTags)
     ? media.experienceTags.map(text).filter(Boolean).slice(0, 12)
     : [];
@@ -292,14 +292,14 @@ export function selectGeneralAutoMediaFromRecords(
 
   const selected = relevant[0];
   return {
-    mode: "IMAGE",
+    mode: selected.media.mediaKind === "video" ? "VIDEO" : "IMAGE",
     mediaId: text(selected.media.id),
     contentPoolId: text(selected.poolItem.id),
     reason: "matched_media",
     score: selected.relevance,
     candidateCount,
     eligibleCount,
-    generationImageContext: generationImageContext(selected.media),
+    generationMediaContext: generationMediaContext(selected.media),
   };
 }
 

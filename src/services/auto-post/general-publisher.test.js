@@ -18,6 +18,7 @@ function dependencies(overrides = {}) {
       async getThreadsProfile(token) { assert.equal(token, "token"); return { id: "user-1", username: "auto" }; },
       async publishTextPost(token, userId, text) { calls.push({ mode: "TEXT", token, userId, text }); return { postId: "text-1" }; },
       async publishImagePost(env, token, userId, text, mediaId) { calls.push({ mode: "IMAGE", env, token, userId, text, mediaId }); return { postId: "image-1" }; },
+      async publishVideoPost(env, token, userId, text, mediaId) { calls.push({ mode: "VIDEO", env, token, userId, text, mediaId }); return { postId: "video-1" }; },
       async logPostSuccess(_env, username, postId, text, metadata) { calls.push({ mode: "LOG", username, postId, text, metadata }); return "post_log:test"; },
       async updatePostLogFirstComment() {},
       async markMediaUsed(_env, mediaId) { calls.push({ mode: "MEDIA", mediaId }); },
@@ -60,8 +61,12 @@ await assert.rejects(
 );
 assert.equal(directPublishCalls, 1);
 
-await assert.rejects(
-  publishGeneralAutoPost({}, { accessToken: "token", text: "x", mediaSelection: { mode: "VIDEO", mediaId: "video-1" }, dependencies: dependencies().value }),
-  (error) => error instanceof AutoPostEngineError && error.code === "FORMAT_NOT_SUPPORTED"
-);
+const video = dependencies();
+const videoResult = await publishGeneralAutoPost({ env: "video" }, {
+  accessToken:"token", text:"video caption", mediaSelection:{ mode:"VIDEO", mediaId:"video-1", contentPoolId:"pool-video" }, dependencies:video.value,
+});
+assert.equal(videoResult.publishResult.postId, "video-1");
+assert.equal(video.calls.filter((call) => call.mode === "VIDEO").length, 1);
+assert.deepEqual(video.calls.find((call) => call.mode === "MEDIA"), { mode:"MEDIA", mediaId:"video-1" });
+assert.deepEqual(video.calls.find((call) => call.mode === "POOL"), { mode:"POOL", contentPoolId:"pool-video" });
 console.log("general auto publisher migration fixture passed");

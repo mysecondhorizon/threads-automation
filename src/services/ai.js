@@ -674,7 +674,7 @@ function normalizeCurrentTopicForContext(value) {
   };
 }
 
-function normalizeDailyImageContext(value) {
+function normalizeDailyMediaContext(value) {
   const experienceTags = Array.isArray(value?.experienceTags)
     ? value.experienceTags
       .filter((item) => typeof item === "string")
@@ -715,7 +715,7 @@ function buildAiContextData(
     normalizeCurrentTopicForContext(
       context?.currentTopic
     );
-  const dailyImageContext = normalizeDailyImageContext(context?.dailyImageContext);
+  const dailyMediaContext = normalizeDailyMediaContext(context?.dailyMediaContext);
 
   return {
     meta: {
@@ -987,8 +987,8 @@ function buildAiContextData(
     ...(currentTopic
       ? { currentTopic }
       : {}),
-    ...(dailyImageContext
-      ? { dailyImageContext }
+    ...(dailyMediaContext
+      ? { dailyMediaContext }
       : {}),
   };
 }
@@ -1063,11 +1063,11 @@ export function buildGenerationInput(
       );
     }
 
-    if (contextData.dailyImageContext) {
+    if (contextData.dailyMediaContext) {
       lines.push(
         "",
-        "dailyImageContext describes the Daily image selected for this post. Keep the body compatible with these grounded visual-context cues when using them.",
-        "Do not invent a visit, purchase, meal, office connection, time of day, menu, taste, ownership, or any other fact that dailyImageContext does not support."
+        "dailyMediaContext describes the Daily media selected for this post. Keep the body compatible with these grounded visual-context cues when using them.",
+        "Do not invent a visit, purchase, meal, office connection, time of day, menu, taste, ownership, or any other fact that dailyMediaContext does not support."
       );
     }
   }

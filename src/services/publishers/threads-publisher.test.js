@@ -10,6 +10,7 @@ const dependencies = {
   async getThreadsProfile(token) { assert.equal(token, "token"); return { id: "user-1", username: "operator" }; },
   async publishTextPost(token, userId, content) { calls.push({ token, userId, content }); return { postId: "threads-1" }; },
   async publishImagePost(env, token, userId, content, mediaId) { calls.push({ env, token, userId, content, mediaId }); return { postId: "threads-image-1" }; },
+  async publishVideoPost(env, token, userId, content, mediaId) { calls.push({ mode:"VIDEO", env, token, userId, content, mediaId }); return { postId: "threads-video-1" }; },
 };
 const published = await threadsPublisher.publish({ env: {}, content: "saved body", format: "TEXT", dependencies });
 assert.equal(published.provider, "THREADS");
@@ -31,10 +32,11 @@ const imagePublished = await threadsPublisher.publish({
 });
 assert.equal(imagePublished.externalPostId, "threads-image-1");
 assert.deepEqual(calls[1], { env: { value: "env" }, token: "token", userId: "user-1", content: "image caption", mediaId: "image-1" });
-await assert.rejects(
-  threadsPublisher.publish({ env: {}, content: "video", format: "TEXT", context: { mediaSelection: { mode: "VIDEO", mediaId: "video-1" } }, dependencies }),
-  (error) => error instanceof ThreadsPublisherError && error.code === "FORMAT_NOT_SUPPORTED"
-);
+const videoPublished = await threadsPublisher.publish({
+  env:{ value:"video-env" }, content:"video", format:"TEXT", context:{ mediaSelection:{ mode:"VIDEO", mediaId:"video-1" } }, dependencies,
+});
+assert.equal(videoPublished.externalPostId, "threads-video-1");
+assert.deepEqual(calls[2], { mode:"VIDEO", env:{ value:"video-env" }, token:"token", userId:"user-1", content:"video", mediaId:"video-1" });
 
 let resolvedOptions;
 const scopedPublished = await threadsPublisher.publish({

@@ -356,14 +356,14 @@ export function buildGeneralAutoProvenance(
   return provenance;
 }
 
-export function applySelectedDailyImageContext(context, mediaSelection) {
-  const imageContext = mediaSelection?.mode === "IMAGE"
-    ? mediaSelection.generationImageContext
+export function applySelectedDailyMediaContext(context, mediaSelection) {
+  const mediaContext = mediaSelection?.mode === "IMAGE" || mediaSelection?.mode === "VIDEO"
+    ? mediaSelection.generationMediaContext
     : null;
 
-  if (!imageContext) return null;
-  context.dailyImageContext = imageContext;
-  return imageContext;
+  if (!mediaContext) return null;
+  context.dailyMediaContext = mediaContext;
+  return mediaContext;
 }
 
 function normalizeGenerationAttemptDiagnostics(value) {
@@ -1141,7 +1141,7 @@ async function runExecution(
               currentTopic: context.currentTopic,
             }
           );
-        applySelectedDailyImageContext(
+        applySelectedDailyMediaContext(
           context,
           plannedMediaSelection
         );
@@ -1194,8 +1194,8 @@ async function runExecution(
     }
 
     let mediaSelection =
-      plannedMediaSelection?.mode === "IMAGE" &&
-      plannedMediaSelection?.generationImageContext
+      (plannedMediaSelection?.mode === "IMAGE" || plannedMediaSelection?.mode === "VIDEO") &&
+      plannedMediaSelection?.generationMediaContext
         ? plannedMediaSelection
         : textMediaSelection();
 
@@ -1219,9 +1219,9 @@ async function runExecution(
           );
 
         if (
-          mediaSelection.mode === "IMAGE" &&
-          mediaSelection.generationImageContext &&
-          !context.dailyImageContext
+          (mediaSelection.mode === "IMAGE" || mediaSelection.mode === "VIDEO") &&
+          mediaSelection.generationMediaContext &&
+          !context.dailyMediaContext
         ) {
           mediaSelection =
             textMediaSelection(

@@ -103,7 +103,7 @@ const experienceTagSelection = selectFromRecords(
   [dailyMedia("media-tag-match", { experienceTags:["commute", "coffee"] }), dailyMedia("media-tag-other")]
 );
 assert.equal(experienceTagSelection.mediaId, "media-tag-match");
-assert.deepEqual(experienceTagSelection.generationImageContext, {
+assert.deepEqual(experienceTagSelection.generationMediaContext, {
   experienceTags:["commute", "coffee"],
   experienceNote:null,
 });
@@ -113,7 +113,7 @@ const experienceNoteSelection = selectFromRecords(
   [dailyMedia("media-note-match", { experienceNote:"commute coffee office routine" }), dailyMedia("media-note-other")]
 );
 assert.equal(experienceNoteSelection.mediaId, "media-note-match");
-assert.deepEqual(experienceNoteSelection.generationImageContext, {
+assert.deepEqual(experienceNoteSelection.generationMediaContext, {
   experienceTags:[],
   experienceNote:"commute coffee office routine",
 });
@@ -146,5 +146,35 @@ const productAssetSelection = selectFromRecords(
   [dailyMedia("media-daily", { tags:["commute"] }), dailyMedia("media-product", { sourceType:"product", tags:["commute", "coffee"], experienceTags:["commute", "coffee"] })]
 );
 assert.equal(productAssetSelection.mediaId, "media-daily");
+
+const videoSelection = selectFromRecords(
+  [poolItem("pool-video", "media-video")],
+  [dailyMedia("media-video", { mediaKind:"video", tags:["commute", "coffee"], experienceNote:"quiet cafe commute stop" })]
+);
+assert.equal(videoSelection.mode, "VIDEO");
+assert.equal(videoSelection.mediaId, "media-video");
+assert.equal(videoSelection.generationMediaContext.experienceNote, "quiet cafe commute stop");
+
+const higherRelevanceImage = selectFromRecords(
+  [poolItem("pool-image-best", "media-image-best"), poolItem("pool-video", "media-video")],
+  [dailyMedia("media-image-best", { tags:["commute", "coffee"] }), dailyMedia("media-video", { mediaKind:"video", tags:["commute"] })]
+);
+assert.equal(higherRelevanceImage.mode, "IMAGE");
+assert.equal(higherRelevanceImage.mediaId, "media-image-best");
+
+const unavailableVideo = selectFromRecords(
+  [poolItem("pool-video-inactive", "media-video-inactive")],
+  [dailyMedia("media-video-inactive", { mediaKind:"video", tags:["commute"], active:false })]
+);
+assert.equal(unavailableVideo.mode, "TEXT");
+
+const irrelevantVideo = selectGeneralAutoMediaFromRecords({
+  poolItems:[{ ...poolItem("pool-irrelevant-video", "media-irrelevant-video"), topics:["beach vacation"] }],
+  mediaRecords:[dailyMedia("media-irrelevant-video", { mediaKind:"video", tags:["beach", "vacation"] })],
+  generatedPost:{ topic:"office commute", contentType:"TEXT" },
+  currentTopic:{ subject:"office commute" },
+  at:new Date("2026-09-01T00:00:00.000Z"),
+});
+assert.equal(irrelevantVideo.mode, "TEXT");
 
 console.log("workspace-aware General AUTO media selection fixtures passed");
