@@ -7,7 +7,10 @@ import {
   WORKSPACES_KEY,
 } from "../services/login-foundation.js";
 import { WorkspaceCloneError } from "../services/workspace-clone.js";
-import { handleAdminWorkspaceClone } from "./admin-workspace-clone.js";
+import {
+  handleAdminWorkspaceClone,
+  handleAdminWorkspaceClonePreflight,
+} from "./admin-workspace-clone.js";
 
 const NOW = "2026-08-30T00:00:00.000Z";
 const EXPIRES = "2099-08-30T00:00:00.000Z";
@@ -165,6 +168,64 @@ test("registered session runner rejects caller workspace ids and wrong confirmat
   assert.equal(suppliedDestination.status, 400);
   assert.equal(wrongConfirmation.status, 400);
   assert.equal(calls, 0);
+});
+
+test("registered session preflight returns only selected Workspace occupancy without clone invocation", async () => {
+  let cloneCalls = 0;
+  const response = await handleAdminWorkspaceClonePreflight(
+    request("GET", undefined, "registered"),
+    createEnv("registered"),
+    {
+      inspect: async (_env, workspaceId) => {
+        assert.equal(workspaceId, "workspace-registered");
+        return {
+          promptProfile: { empty: false },
+          products: { empty: false, count: 2, records: ["secret"] },
+          media: { empty: true, count: 0, records: ["secret"] },
+          contentPool: { empty: false, count: 1, records: ["secret"] },
+          destinationEmpty: false,
+        };
+      },
+      clone: async () => { cloneCalls += 1; },
+    },
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual(payload, {
+    ok: true,
+    destination: { workspaceId: "workspace-registered", name: "Workspace workspace-registered" },
+    stores: {
+      promptProfile: { empty: false },
+      products: { empty: false, count: 2 },
+      media: { empty: true, count: 0 },
+      contentPool: { empty: false, count: 1 },
+    },
+    destinationEmpty: false,
+  });
+  assert.equal(JSON.stringify(payload).includes("secret"), false);
+  assert.equal(cloneCalls, 0);
+});
+
+test("registered session preflight rejects legacy, missing, default, foreign, inactive, and missing Workspace selections", async () => {
+  const legacy = await handleAdminWorkspaceClonePreflight(request("GET"), createEnv());
+  assert.equal(legacy.status, 403);
+
+  const cases = [
+    [null, []],
+    ["default-workspace", []],
+    ["workspace-foreign", [workspace({ id: "workspace-foreign", ownerUserId: "user-other" })]],
+    ["workspace-inactive", [workspace({ id: "workspace-inactive", active: false })]],
+    ["workspace-missing", []],
+  ];
+  for (const [selectedWorkspaceId, workspaces] of cases) {
+    const response = await handleAdminWorkspaceClonePreflight(
+      request("GET", undefined, "registered"),
+      createEnv("registered", { selectedWorkspaceId, workspaces }),
+    );
+    assert.equal(response.status, 400);
+  }
 });
 
 test("workspace clone route is POST-only and rejects invalid confirmation or required ids without mutation", async () => {

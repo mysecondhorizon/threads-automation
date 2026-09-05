@@ -10,6 +10,7 @@ import { listContentPool } from "./content-pool.js";
 import {
   WorkspaceCloneError,
   cloneWorkspace,
+  getCloneDestinationOccupancy,
   preflightWorkspaceClone,
 } from "./workspace-clone.js";
 
@@ -231,6 +232,20 @@ function cloneInput() {
     destinationWorkspaceId: DESTINATION,
   };
 }
+
+test("clone destination occupancy uses the same scoped stores as preflight without exposing records", async () => {
+  const { env } = createEnv({ destinationData: "products" });
+  const occupancy = await getCloneDestinationOccupancy(env, DESTINATION);
+
+  assert.deepEqual(occupancy, {
+    promptProfile: { empty: true },
+    products: { empty: false, count: 1 },
+    media: { empty: true, count: 0 },
+    contentPool: { empty: true, count: 0 },
+    destinationEmpty: false,
+  });
+  assert.equal(JSON.stringify(occupancy).includes("Source Product"), false);
+});
 
 function writeEvents(events) {
   return events.filter((event) => event.includes(":put:") || event.startsWith("r2:put:"));

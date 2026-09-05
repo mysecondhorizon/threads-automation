@@ -80,7 +80,10 @@ import {
   handleAdminPostPage,
   handleAdminPost,
 } from "./routes/admin.js";
-import { handleAdminWorkspaceClone } from "./routes/admin-workspace-clone.js";
+import {
+  handleAdminWorkspaceClone,
+  handleAdminWorkspaceClonePreflight,
+} from "./routes/admin-workspace-clone.js";
 
 import {
   handleAdminHomePage,
@@ -276,6 +279,10 @@ export default {
       method === "POST"
     ) {
       return handleAdminLogout(request, env);
+    }
+
+    if (pathname === "/admin/maintenance/workspace-clone/preflight") {
+      return handleAdminWorkspaceClonePreflight(request, env);
     }
 
     if (pathname === "/admin/maintenance/workspace-clone") {

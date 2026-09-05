@@ -92,14 +92,28 @@ function validateWorkspacePair(source, destination) {
 }
 
 function validateDestinationEmpty(destinationState) {
-  if (
-    destinationState.promptProfilePersisted ||
-    destinationState.products.length ||
-    destinationState.media.length ||
-    destinationState.contentPool.length
-  ) {
+  if (!destinationState.destinationEmpty) {
     fail("Destination Workspace must be empty before cloning", "workspace_clone_destination_not_empty");
   }
+}
+
+export async function getCloneDestinationOccupancy(env, workspaceId) {
+  const [promptProfilePersisted, products, media, contentPool] = await Promise.all([
+    hasPersistedPromptProfile(env, workspaceId),
+    getProducts(env, workspaceId),
+    listMedia(env, {}, workspaceId),
+    listContentPool(env, {}, workspaceId),
+  ]);
+  const stores = {
+    promptProfile: { empty: !promptProfilePersisted },
+    products: { empty: products.length === 0, count: products.length },
+    media: { empty: media.length === 0, count: media.length },
+    contentPool: { empty: contentPool.length === 0, count: contentPool.length },
+  };
+  return Object.freeze({
+    ...stores,
+    destinationEmpty: Object.values(stores).every((store) => store.empty),
+  });
 }
 
 function validateSourceLimits(sourceState) {
@@ -203,18 +217,8 @@ export async function preflightWorkspaceClone(
     ]);
     validateWorkspacePair(sourceWorkspace, destinationWorkspace);
 
-    const [promptProfilePersisted, destinationProducts, destinationMedia, destinationContentPool] = await Promise.all([
-      hasPersistedPromptProfile(env, destinationWorkspace.id),
-      getProducts(env, destinationWorkspace.id),
-      listMedia(env, {}, destinationWorkspace.id),
-      listContentPool(env, {}, destinationWorkspace.id),
-    ]);
-    validateDestinationEmpty({
-      promptProfilePersisted,
-      products: destinationProducts,
-      media: destinationMedia,
-      contentPool: destinationContentPool,
-    });
+    const destinationState = await getCloneDestinationOccupancy(env, destinationWorkspace.id);
+    validateDestinationEmpty(destinationState);
 
     const [promptProfile, products, media, contentPool] = await Promise.all([
       getEffectivePromptProfile(env, sourceWorkspace.id),

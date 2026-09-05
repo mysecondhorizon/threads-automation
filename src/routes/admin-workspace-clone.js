@@ -1,7 +1,11 @@
 import { resolveCurrentSession } from "../middleware/auth.js";
 import { getWorkspaceForOwner } from "../services/login-foundation.js";
 import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
-import { WorkspaceCloneError, cloneWorkspace } from "../services/workspace-clone.js";
+import {
+  WorkspaceCloneError,
+  cloneWorkspace,
+  getCloneDestinationOccupancy,
+} from "../services/workspace-clone.js";
 
 const CONFIRMATION = "CLONE_WORKSPACE";
 const ALLOWED_INPUT_KEYS = new Set([
@@ -45,6 +49,23 @@ function sanitizeCreated(created) {
   };
 }
 
+function sanitizeOccupancy(occupancy) {
+  const count = (store) => Number.isSafeInteger(store?.count) && store.count >= 0
+    ? store.count
+    : 0;
+  const promptProfile = { empty: occupancy?.promptProfile?.empty === true };
+  const products = { empty: occupancy?.products?.empty === true, count: count(occupancy?.products) };
+  const media = { empty: occupancy?.media?.empty === true, count: count(occupancy?.media) };
+  const contentPool = { empty: occupancy?.contentPool?.empty === true, count: count(occupancy?.contentPool) };
+  return {
+    promptProfile,
+    products,
+    media,
+    contentPool,
+    destinationEmpty: promptProfile.empty && products.empty && media.empty && contentPool.empty,
+  };
+}
+
 async function parseInput(request, allowedKeys) {
   let input;
   try {
@@ -76,9 +97,19 @@ async function resolveCloneInput(request, env, current) {
   }
 
   const input = await parseInput(request, new Set(["confirm"]));
+  const destinationWorkspace = await resolveRegisteredDestination(env, current);
+  if (!input || !destinationWorkspace) return null;
+
+  return {
+    sourceWorkspaceId: DEFAULT_WORKSPACE_ID,
+    destinationWorkspaceId: destinationWorkspace.id,
+  };
+}
+
+async function resolveRegisteredDestination(env, current) {
+  if (current.session.legacy) return null;
   const selectedWorkspaceId = current.session.selectedWorkspaceId;
   if (
-    !input ||
     !isWorkspaceId(selectedWorkspaceId) ||
     selectedWorkspaceId === DEFAULT_WORKSPACE_ID
   ) {
@@ -92,10 +123,43 @@ async function resolveCloneInput(request, env, current) {
   );
   if (!destinationWorkspace?.active) return null;
 
-  return {
-    sourceWorkspaceId: DEFAULT_WORKSPACE_ID,
-    destinationWorkspaceId: destinationWorkspace.id,
-  };
+  return destinationWorkspace?.active ? destinationWorkspace : null;
+}
+
+export async function handleAdminWorkspaceClonePreflight(
+  request,
+  env,
+  { inspect = getCloneDestinationOccupancy } = {},
+) {
+  if (request.method !== "GET") return failure("Method Not Allowed", 405);
+
+  const current = await resolveCurrentSession(request, env);
+  if (!current) return failure("Unauthorized", 401);
+  if (current.session.legacy) return failure("Forbidden", 403);
+  const destinationWorkspace = await resolveRegisteredDestination(env, current);
+  if (!destinationWorkspace) return failure("Invalid workspace clone request", 400);
+
+  try {
+    const occupancy = sanitizeOccupancy(await inspect(env, destinationWorkspace.id));
+    return response({
+      ok: true,
+      destination: {
+        workspaceId: destinationWorkspace.id,
+        name: destinationWorkspace.name,
+      },
+      stores: {
+        promptProfile: occupancy.promptProfile,
+        products: occupancy.products,
+        media: occupancy.media,
+        contentPool: occupancy.contentPool,
+      },
+      destinationEmpty: occupancy.destinationEmpty,
+    }, 200);
+  } catch {
+    return failure("Workspace clone preflight failed", 500, {
+      code: "workspace_clone_preflight_failed",
+    });
+  }
 }
 
 export async function handleAdminWorkspaceClone(
