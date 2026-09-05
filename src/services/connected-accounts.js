@@ -420,6 +420,48 @@ export async function resolveConnectedAccount(
   return account;
 }
 
+/**
+ * Chooses the single active Threads account available to a Workspace. This is
+ * intentionally server-owned: callers never supply an account id to select a
+ * publishing credential.
+ */
+export async function resolveWorkspaceThreadsConnectedAccount(
+  env,
+  {
+    workspaceId,
+  } = {}
+) {
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
+  const activeAccounts = (await readConnectedAccounts(env)).filter(
+    (account) =>
+      account.workspaceId === resolvedWorkspaceId &&
+      account.active
+  );
+  const threadsAccounts = activeAccounts.filter(
+    (account) => account.platform === "THREADS"
+  );
+
+  if (!threadsAccounts.length) {
+    fail(
+      activeAccounts.length
+        ? "Connected Account platform is not supported"
+        : "Connected Account was not found",
+      activeAccounts.length
+        ? "connected_account_platform_unsupported"
+        : "connected_account_not_found"
+    );
+  }
+
+  if (threadsAccounts.length !== 1) {
+    fail(
+      "Connected Account is ambiguous",
+      "connected_account_ambiguous"
+    );
+  }
+
+  return threadsAccounts[0];
+}
+
 export function resolveCredentialRef(
   account
 ) {

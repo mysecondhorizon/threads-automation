@@ -1,5 +1,11 @@
 import { requireAdminApiSession } from "../middleware/auth.js";
 import {
+  ConnectedAccountError,
+  resolveWorkspaceThreadsConnectedAccount,
+} from "../services/connected-accounts.js";
+import { resolveExecutionContext } from "../services/execution-context.js";
+import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
+import {
   PostsError,
   createPost,
   deletePost,
@@ -18,6 +24,11 @@ function apiError(error) {
   }
   if (error instanceof OperatorPublishError) {
     return fail(error.message, error.status, { code: error.code });
+  }
+  if (error instanceof ConnectedAccountError) {
+    return fail("Threads account is not available for this workspace", 409, {
+      code: "threads_account_unavailable",
+    });
   }
   console.error(error);
   return fail("Posts API Error", 400);
@@ -46,8 +57,19 @@ async function releasePublishLock(env, lock) {
   if (stored?.token === lock.token) await deleteKey(env, lock.key);
 }
 
-export async function handlePostPublish(request, env, postId, { publish = publishOperatorPost } = {}) {
-  const authorization = await requireAdminApiSession(request, env);
+export async function handlePostPublish(
+  request,
+  env,
+  postId,
+  {
+    publish = publishOperatorPost,
+    resolveThreadsAccount = resolveWorkspaceThreadsConnectedAccount,
+    resolveContext = resolveExecutionContext,
+  } = {}
+) {
+  const authorization = await requireAdminApiSession(request, env, {
+    allowSelectedWorkspace: true,
+  });
   if (!authorization.ok) return authorization.response;
   if (request.method !== "POST") return fail("Method Not Allowed", 405);
   if (activeOperatorPublishes.has(postId)) {
@@ -61,7 +83,7 @@ export async function handlePostPublish(request, env, postId, { publish = publis
     if (!lock) {
       return fail("This post is already being published", 409, { code: "post_publish_in_progress" });
     }
-    const post = await getPost(env, postId);
+    const post = await getPost(env, postId, authorization.workspaceId);
     if (!post) return fail("Post not found", 404, { code: "post_not_found" });
     // Recheck immediately before the side effect. The publish service repeats
     // format/content checks, while this route owns the state boundary.
@@ -71,8 +93,22 @@ export async function handlePostPublish(request, env, postId, { publish = publis
         status: 409,
       });
     }
-    const published = await publish({ env, post });
-    const updatedPost = await markPostPublished(env, postId, published.postId);
+    const executionContext =
+      !authorization.session.legacy &&
+      authorization.workspaceId !== DEFAULT_WORKSPACE_ID
+        ? await resolveContext(env, {
+          workspaceId: authorization.workspaceId,
+          connectedAccountId: (
+            await resolveThreadsAccount(env, {
+              workspaceId: authorization.workspaceId,
+            })
+          ).id,
+        })
+        : null;
+    const published = await publish({ env, post, executionContext });
+    const updatedPost = await markPostPublished(env, postId, published.postId, {
+      workspaceId: authorization.workspaceId,
+    });
     if (!updatedPost) return fail("Post not found", 404, { code: "post_not_found" });
     return ok({
       post: updatedPost,

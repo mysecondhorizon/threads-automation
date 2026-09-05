@@ -11,6 +11,7 @@ import {
   resolveConnectedAccount,
   resolveCredentialRef,
   resolvePendingThreadsConnectedAccount,
+  resolveWorkspaceThreadsConnectedAccount,
 } from "./connected-accounts.js";
 
 import {
@@ -438,6 +439,53 @@ test("workspace validation fails explicitly", async () => {
       workspaceId: " ",
     }),
     "connected_account_workspace_invalid"
+  );
+});
+
+test("Workspace Threads publish selection is active, scoped, and unambiguous", async () => {
+  const selected = account();
+  const { env } = createEnv({
+    [CONNECTED_ACCOUNTS_KEY]: {
+      version: 1,
+      records: [
+        selected,
+        account({ id: "threads-workspace-b", workspaceId: "workspace-b" }),
+        account({ id: "inactive-threads", active: false }),
+      ],
+    },
+  });
+
+  assert.equal(
+    (await resolveWorkspaceThreadsConnectedAccount(env, {
+      workspaceId: "workspace-a",
+    })).id,
+    selected.id,
+  );
+
+  await expectCode(
+    () => resolveWorkspaceThreadsConnectedAccount(env, { workspaceId: "workspace-missing" }),
+    "connected_account_not_found",
+  );
+  const { env: ambiguousEnv } = createEnv({
+    [CONNECTED_ACCOUNTS_KEY]: {
+      version: 1,
+      records: [selected, account({ id: "threads-workspace-a-2" })],
+    },
+  });
+  await expectCode(
+    () => resolveWorkspaceThreadsConnectedAccount(ambiguousEnv, { workspaceId: "workspace-a" }),
+    "connected_account_ambiguous",
+  );
+
+  const { env: unsupportedEnv } = createEnv({
+    [CONNECTED_ACCOUNTS_KEY]: {
+      version: 1,
+      records: [account({ platform: "WORDPRESS" })],
+    },
+  });
+  await expectCode(
+    () => resolveWorkspaceThreadsConnectedAccount(unsupportedEnv, { workspaceId: "workspace-a" }),
+    "connected_account_platform_unsupported",
   );
 });
 

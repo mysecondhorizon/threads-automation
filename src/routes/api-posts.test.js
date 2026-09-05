@@ -17,6 +17,9 @@ function createEnv() {
       async put(key, value) {
         values.set(key, value);
       },
+      async delete(key) {
+        values.delete(key);
+      },
     },
   };
 }
@@ -77,16 +80,111 @@ const deletedResponse = await handlePostById(request(`/api/posts/${created.id}`,
 assert.equal(deletedResponse.status, 200);
 assert.deepEqual(await deletedResponse.json(), { ok: true });
 
+const legacyReadyResponse = await handlePostsCollection(
+  request("/api/posts", "POST", {
+    body: "Legacy publish",
+    status: "READY",
+    sourceType: "MANUAL",
+  }),
+  env,
+  new URL("https://example.test/api/posts"),
+);
+const legacyReadyPost = (await legacyReadyResponse.json()).post;
+let legacyPublishOptions = null;
+const legacyPublishResponse = await handlePostPublish(
+  request(`/api/posts/${legacyReadyPost.id}/publish`, "POST"),
+  env,
+  legacyReadyPost.id,
+  {
+    async publish(options) {
+      legacyPublishOptions = options;
+      return { app: "THREADS", postId: "legacy-external" };
+    },
+  },
+);
+assert.equal(legacyPublishResponse.status, 200);
+assert.equal(legacyPublishOptions.executionContext, null);
+
 const scopedValues = new Map([
   [USERS_KEY, JSON.stringify({ version: 1, users: [{ id: "user-next", loginId: "next", displayName: "Next", active: true, createdAt: "2026-01-01", updatedAt: "2026-01-01" }] })],
   [WORKSPACES_KEY, JSON.stringify({ version: 1, workspaces: [{ id: "workspace-next", ownerUserId: "user-next", name: "Next", active: true, createdAt: "2026-01-01", updatedAt: "2026-01-01" }] })],
   [`${ADMIN_SESSION_KEY_PREFIX}registered`, JSON.stringify({ version: 1, userId: "user-next", selectedWorkspaceId: "workspace-next", createdAt: "2026-01-01", expiresAt: "2099-01-01" })],
 ]);
-const scopedEnv = { THREADS_KV: { async get(key, type) { const value = scopedValues.get(key) ?? null; return type === "json" && value !== null ? JSON.parse(value) : value; }, async put(key, value) { scopedValues.set(key, value); } } };
+const scopedEnv = { THREADS_KV: { async get(key, type) { const value = scopedValues.get(key) ?? null; return type === "json" && value !== null ? JSON.parse(value) : value; }, async put(key, value) { scopedValues.set(key, value); }, async delete(key) { scopedValues.delete(key); } } };
 const scopedRequest = (path, method = "GET", body) => new Request(`https://example.test${path}`, { method, headers: { cookie: "admin_session=registered", ...(body === undefined ? {} : { "content-type": "application/json" }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
-const scopedCreated = await handlePostsCollection(scopedRequest("/api/posts", "POST", { body: "Workspace draft", sourceType: "MANUAL" }), scopedEnv, new URL("https://example.test/api/posts"));
+const scopedCreated = await handlePostsCollection(scopedRequest("/api/posts", "POST", { body: "Workspace draft", status: "READY", sourceType: "MANUAL" }), scopedEnv, new URL("https://example.test/api/posts"));
 assert.equal(scopedCreated.status, 201);
 const scopedPost = (await scopedCreated.json()).post;
 assert.equal(scopedPost.workspaceId, "workspace-next");
 assert.equal((await handlePostPublish(scopedRequest(`/api/posts/${scopedPost.id}/publish`, "POST"), scopedEnv, scopedPost.id)).status, 409);
+
+scopedValues.set("operator_connected_accounts:v1", JSON.stringify({
+  version: 1,
+  records: [{
+    id: "threads-next",
+    workspaceId: "workspace-next",
+    platform: "THREADS",
+    displayName: "Next Threads",
+    active: true,
+    authRef: "connected_account_auth:threads-next",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  }],
+}));
+let scopedPublishOptions = null;
+const scopedPublishResponse = await handlePostPublish(
+  scopedRequest(`/api/posts/${scopedPost.id}/publish`, "POST"),
+  scopedEnv,
+  scopedPost.id,
+  {
+    async publish(options) {
+      scopedPublishOptions = options;
+      return { app: "THREADS", postId: "external-next" };
+    },
+  },
+);
+assert.equal(scopedPublishResponse.status, 200);
+assert.deepEqual(scopedPublishOptions.executionContext, {
+  workspaceId: "workspace-next",
+  connectedAccountId: "threads-next",
+  connectedAccount: {
+    id: "threads-next",
+    workspaceId: "workspace-next",
+    platform: "THREADS",
+    displayName: "Next Threads",
+    active: true,
+  },
+});
+assert.equal("authRef" in scopedPublishOptions.executionContext.connectedAccount, false);
+assert.equal(scopedValues.has("threads_auth"), false);
+
+const foreignPostStore = JSON.parse(scopedValues.get("operator_posts:v1"));
+foreignPostStore.records.push({
+  ...scopedPost,
+  id: "foreign-post",
+  workspaceId: "default-workspace",
+  status: "READY",
+  createdAt: "2026-01-02T00:00:00.000Z",
+  updatedAt: "2026-01-02T00:00:00.000Z",
+});
+scopedValues.set("operator_posts:v1", JSON.stringify(foreignPostStore));
+let foreignPublishCalled = false;
+const foreignPublishResponse = await handlePostPublish(
+  scopedRequest("/api/posts/foreign-post/publish", "POST"),
+  scopedEnv,
+  "foreign-post",
+  { async publish() { foreignPublishCalled = true; } },
+);
+assert.equal(foreignPublishResponse.status, 404);
+assert.equal(foreignPublishCalled, false);
+
+const scopeOverride = await handlePostsCollection(
+  scopedRequest("/api/posts", "POST", {
+    body: "No scope override",
+    workspaceId: "default-workspace",
+  }),
+  scopedEnv,
+  new URL("https://example.test/api/posts"),
+);
+assert.equal(scopeOverride.status, 400);
 console.log("posts API fixture passed");
