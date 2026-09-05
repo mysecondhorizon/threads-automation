@@ -1,4 +1,5 @@
 import { getJson, putJson } from "./kv.js";
+import { DEFAULT_WORKSPACE_ID } from "./workspace-foundation.js";
 
 export const OPERATOR_POSTS_KEY = "operator_posts:v1";
 
@@ -89,6 +90,12 @@ function isIsoDate(value) {
   return typeof value === "string" && !Number.isNaN(Date.parse(value));
 }
 
+function normalizeWorkspaceId(workspaceId) {
+  if (workspaceId === undefined || workspaceId === null) return DEFAULT_WORKSPACE_ID;
+  if (typeof workspaceId !== "string" || !workspaceId.trim()) invalid("workspaceId is invalid");
+  return workspaceId.trim();
+}
+
 function normalizeStoredPost(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new PostsError("Post store contains an invalid record", { code: "invalid_post_store" });
@@ -107,6 +114,7 @@ function normalizeStoredPost(value) {
     updatedAt: value.updatedAt,
     publishedAt: value.publishedAt,
     publishedPostId: value.publishedPostId,
+    workspaceId: normalizeWorkspaceId(value.workspaceId),
   };
 
   if (typeof post.id !== "string" || !post.id.trim()) {
@@ -189,20 +197,22 @@ function normalizeFilters(filters = {}) {
   return normalized;
 }
 
-export async function listPosts(env, filters = {}) {
+export async function listPosts(env, filters = {}, workspaceId) {
   const store = await readStore(env);
   const normalizedFilters = normalizeFilters(filters);
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
   return sortNewestUpdated(store.records.filter((post) => Object.entries(normalizedFilters)
-    .every(([fieldName, value]) => post[fieldName] === value)));
+    .every(([fieldName, value]) => post[fieldName] === value) && post.workspaceId === resolvedWorkspaceId));
 }
 
-export async function getPost(env, postId) {
+export async function getPost(env, postId, workspaceId) {
   if (typeof postId !== "string" || !postId.trim()) invalid("postId is required");
   const store = await readStore(env);
-  return store.records.find((post) => post.id === postId) || null;
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
+  return store.records.find((post) => post.id === postId && post.workspaceId === resolvedWorkspaceId) || null;
 }
 
-export async function createPost(env, input, { now = new Date().toISOString(), idFactory = () => crypto.randomUUID() } = {}) {
+export async function createPost(env, input, { now = new Date().toISOString(), idFactory = () => crypto.randomUUID(), workspaceId } = {}) {
   requirePlainObject(input, "post");
   assertKnownFields(input, CREATE_FIELDS);
   const status = normalizeEnum(input.status, WRITABLE_STATUSES, "status", "DRAFT");
@@ -219,6 +229,7 @@ export async function createPost(env, input, { now = new Date().toISOString(), i
     updatedAt: now,
     publishedAt: null,
     publishedPostId: null,
+    workspaceId: normalizeWorkspaceId(workspaceId),
   };
   if (typeof post.id !== "string" || !post.id.trim()) invalid("Generated post id is invalid");
 
@@ -230,12 +241,13 @@ export async function createPost(env, input, { now = new Date().toISOString(), i
   return post;
 }
 
-export async function updatePost(env, postId, input, { now = new Date().toISOString() } = {}) {
+export async function updatePost(env, postId, input, { now = new Date().toISOString(), workspaceId } = {}) {
   if (typeof postId !== "string" || !postId.trim()) invalid("postId is required");
   requirePlainObject(input, "post");
   assertKnownFields(input, UPDATE_FIELDS);
   const store = await readStore(env);
-  const index = store.records.findIndex((post) => post.id === postId);
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
+  const index = store.records.findIndex((post) => post.id === postId && post.workspaceId === resolvedWorkspaceId);
   if (index < 0) return null;
 
   const existing = store.records[index];
@@ -264,13 +276,14 @@ export async function updatePost(env, postId, input, { now = new Date().toISOStr
 
 // This transition is separate from ordinary CRUD. Only the publishing path
 // may set server-managed publication fields.
-export async function markPostPublished(env, postId, publishedPostId, { now = new Date().toISOString() } = {}) {
+export async function markPostPublished(env, postId, publishedPostId, { now = new Date().toISOString(), workspaceId } = {}) {
   if (typeof postId !== "string" || !postId.trim()) invalid("postId is required");
   if (typeof publishedPostId !== "string" || !publishedPostId.trim()) {
     throw new PostsError("Published post id is required", { code: "invalid_published_post_id" });
   }
   const store = await readStore(env);
-  const index = store.records.findIndex((post) => post.id === postId);
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
+  const index = store.records.findIndex((post) => post.id === postId && post.workspaceId === resolvedWorkspaceId);
   if (index < 0) return null;
   const existing = store.records[index];
   if (existing.status !== "READY") {
@@ -292,14 +305,15 @@ export async function markPostPublished(env, postId, publishedPostId, { now = ne
   return published;
 }
 
-export async function deletePost(env, postId, { now = new Date().toISOString() } = {}) {
+export async function deletePost(env, postId, { now = new Date().toISOString(), workspaceId } = {}) {
   if (typeof postId !== "string" || !postId.trim()) invalid("postId is required");
   const store = await readStore(env);
-  const post = store.records.find((record) => record.id === postId);
+  const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId);
+  const post = store.records.find((record) => record.id === postId && record.workspaceId === resolvedWorkspaceId);
   if (!post) return null;
   if (post.status === "PUBLISHED") {
     throw new PostsError("Published posts cannot be deleted", { code: "published_post_delete_forbidden", status: 400 });
   }
-  await writeStore(env, store.records.filter((record) => record.id !== postId), now);
+  await writeStore(env, store.records.filter((record) => record.id !== postId || record.workspaceId !== resolvedWorkspaceId), now);
   return true;
 }

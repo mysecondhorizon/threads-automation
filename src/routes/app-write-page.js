@@ -1,6 +1,8 @@
 import { requireAdminSession } from "../middleware/auth.js";
+import { resolveCurrentAppContext } from "../services/app-context.js";
+import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
 import { buildWritePageClientScript } from "./app-write-client.js";
-import { renderAppShell } from "./app-shell.js";
+import { renderAppShell, renderAppWorkspaceUnavailable } from "./app-shell.js";
 
 function renderWritePageContent() {
   return `<style>
@@ -92,10 +94,13 @@ function renderWritePageContent() {
 export async function handleAppWritePage(request, env) {
   const auth = await requireAdminSession(request, env);
   if (!auth.ok) return auth.response;
+  const appContext = await resolveCurrentAppContext(request, env);
+  if (!auth.session.legacy && (!auth.session.selectedWorkspaceId || (auth.session.selectedWorkspaceId !== DEFAULT_WORKSPACE_ID && !appContext?.currentWorkspace))) return renderAppWorkspaceUnavailable(appContext, "/app/write");
   return renderAppShell({
     activePath: "/app/write",
     title: "글 작성",
     description: "직접 작성한 글을 저장하고 게시 준비 상태를 관리합니다.",
     content: renderWritePageContent(),
+    appContext,
   });
 }

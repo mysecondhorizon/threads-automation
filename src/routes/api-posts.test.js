@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import {
   handlePostById,
+  handlePostPublish,
   handlePostsCollection,
 } from "./api-posts.js";
+import { ADMIN_SESSION_KEY_PREFIX, USERS_KEY, WORKSPACES_KEY } from "../services/login-foundation.js";
 
 function createEnv() {
   const values = new Map([["admin_session:session-1", "valid"]]);
@@ -74,4 +76,17 @@ assert.equal(missingResponse.status, 404);
 const deletedResponse = await handlePostById(request(`/api/posts/${created.id}`, "DELETE"), env, created.id);
 assert.equal(deletedResponse.status, 200);
 assert.deepEqual(await deletedResponse.json(), { ok: true });
+
+const scopedValues = new Map([
+  [USERS_KEY, JSON.stringify({ version: 1, users: [{ id: "user-next", loginId: "next", displayName: "Next", active: true, createdAt: "2026-01-01", updatedAt: "2026-01-01" }] })],
+  [WORKSPACES_KEY, JSON.stringify({ version: 1, workspaces: [{ id: "workspace-next", ownerUserId: "user-next", name: "Next", active: true, createdAt: "2026-01-01", updatedAt: "2026-01-01" }] })],
+  [`${ADMIN_SESSION_KEY_PREFIX}registered`, JSON.stringify({ version: 1, userId: "user-next", selectedWorkspaceId: "workspace-next", createdAt: "2026-01-01", expiresAt: "2099-01-01" })],
+]);
+const scopedEnv = { THREADS_KV: { async get(key, type) { const value = scopedValues.get(key) ?? null; return type === "json" && value !== null ? JSON.parse(value) : value; }, async put(key, value) { scopedValues.set(key, value); } } };
+const scopedRequest = (path, method = "GET", body) => new Request(`https://example.test${path}`, { method, headers: { cookie: "admin_session=registered", ...(body === undefined ? {} : { "content-type": "application/json" }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+const scopedCreated = await handlePostsCollection(scopedRequest("/api/posts", "POST", { body: "Workspace draft", sourceType: "MANUAL" }), scopedEnv, new URL("https://example.test/api/posts"));
+assert.equal(scopedCreated.status, 201);
+const scopedPost = (await scopedCreated.json()).post;
+assert.equal(scopedPost.workspaceId, "workspace-next");
+assert.equal((await handlePostPublish(scopedRequest(`/api/posts/${scopedPost.id}/publish`, "POST"), scopedEnv, scopedPost.id)).status, 409);
 console.log("posts API fixture passed");

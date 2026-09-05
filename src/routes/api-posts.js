@@ -47,8 +47,8 @@ async function releasePublishLock(env, lock) {
 }
 
 export async function handlePostPublish(request, env, postId, { publish = publishOperatorPost } = {}) {
-  const unauthorized = await authorize(request, env);
-  if (unauthorized) return unauthorized;
+  const authorization = await requireAdminApiSession(request, env);
+  if (!authorization.ok) return authorization.response;
   if (request.method !== "POST") return fail("Method Not Allowed", 405);
   if (activeOperatorPublishes.has(postId)) {
     return fail("This post is already being published", 409, { code: "post_publish_in_progress" });
@@ -91,8 +91,7 @@ export async function handlePostPublish(request, env, postId, { publish = publis
 }
 
 async function authorize(request, env) {
-  const auth = await requireAdminApiSession(request, env);
-  return auth.ok ? null : auth.response;
+  return requireAdminApiSession(request, env, { allowSelectedWorkspace: true });
 }
 
 function getFilters(url) {
@@ -112,15 +111,15 @@ async function readJson(request) {
 }
 
 export async function handlePostsCollection(request, env, url) {
-  const unauthorized = await authorize(request, env);
-  if (unauthorized) return unauthorized;
+  const authorization = await authorize(request, env);
+  if (!authorization.ok) return authorization.response;
 
   try {
     if (request.method === "GET") {
-      return ok({ posts: await listPosts(env, getFilters(url)) });
+      return ok({ posts: await listPosts(env, getFilters(url), authorization.workspaceId) });
     }
     if (request.method === "POST") {
-      const post = await createPost(env, await readJson(request));
+      const post = await createPost(env, await readJson(request), { workspaceId: authorization.workspaceId });
       return ok({ post }, 201);
     }
     return fail("Method Not Allowed", 405);
@@ -130,20 +129,20 @@ export async function handlePostsCollection(request, env, url) {
 }
 
 export async function handlePostById(request, env, postId) {
-  const unauthorized = await authorize(request, env);
-  if (unauthorized) return unauthorized;
+  const authorization = await authorize(request, env);
+  if (!authorization.ok) return authorization.response;
 
   try {
     if (request.method === "GET") {
-      const post = await getPost(env, postId);
+      const post = await getPost(env, postId, authorization.workspaceId);
       return post ? ok({ post }) : fail("Post not found", 404, { code: "post_not_found" });
     }
     if (request.method === "PATCH") {
-      const post = await updatePost(env, postId, await readJson(request));
+      const post = await updatePost(env, postId, await readJson(request), { workspaceId: authorization.workspaceId });
       return post ? ok({ post }) : fail("Post not found", 404, { code: "post_not_found" });
     }
     if (request.method === "DELETE") {
-      const deleted = await deletePost(env, postId);
+      const deleted = await deletePost(env, postId, { workspaceId: authorization.workspaceId });
       return deleted ? ok() : fail("Post not found", 404, { code: "post_not_found" });
     }
     return fail("Method Not Allowed", 405);

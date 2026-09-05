@@ -32,8 +32,7 @@ function parseRequest(value) {
 }
 
 async function authorize(request, env) {
-  const auth = await requireAdminApiSession(request, env);
-  return auth.ok ? null : auth.response;
+  return requireAdminApiSession(request, env, { allowSelectedWorkspace: true });
 }
 
 function buildOperatorGenerationGoal(topic, format) {
@@ -51,8 +50,8 @@ export async function handlePostGenerate(request, env, {
   generatePost = generateThreadPost,
   getProfile = getEffectivePromptProfile,
 } = {}) {
-  const unauthorized = await authorize(request, env);
-  if (unauthorized) return unauthorized;
+  const authorization = await authorize(request, env);
+  if (!authorization.ok) return authorization.response;
   if (request.method !== "POST") return fail("Method Not Allowed", 405);
 
   const options = parseRequest(await readJson(request));
@@ -70,13 +69,13 @@ export async function handlePostGenerate(request, env, {
       return fail("Topic not found", 404, { code: "topic_not_found" });
     }
 
-    const context = await buildContext(env);
+    const context = await buildContext(env, authorization.workspaceId);
     context.publishing = {
       ...context.publishing,
       goal: buildOperatorGenerationGoal(topic, options.format),
     };
     context.currentTopic = currentTopic;
-    const effectiveProfile = await getProfile(env);
+    const effectiveProfile = await getProfile(env, authorization.workspaceId);
     const generated = await generatePost(env, context, { systemPrompt: composeEffectiveThreadsPrompt(effectiveProfile.profile) });
     const body = String(generated?.body || "").trim();
     if (!body) {
