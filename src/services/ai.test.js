@@ -19,6 +19,7 @@ const input = buildGenerationInput({
       forbiddenClaims:[],
     },
     dailyMediaContext: {
+      semanticCues:["cafe", "quiet", "A peaceful cafe near a park"],
       experienceTags:["cafe", "quiet"],
       experienceNote:"A peaceful cafe near a park",
     },
@@ -28,6 +29,7 @@ const input = buildGenerationInput({
 assert.match(input, /core anchor clear/i);
 assert.match(input, /같은 말을 바꿔 반복하지 말고/u);
 assert.match(input, /dailyMediaContext describes the Daily media/i);
+assert.match(input, /must remain meaningfully compatible/i);
 assert.match(input, /Do not invent a visit, purchase, meal, office connection/i);
 assert.match(input, /OTT content after work/);
 

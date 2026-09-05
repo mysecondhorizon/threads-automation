@@ -104,6 +104,7 @@ const experienceTagSelection = selectFromRecords(
 );
 assert.equal(experienceTagSelection.mediaId, "media-tag-match");
 assert.deepEqual(experienceTagSelection.generationMediaContext, {
+  semanticCues:["commute", "coffee"],
   experienceTags:["commute", "coffee"],
   experienceNote:null,
 });
@@ -114,6 +115,7 @@ const experienceNoteSelection = selectFromRecords(
 );
 assert.equal(experienceNoteSelection.mediaId, "media-note-match");
 assert.deepEqual(experienceNoteSelection.generationMediaContext, {
+  semanticCues:["commute coffee office routine"],
   experienceTags:[],
   experienceNote:"commute coffee office routine",
 });
@@ -176,5 +178,77 @@ const irrelevantVideo = selectGeneralAutoMediaFromRecords({
   at:new Date("2026-09-01T00:00:00.000Z"),
 });
 assert.equal(irrelevantVideo.mode, "TEXT");
+
+const kiafRestaurantMismatch = selectGeneralAutoMediaFromRecords({
+  poolItems:[{ ...poolItem("pool-kiaf", "media-suntory"), topics:["KIAF art exhibition"] }],
+  mediaRecords:[dailyMedia("media-suntory", {
+    tags:["restaurant", "bar"],
+    description:"bright open kitchen with draft beer taps and SUNTORY signage",
+    experienceTags:["Dongtan", "restaurant", "suntory"],
+  })],
+  generatedPost:{ topic:"KIAF September art exhibition", contentType:"TEXT" },
+  currentTopic:{ subject:"KIAF September art exhibition" },
+  at:new Date("2026-09-01T00:00:00.000Z"),
+});
+assert.equal(kiafRestaurantMismatch.mode, "TEXT");
+assert.equal(kiafRestaurantMismatch.reason, "no_compatible_media");
+
+const exhibitionGalleryMatch = selectGeneralAutoMediaFromRecords({
+  poolItems:[{ ...poolItem("pool-exhibition", "media-gallery"), topics:["art exhibition"] }],
+  mediaRecords:[dailyMedia("media-gallery", {
+    tags:["art", "exhibition", "gallery"],
+    description:"gallery exhibition interior",
+  })],
+  generatedPost:{ topic:"KIAF art exhibition", contentType:"TEXT" },
+  currentTopic:{ subject:"KIAF art exhibition" },
+  at:new Date("2026-09-01T00:00:00.000Z"),
+});
+assert.equal(exhibitionGalleryMatch.mode, "IMAGE");
+
+const beerBarMatch = selectGeneralAutoMediaFromRecords({
+  poolItems:[{ ...poolItem("pool-beer", "media-suntory-bar"), topics:["after work beer"] }],
+  mediaRecords:[dailyMedia("media-suntory-bar", {
+    description:"draft beer taps at a SUNTORY bar",
+    experienceTags:["beer", "bar"],
+  })],
+  generatedPost:{ topic:"after work beer", contentType:"TEXT" },
+  currentTopic:{ subject:"after work beer" },
+  at:new Date("2026-09-01T00:00:00.000Z"),
+});
+assert.equal(beerBarMatch.mode, "IMAGE");
+
+const dongtanDiningMatch = selectGeneralAutoMediaFromRecords({
+  poolItems:[{ ...poolItem("pool-dongtan", "media-dongtan"), topics:["Dongtan dining"] }],
+  mediaRecords:[dailyMedia("media-dongtan", {
+    description:"Dongtan restaurant kitchen",
+    experienceTags:["Dongtan", "dining"],
+  })],
+  generatedPost:{ topic:"Dongtan dining", contentType:"TEXT" },
+  currentTopic:{ subject:"Dongtan dining" },
+  at:new Date("2026-09-01T00:00:00.000Z"),
+});
+assert.equal(dongtanDiningMatch.mode, "IMAGE");
+
+const incompatibleImage = selectGeneralAutoMediaFromRecords({
+  poolItems:[{ ...poolItem("pool-image-mismatch", "media-image-mismatch"), topics:["art exhibition"] }],
+  mediaRecords:[dailyMedia("media-image-mismatch", { tags:["beach", "vacation"] })],
+  generatedPost:{ topic:"art exhibition", contentType:"TEXT" },
+  currentTopic:{ subject:"art exhibition" },
+  at:new Date("2026-09-01T00:00:00.000Z"),
+});
+assert.equal(incompatibleImage.mode, "TEXT");
+
+const relevantVideo = selectGeneralAutoMediaFromRecords({
+  poolItems:[{ ...poolItem("pool-gallery-video", "media-gallery-video"), topics:["art exhibition"] }],
+  mediaRecords:[dailyMedia("media-gallery-video", {
+    mediaKind:"video",
+    tags:["art", "exhibition", "gallery"],
+    experienceNote:"gallery exhibition space",
+  })],
+  generatedPost:{ topic:"art exhibition", contentType:"TEXT" },
+  currentTopic:{ subject:"art exhibition" },
+  at:new Date("2026-09-01T00:00:00.000Z"),
+});
+assert.equal(relevantVideo.mode, "VIDEO");
 
 console.log("workspace-aware General AUTO media selection fixtures passed");

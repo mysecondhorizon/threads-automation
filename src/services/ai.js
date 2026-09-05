@@ -675,6 +675,13 @@ function normalizeCurrentTopicForContext(value) {
 }
 
 function normalizeDailyMediaContext(value) {
+  const semanticCues = Array.isArray(value?.semanticCues)
+    ? value.semanticCues
+      .filter((item) => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 16)
+    : [];
   const experienceTags = Array.isArray(value?.experienceTags)
     ? value.experienceTags
       .filter((item) => typeof item === "string")
@@ -683,8 +690,12 @@ function normalizeDailyMediaContext(value) {
       .slice(0, 12)
     : [];
   const experienceNote = String(value?.experienceNote || "").trim().slice(0, 500);
-  return experienceTags.length || experienceNote
-    ? { experienceTags, ...(experienceNote ? { experienceNote } : {}) }
+  return semanticCues.length || experienceTags.length || experienceNote
+    ? {
+      ...(semanticCues.length ? { semanticCues } : {}),
+      experienceTags,
+      ...(experienceNote ? { experienceNote } : {}),
+    }
     : null;
 }
 
@@ -1067,6 +1078,7 @@ export function buildGenerationInput(
       lines.push(
         "",
         "dailyMediaContext describes the Daily media selected for this post. Keep the body compatible with these grounded visual-context cues when using them.",
+        "The post's core subject must remain meaningfully compatible with dailyMediaContext.semanticCues; never attach Daily media as decoration for an unrelated subject.",
         "Do not invent a visit, purchase, meal, office connection, time of day, menu, taste, ownership, or any other fact that dailyMediaContext does not support."
       );
     }

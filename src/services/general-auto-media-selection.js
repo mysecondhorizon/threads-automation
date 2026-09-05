@@ -129,6 +129,16 @@ function hasExactPhraseMatch(sourceValues, candidateValues) {
   );
 }
 
+function mediaSemanticValues(media) {
+  return [
+    media?.tags,
+    media?.altText,
+    media?.description,
+    media?.experienceTags,
+    media?.experienceNote,
+  ];
+}
+
 function relevanceAssessment(poolItem, media, context) {
   const sourceValues = [
     context.generatedPost?.topic,
@@ -144,12 +154,12 @@ function relevanceAssessment(poolItem, media, context) {
   const descriptionMatches = matchingTerms(sourceTerms, [media.altText, media.description]);
   const experienceTagMatches = matchingTerms(sourceTerms, [media.experienceTags]);
   const experienceNoteMatches = matchingTerms(sourceTerms, [media.experienceNote]);
+  const mediaSemanticMatches = matchingTerms(sourceTerms, mediaSemanticValues(media));
   const exactPhraseMatch = hasExactPhraseMatch(sourceValues, [
     poolItem.topics,
-    media.tags,
-    media.altText,
-    media.description,
+    mediaSemanticValues(media),
   ]);
+  const mediaExactPhraseMatch = hasExactPhraseMatch(sourceValues, mediaSemanticValues(media));
   const strongMatch = poolTopicMatches.size > 0
     || mediaTagMatches.size > 0
     || descriptionMatches.size >= MIN_MULTI_SIGNAL_MATCHES
@@ -163,6 +173,7 @@ function relevanceAssessment(poolItem, media, context) {
       + (experienceNoteMatches.size * 10)
       + (exactPhraseMatch ? 30 : 0),
     strongMatch,
+    compatible: mediaSemanticMatches.size > 0 || mediaExactPhraseMatch,
   };
 }
 
@@ -215,9 +226,23 @@ function generationMediaContext(media) {
     ? media.experienceTags.map(text).filter(Boolean).slice(0, 12)
     : [];
   const experienceNote = text(media?.experienceNote).slice(0, 500);
+  const semanticCues = [
+    ...(Array.isArray(media?.tags) ? media.tags : []),
+    media?.altText,
+    media?.description,
+    ...experienceTags,
+    experienceNote,
+  ]
+    .map(text)
+    .filter(Boolean)
+    .slice(0, 16);
 
-  if (!experienceTags.length && !experienceNote) return null;
-  return { experienceTags, experienceNote: experienceNote || null };
+  if (!semanticCues.length) return null;
+  return {
+    semanticCues,
+    experienceTags,
+    experienceNote: experienceNote || null,
+  };
 }
 
 export function selectGeneralAutoMediaFromRecords(
@@ -281,13 +306,14 @@ export function selectGeneralAutoMediaFromRecords(
   }
 
   const relevant = eligible
-    .filter((candidate) => candidate.relevance.strongMatch
+    .filter((candidate) => candidate.relevance.compatible
+      && candidate.relevance.strongMatch
       && candidate.relevance.score >= MIN_IMAGE_RELEVANCE_SCORE)
     .map((candidate) => ({ ...candidate, relevance: candidate.relevance.score }))
     .sort(compareCandidates);
 
   if (!relevant.length) {
-    return textSelection("relevance_too_low", candidateCount, eligibleCount);
+    return textSelection("no_compatible_media", candidateCount, eligibleCount);
   }
 
   const selected = relevant[0];
