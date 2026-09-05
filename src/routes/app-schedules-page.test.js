@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { handleAppSchedulesPage } from "./app-schedules-page.js";
+import { ADMIN_SESSION_KEY_PREFIX, USERS_KEY, WORKSPACES_KEY } from "../services/login-foundation.js";
 
 const env = { THREADS_KV: { async get(key) { return key === "admin_session:session-1" ? "valid" : null; } } };
 const response = await handleAppSchedulesPage(new Request("https://x/app/schedules", { headers: { cookie: "admin_session=session-1" } }), env);
@@ -42,4 +43,15 @@ assert.doesNotMatch(page, /recentGeneralAutoExecutions|\/admin\/auto-post\/statu
 assert.doesNotMatch(page, /['"]자동 실행 중['"]/u);
 assert.doesNotMatch(page, /Durable Object|Wrangler|cron/iu);
 assert.equal((await handleAppSchedulesPage(new Request("https://x/app/schedules"), env)).status, 302);
+
+const scopedValues = new Map([
+  [USERS_KEY, JSON.stringify({ version:1, users:[{ id:"user-next", loginId:"next", displayName:"Next", active:true, createdAt:"2026-01-01", updatedAt:"2026-01-01" }] })],
+  [WORKSPACES_KEY, JSON.stringify({ version:1, workspaces:[{ id:"workspace-next", ownerUserId:"user-next", name:"Next", active:true, createdAt:"2026-01-01", updatedAt:"2026-01-01" }] })],
+  [`${ADMIN_SESSION_KEY_PREFIX}registered`, JSON.stringify({ version:1, userId:"user-next", selectedWorkspaceId:"workspace-next", createdAt:"2026-01-01", expiresAt:"2099-01-01" })],
+]);
+const scopedEnv = { THREADS_KV: { async get(key, type) { const value = scopedValues.get(key) ?? null; return type === "json" && value !== null ? JSON.parse(value) : value; } } };
+assert.equal((await handleAppSchedulesPage(
+  new Request("https://x/app/schedules", { headers:{ cookie:"admin_session=registered" } }),
+  scopedEnv,
+)).status, 200);
 console.log("app schedules page fixture passed");

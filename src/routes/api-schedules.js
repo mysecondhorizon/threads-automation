@@ -1,13 +1,26 @@
 import { requireAdminApiSession } from "../middleware/auth.js";
-import { createRuntimeSchedule, getRuntimeScheduleCoordinatorStatus, listRuntimeSchedules, reconcileRuntimeScheduleAlarm, updateRuntimeSchedule } from "../services/runtime-schedules.js";
+import {
+  WorkspaceScheduleError,
+  createRuntimeSchedule,
+  createWorkspaceRuntimeSchedule,
+  getRuntimeScheduleCoordinatorStatus,
+  getWorkspaceRuntimeSchedule,
+  listRuntimeSchedules,
+  listWorkspaceRuntimeSchedules,
+  reconcileRuntimeScheduleAlarm,
+  updateRuntimeSchedule,
+  updateWorkspaceRuntimeSchedule,
+} from "../services/runtime-schedules.js";
 import { getScheduleRuns } from "../services/auto-post/schedule-store.js";
 import { SCHEDULER_MODE, enrichScheduleOperations, getNextActualProductionRun, getProductionScheduleReadiness, normalizeScheduleHistory } from "../services/schedule-operations.js";
 import { isRuntimeSchedulerActive } from "../services/scheduler-ownership.js";
+import { ConnectedAccountError, resolveWorkspaceThreadsConnectedAccount } from "../services/connected-accounts.js";
+import { resolveExecutionContext } from "../services/execution-context.js";
+import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
 import { fail, ok } from "../utils/response.js";
 
 async function authorize(request, env) {
-  const auth = await requireAdminApiSession(request, env);
-  return auth.ok ? null : auth.response;
+  return requireAdminApiSession(request, env, { allowSelectedWorkspace: true });
 }
 
 async function json(request) {
@@ -15,6 +28,12 @@ async function json(request) {
 }
 
 function coordinatorError(error, fallback) {
+  if (error instanceof ConnectedAccountError) {
+    return fail("Threads account is not available for this workspace", 409, { code: "threads_account_unavailable" });
+  }
+  if (error instanceof WorkspaceScheduleError) {
+    return fail(error.message, 400, { code: error.code });
+  }
   const message = String(error?.message || fallback);
   const known = new Set([
     "Schedule must be an object", "Schedule contains protected fields", "name is required",
@@ -25,6 +44,45 @@ function coordinatorError(error, fallback) {
   if (known.has(message)) return fail(message, 400, { code: "invalid_schedule" });
   console.error(fallback, { message: message.slice(0, 256) });
   return fail(fallback, 500, { code: "schedule_request_failed" });
+}
+
+function isDefaultWorkspace(auth) {
+  return auth.session.legacy || auth.workspaceId === DEFAULT_WORKSPACE_ID;
+}
+
+function workspaceScheduleResponse(runtime) {
+  const schedules = (Array.isArray(runtime?.schedules) ? runtime.schedules : []).map((schedule) => ({
+    ...schedule,
+    actualProductionStatus: "WORKSPACE_EXECUTION_NOT_READY",
+    actualProductionNextRunAt: null,
+    actualProductionLastRun: null,
+  }));
+  return {
+    schedules,
+    schedulerMode: SCHEDULER_MODE,
+    runtimeExecutionEnabled: false,
+    coordinatorStatus: {
+      alarmScheduled: false,
+      alarmAt: null,
+      coordinatorTime: null,
+      earliestEnabledNextRunAt: null,
+      enabledScheduleCount: 0,
+      lastReceipt: null,
+      health: "INACTIVE",
+    },
+    nextActualProductionRun: null,
+    scheduleReadiness: { ready: false, expectedCount: 0, activeCount: 0, unavailable: [] },
+    history: [],
+    canReconcileRuntime: false,
+  };
+}
+
+async function resolveWorkspaceScheduleContext(env, workspaceId, {
+  resolveThreadsAccount = resolveWorkspaceThreadsConnectedAccount,
+  resolveContext = resolveExecutionContext,
+} = {}) {
+  const account = await resolveThreadsAccount(env, { workspaceId });
+  return resolveContext(env, { workspaceId, connectedAccountId: account.id });
 }
 
 const RECEIPT_STATUSES = new Set(["SUPPRESSED", "MISSED", "RUNNING", "SUCCESS", "FAILED", "UNCERTAIN"]);
@@ -71,12 +129,18 @@ export async function handleSchedulesCollection(request, env, {
   status = getRuntimeScheduleCoordinatorStatus,
   create = createRuntimeSchedule,
   history = getScheduleRuns,
+  listWorkspace = listWorkspaceRuntimeSchedules,
+  createWorkspace = createWorkspaceRuntimeSchedule,
+  resolveWorkspaceContext = resolveWorkspaceScheduleContext,
   now = () => Date.now(),
 } = {}) {
-  const unauthorized = await authorize(request, env);
-  if (unauthorized) return unauthorized;
+  const auth = await authorize(request, env);
+  if (!auth.ok) return auth.response;
   try {
     if (request.method === "GET") {
+      if (!isDefaultWorkspace(auth)) {
+        return ok(workspaceScheduleResponse(await listWorkspace(env, auth.workspaceId)));
+      }
       const [runtime, coordinatorStatus, runs] = await Promise.all([list(env), status(env), history(env)]);
       const timestamp = now();
       const schedules = (Array.isArray(runtime?.schedules) ? runtime.schedules : []).map((schedule) => ({
@@ -92,9 +156,18 @@ export async function handleSchedulesCollection(request, env, {
         scheduleReadiness: getProductionScheduleReadiness(schedules),
         schedules: enrichScheduleOperations(schedules, runs, timestamp),
         history: normalizeScheduleHistory(runs),
+        canReconcileRuntime: true,
       });
     }
-    if (request.method === "POST") return ok({ schedule: await create(env, await json(request)) }, 201);
+    if (request.method === "POST") {
+      const input = await json(request);
+      if (isDefaultWorkspace(auth)) return ok({ schedule: await create(env, input) }, 201);
+      const executionContext = await resolveWorkspaceContext(env, auth.workspaceId);
+      return ok({ schedule: await createWorkspace(env, input, {
+        workspaceId: auth.workspaceId,
+        connectedAccountId: executionContext.connectedAccountId,
+      }) }, 201);
+    }
     return fail("Method Not Allowed", 405);
   } catch (error) {
     return coordinatorError(error, "Schedule request failed");
@@ -104,9 +177,14 @@ export async function handleSchedulesCollection(request, env, {
 export async function handleScheduleReconcile(request, env, {
   reconcile = reconcileRuntimeScheduleAlarm,
 } = {}) {
-  const unauthorized = await authorize(request, env);
-  if (unauthorized) return unauthorized;
+  const auth = await authorize(request, env);
+  if (!auth.ok) return auth.response;
   if (request.method !== "POST") return fail("Method Not Allowed", 405);
+  if (!isDefaultWorkspace(auth)) {
+    return fail("Workspace schedule execution is not active yet", 409, {
+      code: "workspace_schedule_execution_not_ready",
+    });
+  }
   try {
     const result = await reconcile(env);
     return ok({
@@ -122,12 +200,30 @@ export async function handleScheduleReconcile(request, env, {
 
 export async function handleScheduleById(request, env, scheduleId, {
   update = updateRuntimeSchedule,
+  getWorkspace = getWorkspaceRuntimeSchedule,
+  updateWorkspace = updateWorkspaceRuntimeSchedule,
+  resolveWorkspaceContext = resolveWorkspaceScheduleContext,
 } = {}) {
-  const unauthorized = await authorize(request, env);
-  if (unauthorized) return unauthorized;
+  const auth = await authorize(request, env);
+  if (!auth.ok) return auth.response;
   if (request.method !== "PATCH") return fail("Method Not Allowed", 405);
   try {
-    const schedule = await update(env, scheduleId, await json(request));
+    const input = await json(request);
+    if (!isDefaultWorkspace(auth)) {
+      const existing = await getWorkspace(env, scheduleId, auth.workspaceId);
+      if (!existing) return fail("Schedule not found", 404, { code: "schedule_not_found" });
+      const executionContext = await resolveWorkspaceContext(env, auth.workspaceId);
+      if (executionContext.connectedAccountId !== existing.connectedAccountId) {
+        return fail("Threads account is not available for this workspace", 409, {
+          code: "threads_account_unavailable",
+        });
+      }
+      const schedule = await updateWorkspace(env, scheduleId, input, {
+        workspaceId: auth.workspaceId,
+      });
+      return schedule ? ok({ schedule }) : fail("Schedule not found", 404, { code: "schedule_not_found" });
+    }
+    const schedule = await update(env, scheduleId, input);
     return schedule ? ok({ schedule }) : fail("Schedule not found", 404, { code: "schedule_not_found" });
   } catch (error) {
     return coordinatorError(error, "Schedule update failed");

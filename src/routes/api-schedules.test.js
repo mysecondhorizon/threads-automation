@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { handleScheduleById, handleScheduleReconcile, handleSchedulesCollection } from "./api-schedules.js";
+import { ADMIN_SESSION_KEY_PREFIX, USERS_KEY, WORKSPACES_KEY } from "../services/login-foundation.js";
+import { ConnectedAccountError } from "../services/connected-accounts.js";
 
 function env(authenticated = true) { return { THREADS_KV: { async get(key) { return authenticated && key === "admin_session:session-1" ? "valid" : null; } } }; }
 function request(url, method, body, authenticated = true) { return new Request(url, { method, headers: { ...(authenticated ? { cookie: "admin_session=session-1" } : {}), ...(body === undefined ? {} : { "content-type": "application/json" }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }); }
@@ -72,4 +74,62 @@ let patchInput = null;
 const patched = await handleScheduleById(request("https://x/api/schedules/one", "PATCH", { enabled: true }), env(), "one", { update: async (_env, id, input) => { patchInput = { id, input }; return { id, ...input }; } });
 assert.equal(patched.status, 200);
 assert.deepEqual(patchInput, { id: "one", input: { enabled: true } });
+
+const workspaceValues = new Map([
+  [USERS_KEY, JSON.stringify({ version:1, users:[{ id:"user-next", loginId:"next", displayName:"Next", active:true, createdAt:"2026-01-01", updatedAt:"2026-01-01" }] })],
+  [WORKSPACES_KEY, JSON.stringify({ version:1, workspaces:[{ id:"workspace-next", ownerUserId:"user-next", name:"Next", active:true, createdAt:"2026-01-01", updatedAt:"2026-01-01" }] })],
+  [`${ADMIN_SESSION_KEY_PREFIX}registered`, JSON.stringify({ version:1, userId:"user-next", selectedWorkspaceId:"workspace-next", createdAt:"2026-01-01", expiresAt:"2099-01-01" })],
+]);
+const workspaceEnv = { THREADS_KV: { async get(key, type) { const value = workspaceValues.get(key) ?? null; return type === "json" && value !== null ? JSON.parse(value) : value; }, async put(key, value) { workspaceValues.set(key, value); } } };
+const workspaceRequest = (path, method = "GET", body) => request(`https://x${path}`, method, body, false);
+function registeredRequest(path, method = "GET", body) {
+  return new Request(`https://x${path}`, { method, headers:{ cookie:"admin_session=registered", ...(body === undefined ? {} : { "content-type":"application/json" }) }, ...(body === undefined ? {} : { body:JSON.stringify(body) }) });
+}
+let listedWorkspaceId = null;
+const workspaceListed = await handleSchedulesCollection(registeredRequest("/api/schedules"), workspaceEnv, {
+  listWorkspace: async (_env, workspaceId) => {
+    listedWorkspaceId = workspaceId;
+    return { schedules:[{ id:"workspace-schedule", name:"Next", type:"GENERAL_AUTO", enabled:true, timezone:"Asia/Seoul", cadence:{ kind:"daily", time:"08:10" } }], runtimeExecutionEnabled:false };
+  },
+});
+assert.equal(workspaceListed.status, 200);
+assert.equal(listedWorkspaceId, "workspace-next");
+const workspaceListedBody = await workspaceListed.json();
+assert.equal(workspaceListedBody.schedules.length, 1);
+assert.equal(workspaceListedBody.schedules[0].actualProductionStatus, "WORKSPACE_EXECUTION_NOT_READY");
+assert.equal(workspaceListedBody.history.length, 0);
+
+let workspaceCreate = null;
+const workspaceCreated = await handleSchedulesCollection(registeredRequest("/api/schedules", "POST", valid), workspaceEnv, {
+  resolveWorkspaceContext: async (_env, workspaceId) => ({ workspaceId, connectedAccountId:"threads-next" }),
+  createWorkspace: async (_env, input, options) => {
+    workspaceCreate = { input, options };
+    return { id:"workspace-schedule", ...input, timezone:"Asia/Seoul" };
+  },
+});
+assert.equal(workspaceCreated.status, 201);
+assert.deepEqual(workspaceCreate.options, { workspaceId:"workspace-next", connectedAccountId:"threads-next" });
+
+const scopeOverride = await handleSchedulesCollection(registeredRequest("/api/schedules", "POST", {
+  ...valid,
+  workspaceId:"default-workspace",
+}), workspaceEnv, {
+  resolveWorkspaceContext: async (_env, workspaceId) => ({ workspaceId, connectedAccountId:"threads-next" }),
+});
+assert.equal(scopeOverride.status, 400);
+
+const foreignSchedule = await handleScheduleById(registeredRequest("/api/schedules/foreign", "PATCH", { enabled:false }), workspaceEnv, "foreign", {
+  getWorkspace: async () => null,
+});
+assert.equal(foreignSchedule.status, 404);
+const mismatchedAccount = await handleScheduleById(registeredRequest("/api/schedules/workspace-schedule", "PATCH", { enabled:false }), workspaceEnv, "workspace-schedule", {
+  getWorkspace: async () => ({ id:"workspace-schedule", workspaceId:"workspace-next", connectedAccountId:"threads-original" }),
+  resolveWorkspaceContext: async () => ({ workspaceId:"workspace-next", connectedAccountId:"threads-other" }),
+});
+assert.equal(mismatchedAccount.status, 409);
+const foreignAccount = await handleSchedulesCollection(registeredRequest("/api/schedules", "POST", valid), workspaceEnv, {
+  resolveWorkspaceContext: async () => { throw new ConnectedAccountError("foreign", "connected_account_not_found"); },
+});
+assert.equal(foreignAccount.status, 409);
+assert.equal((await handleScheduleReconcile(registeredRequest("/api/schedules/reconcile", "POST"), workspaceEnv)).status, 409);
 console.log("schedule API fixture passed");

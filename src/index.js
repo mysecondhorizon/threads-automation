@@ -320,7 +320,8 @@ export default {
         pathname !== "/app/media" &&
         pathname !== "/app/prompts" &&
         pathname !== "/app/write" &&
-        pathname !== "/app/activity"
+        pathname !== "/app/activity" &&
+        pathname !== "/app/schedules"
       ) {
         return renderAppWorkspaceUnavailable(appContext, pathname);
       }
