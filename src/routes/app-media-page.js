@@ -1,6 +1,8 @@
 import { requireAdminSession } from "../middleware/auth.js";
+import { resolveCurrentAppContext } from "../services/app-context.js";
+import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
 import { buildMediaPageClientScript } from "./app-media-client.js";
-import { renderAppShell } from "./app-shell.js";
+import { renderAppShell, renderAppWorkspaceUnavailable } from "./app-shell.js";
 
 function renderMediaPageContent() {
   return `<style>
@@ -65,11 +67,19 @@ function renderMediaPageContent() {
 export async function handleAppDailyPage(request, env) {
   const auth = await requireAdminSession(request, env);
   if (!auth.ok) return auth.response;
+  const appContext = await resolveCurrentAppContext(request, env);
+  if (!auth.session.legacy && (
+    !auth.session.selectedWorkspaceId ||
+    (auth.session.selectedWorkspaceId !== DEFAULT_WORKSPACE_ID && !appContext?.currentWorkspace)
+  )) {
+    return renderAppWorkspaceUnavailable(appContext, "/app/daily");
+  }
   return renderAppShell({
     activePath: "/app/daily",
     title: "Daily",
     description: "\uC77C\uC0C1 \uC0AC\uC9C4\uACFC \uB3D9\uC601\uC0C1\uC744 \uC5C5\uB85C\uB4DC\uD558\uACE0 \uAD00\uB9AC\uD569\uB2C8\uB2E4.",
     content: renderMediaPageContent(),
+    appContext,
   });
 }
 

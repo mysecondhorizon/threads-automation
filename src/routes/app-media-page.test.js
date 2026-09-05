@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { getMediaUpdateRequest } from "./app-media-client.js";
 import { handleAppDailyPage, handleAppMediaPage } from "./app-media-page.js";
+import { ADMIN_SESSION_KEY_PREFIX, USERS_KEY, WORKSPACES_KEY } from "../services/login-foundation.js";
 
 const env = {
   THREADS_KV: {
@@ -52,4 +53,16 @@ assert.equal(compatibility.status, 302);
 assert.equal(compatibility.headers.get("location"), "https://example.test/app/daily");
 const unauthenticated = await handleAppDailyPage(new Request("https://example.test/app/daily"), env);
 assert.equal(unauthenticated.status, 302);
+const values = new Map([
+  [USERS_KEY, JSON.stringify({ version: 1, users: [{ id: "user-next", loginId: "next", displayName: "Next", active: true, createdAt: "2026-01-01", updatedAt: "2026-01-01" }] })],
+  [WORKSPACES_KEY, JSON.stringify({ version: 1, workspaces: [{ id: "workspace-next", ownerUserId: "user-next", name: "Next Horizon", active: true, createdAt: "2026-01-01", updatedAt: "2026-01-01" }] })],
+  [`${ADMIN_SESSION_KEY_PREFIX}registered`, JSON.stringify({ version: 1, userId: "user-next", selectedWorkspaceId: "workspace-next", createdAt: "2026-01-01", expiresAt: "2099-01-01" })],
+]);
+const registeredEnv = { THREADS_KV: { async get(key, type) { const value = values.get(key); return value === undefined ? null : (type === "json" ? JSON.parse(value) : value); } } };
+const registeredDaily = await handleAppDailyPage(new Request("https://example.test/app/daily", { headers: { cookie: "admin_session=registered" } }), registeredEnv);
+assert.equal(registeredDaily.status, 200);
+assert.match(await registeredDaily.text(), /Next Horizon/u);
+const registeredAlias = await handleAppMediaPage(new Request("https://example.test/app/media", { headers: { cookie: "admin_session=registered" } }), registeredEnv);
+assert.equal(registeredAlias.status, 302);
+assert.equal(registeredAlias.headers.get("location"), "https://example.test/app/daily");
 console.log("app media page fixture passed");

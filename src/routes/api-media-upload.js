@@ -32,7 +32,7 @@ function toOperatorResult(result) {
 }
 
 export async function handleOperatorMediaUpload(request, env, { batchUpload = runBatchUpload } = {}) {
-  const auth = await requireAdminApiSession(request, env);
+  const auth = await requireAdminApiSession(request, env, { allowSelectedWorkspace: true });
   if (!auth.ok) return auth.response;
   if (request.method !== "POST") return fail("Method Not Allowed", 405);
   try {
@@ -49,7 +49,7 @@ export async function handleOperatorMediaUpload(request, env, { batchUpload = ru
         experienceNote,
       },
       createPoolItems: true,
-    });
+    }, auth.workspaceId);
     return ok({ results: (Array.isArray(result?.results) ? result.results : []).map(toOperatorResult) });
   } catch (error) {
     console.error("Operator media upload failed", { code: error?.code || "media_upload_failed" });

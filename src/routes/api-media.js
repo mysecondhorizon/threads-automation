@@ -19,8 +19,7 @@ function toOperatorMedia(media) {
 }
 
 async function authorize(request, env) {
-  const auth = await requireAdminApiSession(request, env);
-  return auth.ok ? null : auth.response;
+  return requireAdminApiSession(request, env, { allowSelectedWorkspace: true });
 }
 
 function parsePatch(value) {
@@ -75,11 +74,11 @@ function errorResponse(error, fallback = "Media request failed") {
 export async function handleOperatorMediaCollection(request, env, {
   list = listMedia,
 } = {}) {
-  const unauthorized = await authorize(request, env);
-  if (unauthorized) return unauthorized;
+  const authorization = await authorize(request, env);
+  if (!authorization.ok) return authorization.response;
   if (request.method !== "GET") return fail("Method Not Allowed", 405);
   try {
-    const media = await list(env, { sourceType: "general" });
+    const media = await list(env, { sourceType: "general" }, authorization.workspaceId);
     return ok({ media: media.map(toOperatorMedia) });
   } catch (error) {
     return errorResponse(error, "Media lookup failed");
@@ -90,19 +89,19 @@ export async function handleOperatorMediaById(request, env, mediaId, {
   get = getMedia,
   update = updateMedia,
 } = {}) {
-  const unauthorized = await authorize(request, env);
-  if (unauthorized) return unauthorized;
+  const authorization = await authorize(request, env);
+  if (!authorization.ok) return authorization.response;
   if (request.method !== "PATCH") return fail("Method Not Allowed", 405);
 
   const parsed = parsePatch(await readJson(request));
   if (parsed.error) return fail(parsed.error, 400, { code: "invalid_media_update" });
 
   try {
-    const existing = await get(env, mediaId);
+    const existing = await get(env, mediaId, authorization.workspaceId);
     if (!existing) {
       return fail("Media not found", 404, { code: "media_not_found" });
     }
-    return ok({ media: toOperatorMedia(await update(env, mediaId, parsed.update)) });
+    return ok({ media: toOperatorMedia(await update(env, mediaId, parsed.update, authorization.workspaceId)) });
   } catch (error) {
     if (error?.code === "media_not_found") {
       return fail("Media not found", 404, { code: "media_not_found" });

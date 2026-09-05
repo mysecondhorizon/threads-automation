@@ -4,6 +4,7 @@ import {
   handleOperatorMediaCollection,
 } from "./api-media.js";
 import { handleOperatorMediaUpload } from "./api-media-upload.js";
+import { ADMIN_SESSION_KEY_PREFIX, USERS_KEY, WORKSPACES_KEY } from "../services/login-foundation.js";
 
 function env(authenticated = true) {
   return {
@@ -36,7 +37,7 @@ const unauthorized = await handleOperatorMediaCollection(request("https://exampl
 assert.equal(unauthorized.status, 401);
 let listOptions = null;
 const listed = await handleOperatorMediaCollection(request("https://example.test/api/media", "GET", undefined, true), env(), {
-  list: async (_env, options) => { listOptions = options; return [image, video]; },
+  list: async (_env, options, workspaceId) => { listOptions = options; assert.equal(workspaceId, "default-workspace"); return [image, video]; },
 });
 const listedMedia = (await listed.json()).media;
 assert.deepEqual(listOptions, { sourceType: "general" });
@@ -49,7 +50,7 @@ assert.equal(Object.hasOwn(listedMedia[0], "objectKey"), false);
 
 const updated = await handleOperatorMediaById(request("https://example.test/api/media/image-1", "PATCH", { description: "수정", tags: ["태그", "태그"], active: false }), env(), "image-1", {
   get: async () => image,
-  update: async (_env, id, value) => ({ ...image, id, ...value }),
+  update: async (_env, id, value, workspaceId) => { assert.equal(workspaceId, "default-workspace"); return { ...image, id, ...value }; },
 });
 assert.deepEqual((await updated.json()).media.tags, ["태그"]);
 const protectedField = await handleOperatorMediaById(request("https://example.test/api/media/image-1", "PATCH", { objectKey: "no" }), env(), "image-1", { get: async () => image });
@@ -85,8 +86,9 @@ uploadForm.append("files", new Blob(["image"], { type: "image/jpeg" }), "photo.j
 const uploadRequest = new Request("https://example.test/api/media/upload", { method: "POST", headers: { cookie: "admin_session=session-1" }, body: uploadForm });
 let uploadInput = null;
 const upload = await handleOperatorMediaUpload(uploadRequest, env(), {
-  batchUpload: async (_env, input) => {
+  batchUpload: async (_env, input, workspaceId) => {
     uploadInput = input;
+    assert.equal(workspaceId, "default-workspace");
     return { results: [{ fileName: "photo.jpg", status: "success", media: image }] };
   },
 });
@@ -179,4 +181,38 @@ const experienceUpdated = await handleOperatorMediaById(request("https://example
 const experienceMedia = (await experienceUpdated.json()).media;
 assert.deepEqual(experienceMedia.experienceTags, ["weekend"]);
 assert.equal(experienceMedia.experienceNote, "Long walk");
+
+function workspaceEnv() {
+  const values = new Map([
+    [USERS_KEY, JSON.stringify({ version: 1, users: [{ id: "user-next", loginId: "next", displayName: "Next", active: true, createdAt: "2026-01-01", updatedAt: "2026-01-01" }] })],
+    [WORKSPACES_KEY, JSON.stringify({ version: 1, workspaces: [
+      { id: "workspace-next", ownerUserId: "user-next", name: "Next", active: true, createdAt: "2026-01-01", updatedAt: "2026-01-01" },
+      { id: "workspace-foreign", ownerUserId: "user-other", name: "Foreign", active: true, createdAt: "2026-01-01", updatedAt: "2026-01-01" },
+    ] })],
+    [`${ADMIN_SESSION_KEY_PREFIX}registered`, JSON.stringify({ version: 1, userId: "user-next", selectedWorkspaceId: "workspace-next", createdAt: "2026-01-01", expiresAt: "2099-01-01" })],
+  ]);
+  return { THREADS_KV: { async get(key, type) { const value = values.get(key); return value === undefined ? null : (type === "json" ? JSON.parse(value) : value); } } };
+}
+function registeredRequest(url, method = "GET", body) {
+  return new Request(url, { method, headers: { cookie: "admin_session=registered", ...(body === undefined ? {} : { "content-type": "application/json" }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+}
+const scopedEnv = workspaceEnv();
+const scopedList = await handleOperatorMediaCollection(registeredRequest("https://example.test/api/media"), scopedEnv, {
+  list: async (_env, options, workspaceId) => { assert.deepEqual(options, { sourceType: "general" }); assert.equal(workspaceId, "workspace-next"); return [image]; },
+});
+assert.equal((await scopedList.json()).media.length, 1);
+const scopedUploadForm = new FormData();
+scopedUploadForm.append("files", new Blob(["image"], { type: "image/jpeg" }), "next.jpg");
+scopedUploadForm.append("workspaceId", "workspace-foreign");
+const scopedUpload = await handleOperatorMediaUpload(
+  new Request("https://example.test/api/media/upload", { method: "POST", headers: { cookie: "admin_session=registered" }, body: scopedUploadForm }),
+  scopedEnv,
+  { batchUpload: async (_env, _input, workspaceId) => { assert.equal(workspaceId, "workspace-next"); return { results: [{ fileName: "next.jpg", status: "success", media: image }] }; } },
+);
+assert.equal(scopedUpload.status, 200);
+const foreignMedia = await handleOperatorMediaById(registeredRequest("https://example.test/api/media/foreign", "PATCH", { active: false }), scopedEnv, "foreign", {
+  get: async (_env, _id, workspaceId) => { assert.equal(workspaceId, "workspace-next"); return null; },
+});
+assert.equal(foreignMedia.status, 404);
+assert.equal((await handleOperatorMediaById(registeredRequest("https://example.test/api/media/image-1", "PATCH", { workspaceId: "workspace-foreign" }), scopedEnv, "image-1", { get: async () => image })).status, 400);
 console.log("operator media API fixture passed");
