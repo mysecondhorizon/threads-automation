@@ -11,6 +11,7 @@ import {
   WorkspaceCloneError,
   cloneWorkspace,
   getCloneDestinationOccupancy,
+  getCloneSourceDestinationComparison,
   preflightWorkspaceClone,
 } from "./workspace-clone.js";
 
@@ -245,6 +246,42 @@ test("clone destination occupancy uses the same scoped stores as preflight witho
     destinationEmpty: false,
   });
   assert.equal(JSON.stringify(occupancy).includes("Source Product"), false);
+});
+
+test("clone comparison matches normalized cloned content while ignoring generated identities and usage state", async () => {
+  const fixture = createEnv();
+  await cloneWorkspace(fixture.env, cloneInput(), deterministicCloneOptions());
+
+  const comparison = await getCloneSourceDestinationComparison(fixture.env, DESTINATION);
+  assert.deepEqual(comparison, {
+    promptProfile: { sourceExists: true, destinationExists: true, equivalent: true },
+    products: { sourceCount: 1, destinationCount: 1, equivalentCount: 1, destinationOnlyCount: 0, sourceOnlyCount: 0 },
+    media: { sourceCount: 1, destinationCount: 1, equivalentCount: 1, destinationOnlyCount: 0, sourceOnlyCount: 0 },
+    contentPool: { sourceCount: 1, destinationCount: 1, equivalentCount: 1, destinationOnlyCount: 0, sourceOnlyCount: 0 },
+  });
+  assert.equal(JSON.stringify(comparison).includes("Source Product"), false);
+  assert.equal(JSON.stringify(comparison).includes(SOURCE_OBJECT_KEY), false);
+});
+
+test("clone comparison reports partial, source-only, destination-only, and changed reusable content", async () => {
+  const fixture = createEnv();
+  await cloneWorkspace(fixture.env, cloneInput(), deterministicCloneOptions());
+  const products = JSON.parse(fixture.values.get("content_products"));
+  const destinationProduct = products.products.find((product) => product.workspaceId === DESTINATION);
+  destinationProduct.description = "Changed reusable content";
+  products.products.push({ ...sourceProduct(7), id: "product-destination-only", workspaceId: DESTINATION });
+  fixture.values.set("content_products", JSON.stringify(products));
+
+  const comparison = await getCloneSourceDestinationComparison(fixture.env, DESTINATION);
+  assert.deepEqual(comparison.products, {
+    sourceCount: 1,
+    destinationCount: 2,
+    equivalentCount: 0,
+    destinationOnlyCount: 2,
+    sourceOnlyCount: 1,
+  });
+  assert.equal(comparison.media.sourceOnlyCount, 1);
+  assert.equal(comparison.contentPool.sourceOnlyCount, 1);
 });
 
 function writeEvents(events) {

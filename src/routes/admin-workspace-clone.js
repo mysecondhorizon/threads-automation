@@ -5,6 +5,7 @@ import {
   WorkspaceCloneError,
   cloneWorkspace,
   getCloneDestinationOccupancy,
+  getCloneSourceDestinationComparison,
 } from "../services/workspace-clone.js";
 
 const CONFIRMATION = "CLONE_WORKSPACE";
@@ -63,6 +64,29 @@ function sanitizeOccupancy(occupancy) {
     media,
     contentPool,
     destinationEmpty: promptProfile.empty && products.empty && media.empty && contentPool.empty,
+  };
+}
+
+function sanitizeComparison(comparison) {
+  const count = (store, field) => Number.isSafeInteger(store?.[field]) && store[field] >= 0
+    ? store[field]
+    : 0;
+  const store = (value) => ({
+    sourceCount: count(value, "sourceCount"),
+    destinationCount: count(value, "destinationCount"),
+    equivalentCount: count(value, "equivalentCount"),
+    destinationOnlyCount: count(value, "destinationOnlyCount"),
+    sourceOnlyCount: count(value, "sourceOnlyCount"),
+  });
+  return {
+    promptProfile: {
+      sourceExists: comparison?.promptProfile?.sourceExists === true,
+      destinationExists: comparison?.promptProfile?.destinationExists === true,
+      equivalent: comparison?.promptProfile?.equivalent === true,
+    },
+    products: store(comparison?.products),
+    media: store(comparison?.media),
+    contentPool: store(comparison?.contentPool),
   };
 }
 
@@ -129,7 +153,10 @@ async function resolveRegisteredDestination(env, current) {
 export async function handleAdminWorkspaceClonePreflight(
   request,
   env,
-  { inspect = getCloneDestinationOccupancy } = {},
+  {
+    inspect = getCloneDestinationOccupancy,
+    compare = getCloneSourceDestinationComparison,
+  } = {},
 ) {
   if (request.method !== "GET") return failure("Method Not Allowed", 405);
 
@@ -140,7 +167,11 @@ export async function handleAdminWorkspaceClonePreflight(
   if (!destinationWorkspace) return failure("Invalid workspace clone request", 400);
 
   try {
-    const occupancy = sanitizeOccupancy(await inspect(env, destinationWorkspace.id));
+    const [occupancy, comparison] = await Promise.all([
+      inspect(env, destinationWorkspace.id),
+      compare(env, destinationWorkspace.id),
+    ]);
+    const sanitizedOccupancy = sanitizeOccupancy(occupancy);
     return response({
       ok: true,
       destination: {
@@ -148,12 +179,13 @@ export async function handleAdminWorkspaceClonePreflight(
         name: destinationWorkspace.name,
       },
       stores: {
-        promptProfile: occupancy.promptProfile,
-        products: occupancy.products,
-        media: occupancy.media,
-        contentPool: occupancy.contentPool,
+        promptProfile: sanitizedOccupancy.promptProfile,
+        products: sanitizedOccupancy.products,
+        media: sanitizedOccupancy.media,
+        contentPool: sanitizedOccupancy.contentPool,
       },
-      destinationEmpty: occupancy.destinationEmpty,
+      destinationEmpty: sanitizedOccupancy.destinationEmpty,
+      comparison: sanitizeComparison(comparison),
     }, 200);
   } catch {
     return failure("Workspace clone preflight failed", 500, {

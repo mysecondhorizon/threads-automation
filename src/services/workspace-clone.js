@@ -11,6 +11,16 @@ import { createContentPoolItem, listContentPool } from "./content-pool.js";
 import { DEFAULT_WORKSPACE_ID } from "./workspace-foundation.js";
 
 const LIMITS = Object.freeze({ products: 50, media: 500, contentPool: 1000 });
+const NON_COMPARABLE_FIELDS = new Set([
+  "id",
+  "workspaceId",
+  "createdAt",
+  "updatedAt",
+  "objectKey",
+  "imageUrl",
+  "usedCount",
+  "lastUsedAt",
+]);
 
 export class WorkspaceCloneError extends Error {
   constructor(message, {
@@ -113,6 +123,127 @@ export async function getCloneDestinationOccupancy(env, workspaceId) {
   return Object.freeze({
     ...stores,
     destinationEmpty: Object.values(stores).every((store) => store.empty),
+  });
+}
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, stableValue(value[key])]),
+  );
+}
+
+function comparableRecord(record, {
+  productSignatures = new Map(),
+  mediaSignatures = new Map(),
+} = {}) {
+  const comparable = {};
+  for (const [key, value] of Object.entries(record || {})) {
+    if (!NON_COMPARABLE_FIELDS.has(key)) comparable[key] = value;
+  }
+  if (Object.hasOwn(comparable, "productId")) {
+    comparable.productId = comparable.productId
+      ? productSignatures.get(comparable.productId) || "__unmatched_product__"
+      : null;
+  }
+  if (Array.isArray(comparable.mediaIds)) {
+    comparable.mediaIds = comparable.mediaIds
+      .map((mediaId) => mediaSignatures.get(mediaId) || "__unmatched_media__")
+      .sort();
+  }
+  for (const field of ["tags", "experienceTags", "topics", "allowedContentTypes"]) {
+    if (Array.isArray(comparable[field])) comparable[field] = [...comparable[field]].sort();
+  }
+  return JSON.stringify(stableValue(comparable));
+}
+
+function signatureMap(records, signature) {
+  return new Map(records.map((record) => [record.id, signature(record)]));
+}
+
+function comparableProduct(product) {
+  return comparableRecord(validateProductInput(cloneInput(product, {})));
+}
+
+function comparisonCounts(sourceSignatures, destinationSignatures) {
+  const sourceCounts = new Map();
+  const destinationCounts = new Map();
+  for (const signature of sourceSignatures) {
+    sourceCounts.set(signature, (sourceCounts.get(signature) || 0) + 1);
+  }
+  for (const signature of destinationSignatures) {
+    destinationCounts.set(signature, (destinationCounts.get(signature) || 0) + 1);
+  }
+  const equivalentCount = [...sourceCounts].reduce(
+    (count, [signature, sourceCount]) => count + Math.min(sourceCount, destinationCounts.get(signature) || 0),
+    0,
+  );
+  return {
+    sourceCount: sourceSignatures.length,
+    destinationCount: destinationSignatures.length,
+    equivalentCount,
+    destinationOnlyCount: destinationSignatures.length - equivalentCount,
+    sourceOnlyCount: sourceSignatures.length - equivalentCount,
+  };
+}
+
+export async function getCloneSourceDestinationComparison(env, destinationWorkspaceId) {
+  const sourceWorkspaceId = DEFAULT_WORKSPACE_ID;
+  const [
+    sourcePromptExists,
+    destinationPromptExists,
+    sourcePrompt,
+    destinationPrompt,
+    sourceProducts,
+    destinationProducts,
+    sourceMedia,
+    destinationMedia,
+    sourceContentPool,
+    destinationContentPool,
+  ] = await Promise.all([
+    hasPersistedPromptProfile(env, sourceWorkspaceId),
+    hasPersistedPromptProfile(env, destinationWorkspaceId),
+    getEffectivePromptProfile(env, sourceWorkspaceId),
+    getEffectivePromptProfile(env, destinationWorkspaceId),
+    getProducts(env, sourceWorkspaceId),
+    getProducts(env, destinationWorkspaceId),
+    listMedia(env, {}, sourceWorkspaceId),
+    listMedia(env, {}, destinationWorkspaceId),
+    listContentPool(env, {}, sourceWorkspaceId),
+    listContentPool(env, {}, destinationWorkspaceId),
+  ]);
+
+  const sourceProductSignatures = signatureMap(sourceProducts, comparableProduct);
+  const destinationProductSignatures = signatureMap(destinationProducts, comparableProduct);
+  const sourceMediaSignatures = signatureMap(sourceMedia, (media) => comparableRecord(media, {
+    productSignatures: sourceProductSignatures,
+  }));
+  const destinationMediaSignatures = signatureMap(destinationMedia, (media) => comparableRecord(media, {
+    productSignatures: destinationProductSignatures,
+  }));
+
+  return Object.freeze({
+    promptProfile: {
+      sourceExists: sourcePromptExists,
+      destinationExists: destinationPromptExists,
+      equivalent: sourcePromptExists && destinationPromptExists &&
+        JSON.stringify(stableValue(sourcePrompt.profile)) === JSON.stringify(stableValue(destinationPrompt.profile)),
+    },
+    products: comparisonCounts([...sourceProductSignatures.values()], [...destinationProductSignatures.values()]),
+    media: comparisonCounts([...sourceMediaSignatures.values()], [...destinationMediaSignatures.values()]),
+    contentPool: comparisonCounts(
+      sourceContentPool.map((item) => comparableRecord(item, {
+        productSignatures: sourceProductSignatures,
+        mediaSignatures: sourceMediaSignatures,
+      })),
+      destinationContentPool.map((item) => comparableRecord(item, {
+        productSignatures: destinationProductSignatures,
+        mediaSignatures: destinationMediaSignatures,
+      })),
+    ),
   });
 }
 

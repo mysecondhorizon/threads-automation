@@ -186,6 +186,12 @@ test("registered session preflight returns only selected Workspace occupancy wit
           destinationEmpty: false,
         };
       },
+      compare: async () => ({
+        promptProfile: { sourceExists: true, destinationExists: true, equivalent: true, raw: "secret" },
+        products: { sourceCount: 2, destinationCount: 2, equivalentCount: 2, destinationOnlyCount: 0, sourceOnlyCount: 0, records: ["secret"] },
+        media: { sourceCount: 1, destinationCount: 0, equivalentCount: 0, destinationOnlyCount: 0, sourceOnlyCount: 1, records: ["secret"] },
+        contentPool: { sourceCount: 1, destinationCount: 1, equivalentCount: 0, destinationOnlyCount: 1, sourceOnlyCount: 1, records: ["secret"] },
+      }),
       clone: async () => { cloneCalls += 1; },
     },
   );
@@ -203,6 +209,12 @@ test("registered session preflight returns only selected Workspace occupancy wit
       contentPool: { empty: false, count: 1 },
     },
     destinationEmpty: false,
+    comparison: {
+      promptProfile: { sourceExists: true, destinationExists: true, equivalent: true },
+      products: { sourceCount: 2, destinationCount: 2, equivalentCount: 2, destinationOnlyCount: 0, sourceOnlyCount: 0 },
+      media: { sourceCount: 1, destinationCount: 0, equivalentCount: 0, destinationOnlyCount: 0, sourceOnlyCount: 1 },
+      contentPool: { sourceCount: 1, destinationCount: 1, equivalentCount: 0, destinationOnlyCount: 1, sourceOnlyCount: 1 },
+    },
   });
   assert.equal(JSON.stringify(payload).includes("secret"), false);
   assert.equal(cloneCalls, 0);
