@@ -11,16 +11,6 @@ import { createContentPoolItem, listContentPool } from "./content-pool.js";
 import { DEFAULT_WORKSPACE_ID } from "./workspace-foundation.js";
 
 const LIMITS = Object.freeze({ products: 50, media: 500, contentPool: 1000 });
-const NON_COMPARABLE_FIELDS = new Set([
-  "id",
-  "workspaceId",
-  "createdAt",
-  "updatedAt",
-  "objectKey",
-  "imageUrl",
-  "usedCount",
-  "lastUsedAt",
-]);
 
 export class WorkspaceCloneError extends Error {
   constructor(message, {
@@ -42,10 +32,6 @@ function fail(message, code, stage = "preflight") {
 
 function defaultId(kind) {
   return `${kind}_${globalThis.crypto.randomUUID()}`;
-}
-
-function compareIds(left, right) {
-  return String(left || "").localeCompare(String(right || ""));
 }
 
 function requireFreshId(value, kind, usedIds, sourceId) {
@@ -106,339 +92,15 @@ function validateWorkspacePair(source, destination) {
 }
 
 function validateDestinationEmpty(destinationState) {
-  if (!destinationState.destinationEmpty) {
+  if (
+    destinationState.promptProfilePersisted ||
+    destinationState.products.length > 0 ||
+    destinationState.media.length > 0 ||
+    destinationState.contentPool.length > 0
+  ) {
     fail("Destination Workspace must be empty before cloning", "workspace_clone_destination_not_empty");
   }
 }
-
-export async function getCloneDestinationOccupancy(env, workspaceId) {
-  const [promptProfilePersisted, products, media, contentPool] = await Promise.all([
-    hasPersistedPromptProfile(env, workspaceId),
-    getProducts(env, workspaceId),
-    listMedia(env, {}, workspaceId),
-    listContentPool(env, {}, workspaceId),
-  ]);
-  const stores = {
-    promptProfile: { empty: !promptProfilePersisted },
-    products: { empty: products.length === 0, count: products.length },
-    media: { empty: media.length === 0, count: media.length },
-    contentPool: { empty: contentPool.length === 0, count: contentPool.length },
-  };
-  return Object.freeze({
-    ...stores,
-    destinationEmpty: Object.values(stores).every((store) => store.empty),
-  });
-}
-
-function stableValue(value) {
-  if (Array.isArray(value)) return value.map(stableValue);
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(
-    Object.keys(value)
-      .sort()
-      .map((key) => [key, stableValue(value[key])]),
-  );
-}
-
-function comparableRecord(record, {
-  productSignatures = new Map(),
-  mediaSignatures = new Map(),
-} = {}) {
-  const comparable = {};
-  for (const [key, value] of Object.entries(record || {})) {
-    if (!NON_COMPARABLE_FIELDS.has(key)) comparable[key] = value;
-  }
-  if (Object.hasOwn(comparable, "productId")) {
-    comparable.productId = comparable.productId
-      ? productSignatures.get(comparable.productId) || "__unmatched_product__"
-      : null;
-  }
-  if (Array.isArray(comparable.mediaIds)) {
-    comparable.mediaIds = comparable.mediaIds
-      .map((mediaId) => mediaSignatures.get(mediaId) || "__unmatched_media__")
-      .sort();
-  }
-  for (const field of ["tags", "experienceTags", "topics", "allowedContentTypes"]) {
-    if (Array.isArray(comparable[field])) comparable[field] = [...comparable[field]].sort();
-  }
-  return JSON.stringify(stableValue(comparable));
-}
-
-function signatureMap(records, signature) {
-  return new Map(records.map((record) => [record.id, signature(record)]));
-}
-
-function comparableProduct(product) {
-  return comparableRecord(validateProductInput(cloneInput(product, {})));
-}
-
-function comparisonCounts(sourceSignatures, destinationSignatures) {
-  const sourceCounts = new Map();
-  const destinationCounts = new Map();
-  for (const signature of sourceSignatures) {
-    sourceCounts.set(signature, (sourceCounts.get(signature) || 0) + 1);
-  }
-  for (const signature of destinationSignatures) {
-    destinationCounts.set(signature, (destinationCounts.get(signature) || 0) + 1);
-  }
-  const equivalentCount = [...sourceCounts].reduce(
-    (count, [signature, sourceCount]) => count + Math.min(sourceCount, destinationCounts.get(signature) || 0),
-    0,
-  );
-  return {
-    sourceCount: sourceSignatures.length,
-    destinationCount: destinationSignatures.length,
-    equivalentCount,
-    destinationOnlyCount: destinationSignatures.length - equivalentCount,
-    sourceOnlyCount: sourceSignatures.length - equivalentCount,
-  };
-}
-
-function matchingRecordIds(sourceRecords, destinationRecords, sourceSignatures, destinationSignatures) {
-  const destinationIdsBySignature = new Map();
-  for (const destination of destinationRecords) {
-    const signature = destinationSignatures.get(destination.id);
-    const ids = destinationIdsBySignature.get(signature) || [];
-    ids.push(destination.id);
-    destinationIdsBySignature.set(signature, ids);
-  }
-  for (const ids of destinationIdsBySignature.values()) ids.sort(compareIds);
-
-  const matched = new Map();
-  for (const source of [...sourceRecords].sort((left, right) => compareIds(left.id, right.id))) {
-    const ids = destinationIdsBySignature.get(sourceSignatures.get(source.id));
-    if (ids?.length) matched.set(source.id, ids.shift());
-  }
-  return matched;
-}
-
-async function buildCloneSourceDestinationComparison(env, destinationWorkspaceId) {
-  const sourceWorkspaceId = DEFAULT_WORKSPACE_ID;
-  const [
-    sourcePromptExists,
-    destinationPromptExists,
-    sourcePrompt,
-    destinationPrompt,
-    sourceProducts,
-    destinationProducts,
-    sourceMedia,
-    destinationMedia,
-    sourceContentPool,
-    destinationContentPool,
-  ] = await Promise.all([
-    hasPersistedPromptProfile(env, sourceWorkspaceId),
-    hasPersistedPromptProfile(env, destinationWorkspaceId),
-    getEffectivePromptProfile(env, sourceWorkspaceId),
-    getEffectivePromptProfile(env, destinationWorkspaceId),
-    getProducts(env, sourceWorkspaceId),
-    getProducts(env, destinationWorkspaceId),
-    listMedia(env, {}, sourceWorkspaceId),
-    listMedia(env, {}, destinationWorkspaceId),
-    listContentPool(env, {}, sourceWorkspaceId),
-    listContentPool(env, {}, destinationWorkspaceId),
-  ]);
-
-  const sourceProductSignatures = signatureMap(sourceProducts, comparableProduct);
-  const destinationProductSignatures = signatureMap(destinationProducts, comparableProduct);
-  const sourceMediaSignatures = signatureMap(sourceMedia, (media) => comparableRecord(media, {
-    productSignatures: sourceProductSignatures,
-  }));
-  const destinationMediaSignatures = signatureMap(destinationMedia, (media) => comparableRecord(media, {
-    productSignatures: destinationProductSignatures,
-  }));
-
-  const sourceContentPoolSignatures = sourceContentPool.map((item) => comparableRecord(item, {
-    productSignatures: sourceProductSignatures,
-    mediaSignatures: sourceMediaSignatures,
-  }));
-  const destinationContentPoolSignatures = destinationContentPool.map((item) => comparableRecord(item, {
-    productSignatures: destinationProductSignatures,
-    mediaSignatures: destinationMediaSignatures,
-  }));
-  const sourceContentPoolSignatureMap = new Map(
-    sourceContentPool.map((item, index) => [item.id, sourceContentPoolSignatures[index]]),
-  );
-  const destinationContentPoolSignatureMap = new Map(
-    destinationContentPool.map((item, index) => [item.id, destinationContentPoolSignatures[index]]),
-  );
-
-  const summary = {
-    promptProfile: {
-      sourceExists: sourcePromptExists,
-      destinationExists: destinationPromptExists,
-      equivalent: sourcePromptExists && destinationPromptExists &&
-        JSON.stringify(stableValue(sourcePrompt.profile)) === JSON.stringify(stableValue(destinationPrompt.profile)),
-    },
-    products: comparisonCounts([...sourceProductSignatures.values()], [...destinationProductSignatures.values()]),
-    media: comparisonCounts([...sourceMediaSignatures.values()], [...destinationMediaSignatures.values()]),
-    contentPool: comparisonCounts(sourceContentPoolSignatures, destinationContentPoolSignatures),
-  };
-
-  return {
-    summary,
-    source: {
-      workspaceId: sourceWorkspaceId,
-      promptExists: sourcePromptExists,
-      promptProfile: sourcePrompt.profile,
-      products: sourceProducts,
-      media: sourceMedia,
-      contentPool: sourceContentPool,
-    },
-    destination: {
-      workspaceId: destinationWorkspaceId,
-      products: destinationProducts,
-      media: destinationMedia,
-      contentPool: destinationContentPool,
-    },
-    matches: {
-      products: matchingRecordIds(sourceProducts, destinationProducts, sourceProductSignatures, destinationProductSignatures),
-      media: matchingRecordIds(sourceMedia, destinationMedia, sourceMediaSignatures, destinationMediaSignatures),
-      contentPool: matchingRecordIds(sourceContentPool, destinationContentPool, sourceContentPoolSignatureMap, destinationContentPoolSignatureMap),
-    },
-  };
-}
-
-export async function getCloneSourceDestinationComparison(env, destinationWorkspaceId) {
-  return Object.freeze((await buildCloneSourceDestinationComparison(env, destinationWorkspaceId)).summary);
-}
-
-function requireReconciliationSafeComparison(summary) {
-  for (const store of ["products", "media", "contentPool"]) {
-    if (summary[store].destinationOnlyCount !== 0) {
-      fail("Destination Workspace has non-equivalent cloneable data", "workspace_reconcile_destination_conflict");
-    }
-  }
-  if (
-    summary.promptProfile.sourceExists &&
-    summary.promptProfile.destinationExists &&
-    !summary.promptProfile.equivalent
-  ) {
-    fail("Destination Prompt Profile conflicts with source", "workspace_reconcile_prompt_conflict");
-  }
-}
-
-function sourceOnlyRecords(records, matches) {
-  return records.filter((record) => !matches.has(record.id));
-}
-
-export async function reconcileWorkspaceClone(
-  env,
-  { sourceWorkspaceId = DEFAULT_WORKSPACE_ID, destinationWorkspaceId },
-  {
-    createId = defaultId,
-    createObjectKey = ({ operationId, mediaId }) => `media/reconcile/${operationId}/${mediaId}`,
-  } = {},
-) {
-  try {
-    if (sourceWorkspaceId !== DEFAULT_WORKSPACE_ID) {
-      fail("Reconciliation source Workspace is invalid", "workspace_reconcile_source_invalid");
-    }
-    const [sourceWorkspace, destinationWorkspace] = await Promise.all([
-      getWorkspaceById(env, sourceWorkspaceId),
-      getWorkspaceById(env, destinationWorkspaceId),
-    ]);
-    validateWorkspacePair(sourceWorkspace, destinationWorkspace);
-
-    const comparison = await buildCloneSourceDestinationComparison(env, destinationWorkspace.id);
-    requireReconciliationSafeComparison(comparison.summary);
-
-    const operationId = requireFreshId(createId("workspace_reconcile"), "workspace_reconcile", new Set(), null);
-    const productIdMap = new Map(comparison.matches.products);
-    const productsPlan = prepareProductPlan(
-      sourceOnlyRecords(comparison.source.products, comparison.matches.products),
-      createId,
-    );
-    for (const [sourceId, destinationId] of productsPlan.productIdMap) {
-      productIdMap.set(sourceId, destinationId);
-    }
-
-    const mediaIdMap = new Map(comparison.matches.media);
-    const mediaPlan = prepareMediaPlan(
-      sourceOnlyRecords(comparison.source.media, comparison.matches.media),
-      productIdMap,
-      operationId,
-      createId,
-      createObjectKey,
-    );
-    for (const [sourceId, destinationId] of mediaPlan.mediaIdMap) {
-      mediaIdMap.set(sourceId, destinationId);
-    }
-
-    const contentPoolPlan = prepareContentPoolPlan(
-      sourceOnlyRecords(comparison.source.contentPool, comparison.matches.contentPool),
-      productIdMap,
-      mediaIdMap,
-      createId,
-    );
-
-    for (const mediaItem of mediaPlan.plan) {
-      const sourceObject = await getMediaObject(env, mediaItem.sourceObjectKey);
-      if (!sourceObject || sourceObject.body === null || sourceObject.body === undefined) {
-        fail("Source media object is unavailable", "workspace_clone_source_object_missing");
-      }
-      await verifyReadableSourceBody(sourceObject.body);
-      mediaItem.httpMetadata = sourceObject.httpMetadata;
-      mediaItem.customMetadata = sourceObject.customMetadata;
-    }
-
-    const created = { products: 0, media: 0, contentPool: 0, promptProfile: 0 };
-    let stage = "prompt_profile";
-    try {
-      if (comparison.summary.promptProfile.sourceExists && !comparison.summary.promptProfile.destinationExists) {
-        await updatePromptProfile(env, comparison.source.promptProfile, destinationWorkspace.id);
-        created.promptProfile = 1;
-      }
-
-      stage = "r2_copy";
-      for (const mediaItem of mediaPlan.plan) {
-        const sourceObject = await getMediaObject(env, mediaItem.sourceObjectKey);
-        if (!sourceObject || sourceObject.body === null || sourceObject.body === undefined) {
-          throw new Error("Source media object is unavailable during copy");
-        }
-        await putMediaObject(env, mediaItem.objectKey, sourceObject.body, {
-          httpMetadata: mediaItem.httpMetadata,
-          customMetadata: mediaItem.customMetadata,
-        });
-      }
-
-      stage = "products";
-      for (const product of productsPlan.plan) {
-        await saveProduct(env, product.input, destinationWorkspace.id);
-        created.products += 1;
-      }
-
-      stage = "media";
-      for (const mediaItem of mediaPlan.plan) {
-        await createMedia(env, mediaItem.input, destinationWorkspace.id, { id: mediaItem.id });
-        created.media += 1;
-      }
-
-      stage = "content_pool";
-      for (const item of contentPoolPlan.plan) {
-        await createContentPoolItem(env, item.input, destinationWorkspace.id, { id: item.id });
-        created.contentPool += 1;
-      }
-    } catch {
-      throw new WorkspaceCloneError("Workspace reconciliation stopped after destination writes began", {
-        code: "workspace_reconcile_partial",
-        stage,
-        created,
-      });
-    }
-
-    return Object.freeze({
-      sourceWorkspaceId: sourceWorkspace.id,
-      destinationWorkspaceId: destinationWorkspace.id,
-      created: Object.freeze({ ...created }),
-    });
-  } catch (error) {
-    if (error instanceof WorkspaceCloneError) throw error;
-    throw new WorkspaceCloneError("Workspace reconciliation preflight failed", {
-      code: "workspace_reconcile_preflight_failed",
-    });
-  }
-}
-
 function validateSourceLimits(sourceState) {
   if (
     sourceState.products.length > LIMITS.products ||
@@ -540,8 +202,18 @@ export async function preflightWorkspaceClone(
     ]);
     validateWorkspacePair(sourceWorkspace, destinationWorkspace);
 
-    const destinationState = await getCloneDestinationOccupancy(env, destinationWorkspace.id);
-    validateDestinationEmpty(destinationState);
+    const [promptProfilePersisted, destinationProducts, destinationMedia, destinationContentPool] = await Promise.all([
+      hasPersistedPromptProfile(env, destinationWorkspace.id),
+      getProducts(env, destinationWorkspace.id),
+      listMedia(env, {}, destinationWorkspace.id),
+      listContentPool(env, {}, destinationWorkspace.id),
+    ]);
+    validateDestinationEmpty({
+      promptProfilePersisted,
+      products: destinationProducts,
+      media: destinationMedia,
+      contentPool: destinationContentPool,
+    });
 
     const [promptProfile, products, media, contentPool] = await Promise.all([
       getEffectivePromptProfile(env, sourceWorkspace.id),

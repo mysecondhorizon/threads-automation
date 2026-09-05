@@ -81,12 +81,6 @@ import {
   handleAdminPost,
 } from "./routes/admin.js";
 import {
-  handleAdminWorkspaceClone,
-  handleAdminWorkspaceClonePreflight,
-  handleAdminWorkspaceCloneReconcile,
-} from "./routes/admin-workspace-clone.js";
-
-import {
   handleAdminHomePage,
   handleEndpointOverviewPage,
 } from "./routes/admin-overview.js";
@@ -280,18 +274,6 @@ export default {
       method === "POST"
     ) {
       return handleAdminLogout(request, env);
-    }
-
-    if (pathname === "/admin/maintenance/workspace-clone/preflight") {
-      return handleAdminWorkspaceClonePreflight(request, env);
-    }
-
-    if (pathname === "/admin/maintenance/workspace-clone/reconcile") {
-      return handleAdminWorkspaceCloneReconcile(request, env);
-    }
-
-    if (pathname === "/admin/maintenance/workspace-clone") {
-      return handleAdminWorkspaceClone(request, env);
     }
 
     if (pathname === "/app" && method === "GET") {

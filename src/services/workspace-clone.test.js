@@ -10,10 +10,7 @@ import { listContentPool } from "./content-pool.js";
 import {
   WorkspaceCloneError,
   cloneWorkspace,
-  getCloneDestinationOccupancy,
-  getCloneSourceDestinationComparison,
   preflightWorkspaceClone,
-  reconcileWorkspaceClone,
 } from "./workspace-clone.js";
 
 const DESTINATION = "workspace-destination";
@@ -234,131 +231,6 @@ function cloneInput() {
     destinationWorkspaceId: DESTINATION,
   };
 }
-
-test("clone destination occupancy uses the same scoped stores as preflight without exposing records", async () => {
-  const { env } = createEnv({ destinationData: "products" });
-  const occupancy = await getCloneDestinationOccupancy(env, DESTINATION);
-
-  assert.deepEqual(occupancy, {
-    promptProfile: { empty: true },
-    products: { empty: false, count: 1 },
-    media: { empty: true, count: 0 },
-    contentPool: { empty: true, count: 0 },
-    destinationEmpty: false,
-  });
-  assert.equal(JSON.stringify(occupancy).includes("Source Product"), false);
-});
-
-test("clone comparison matches normalized cloned content while ignoring generated identities and usage state", async () => {
-  const fixture = createEnv();
-  await cloneWorkspace(fixture.env, cloneInput(), deterministicCloneOptions());
-
-  const comparison = await getCloneSourceDestinationComparison(fixture.env, DESTINATION);
-  assert.deepEqual(comparison, {
-    promptProfile: { sourceExists: true, destinationExists: true, equivalent: true },
-    products: { sourceCount: 1, destinationCount: 1, equivalentCount: 1, destinationOnlyCount: 0, sourceOnlyCount: 0 },
-    media: { sourceCount: 1, destinationCount: 1, equivalentCount: 1, destinationOnlyCount: 0, sourceOnlyCount: 0 },
-    contentPool: { sourceCount: 1, destinationCount: 1, equivalentCount: 1, destinationOnlyCount: 0, sourceOnlyCount: 0 },
-  });
-  assert.equal(JSON.stringify(comparison).includes("Source Product"), false);
-  assert.equal(JSON.stringify(comparison).includes(SOURCE_OBJECT_KEY), false);
-});
-
-test("clone comparison reports partial, source-only, destination-only, and changed reusable content", async () => {
-  const fixture = createEnv();
-  await cloneWorkspace(fixture.env, cloneInput(), deterministicCloneOptions());
-  const products = JSON.parse(fixture.values.get("content_products"));
-  const destinationProduct = products.products.find((product) => product.workspaceId === DESTINATION);
-  destinationProduct.description = "Changed reusable content";
-  products.products.push({ ...sourceProduct(7), id: "product-destination-only", workspaceId: DESTINATION });
-  fixture.values.set("content_products", JSON.stringify(products));
-
-  const comparison = await getCloneSourceDestinationComparison(fixture.env, DESTINATION);
-  assert.deepEqual(comparison.products, {
-    sourceCount: 1,
-    destinationCount: 2,
-    equivalentCount: 0,
-    destinationOnlyCount: 2,
-    sourceOnlyCount: 1,
-  });
-  assert.equal(comparison.media.sourceOnlyCount, 1);
-  assert.equal(comparison.contentPool.sourceOnlyCount, 1);
-});
-
-test("reconciliation creates only the missing Content Pool item and remaps equivalent destination references", async () => {
-  const fixture = createEnv();
-  await cloneWorkspace(fixture.env, cloneInput(), deterministicCloneOptions());
-  const poolStore = JSON.parse(fixture.values.get("content_pool"));
-  poolStore.items = poolStore.items.filter((item) => item.workspaceId !== DESTINATION);
-  fixture.values.set("content_pool", JSON.stringify(poolStore));
-
-  const result = await reconcileWorkspaceClone(fixture.env, cloneInput(), deterministicCloneOptions());
-  assert.deepEqual(result.created, { products: 0, media: 0, contentPool: 1, promptProfile: 0 });
-  const destinationProducts = await getProducts(fixture.env, DESTINATION);
-  const destinationMedia = await listMedia(fixture.env, {}, DESTINATION);
-  const destinationPool = await listContentPool(fixture.env, {}, DESTINATION);
-  assert.equal(destinationPool.length, 1);
-  assert.notEqual(destinationPool[0].id, "pool-source");
-  assert.equal(destinationPool[0].productId, destinationProducts[0].id);
-  assert.deepEqual(destinationPool[0].mediaIds, [destinationMedia[0].id]);
-
-  const second = await reconcileWorkspaceClone(fixture.env, cloneInput(), deterministicCloneOptions());
-  assert.deepEqual(second.created, { products: 0, media: 0, contentPool: 0, promptProfile: 0 });
-  assert.equal((await listContentPool(fixture.env, {}, DESTINATION)).length, 1);
-});
-
-test("reconciliation rejects destination conflicts and prompt conflicts before writes", async () => {
-  const cases = [
-    ["product", (fixture) => {
-      const store = JSON.parse(fixture.values.get("content_products"));
-      store.products.push({ ...sourceProduct(8), id: "destination-only-product", workspaceId: DESTINATION });
-      fixture.values.set("content_products", JSON.stringify(store));
-    }],
-    ["media", (fixture) => {
-      const store = JSON.parse(fixture.values.get("content_media_library"));
-      store.records.push({ ...sourceMedia(), id: "destination-only-media", workspaceId: DESTINATION, objectKey: "media/destination-only.jpg" });
-      fixture.values.set("content_media_library", JSON.stringify(store));
-    }],
-    ["content pool", (fixture) => {
-      const store = JSON.parse(fixture.values.get("content_pool"));
-      store.items.push({ ...sourcePool(), id: "destination-only-pool", workspaceId: DESTINATION, mediaIds: ["media-source"], productId: "product-source-0" });
-      fixture.values.set("content_pool", JSON.stringify(store));
-    }],
-    ["non-equivalent product", (fixture) => {
-      const store = JSON.parse(fixture.values.get("content_products"));
-      store.products.find((item) => item.workspaceId === DESTINATION).description = "conflicting content";
-      fixture.values.set("content_products", JSON.stringify(store));
-    }],
-    ["non-equivalent prompt", (fixture) => {
-      const prompt = JSON.parse(fixture.values.get(DESTINATION_PROMPT_KEY));
-      prompt.profile.identityWriting = "conflicting persona";
-      fixture.values.set(DESTINATION_PROMPT_KEY, JSON.stringify(prompt));
-    }],
-  ];
-
-  for (const [_name, mutate] of cases) {
-    const fixture = createEnv();
-    await cloneWorkspace(fixture.env, cloneInput(), deterministicCloneOptions());
-    mutate(fixture);
-    const beforeWrites = writeEvents(fixture.events).length;
-    await assert.rejects(
-      () => reconcileWorkspaceClone(fixture.env, cloneInput(), deterministicCloneOptions()),
-      (error) => error instanceof WorkspaceCloneError,
-    );
-    assert.equal(writeEvents(fixture.events).length, beforeWrites);
-  }
-});
-
-test("reconciliation preserves destination Prompt Profile when source has no persisted profile", async () => {
-  const fixture = createEnv();
-  await cloneWorkspace(fixture.env, cloneInput(), deterministicCloneOptions());
-  fixture.values.delete("operator_prompt_profile:v1");
-  const destinationBefore = fixture.values.get(DESTINATION_PROMPT_KEY);
-
-  const result = await reconcileWorkspaceClone(fixture.env, cloneInput(), deterministicCloneOptions());
-  assert.equal(result.created.promptProfile, 0);
-  assert.equal(fixture.values.get(DESTINATION_PROMPT_KEY), destinationBefore);
-});
 
 function writeEvents(events) {
   return events.filter((event) => event.includes(":put:") || event.startsWith("r2:put:"));
