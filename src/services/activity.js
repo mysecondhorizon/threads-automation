@@ -4,6 +4,7 @@ import { listProductReviewCandidates } from "./product-review.js";
 import { getScheduleRuns } from "./auto-post/schedule-store.js";
 import { getAutoPostStatus } from "./auto-post/status.js";
 import { normalizeScheduleFailure } from "./schedule-operations.js";
+import { DEFAULT_WORKSPACE_ID } from "./workspace-foundation.js";
 
 const DEFAULT_LIMIT = 30;
 const MAX_LIMIT = 50;
@@ -16,6 +17,16 @@ function iso(value) {
 
 function text(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function activityWorkspaceId(value) {
+  return text(value?.workspaceId) ||
+    text(value?.metadata?.workspaceId) ||
+    DEFAULT_WORKSPACE_ID;
+}
+
+function belongsToWorkspace(value, workspaceId) {
+  return activityWorkspaceId(value) === workspaceId;
 }
 
 function safeIdentifier(value) {
@@ -171,7 +182,11 @@ export function summarizeGeneralAutoActivity(items) {
   return summary;
 }
 
-export async function getOperatorActivity(env, { limit, dependencies = {} } = {}) {
+export async function getOperatorActivity(env, {
+  limit,
+  workspaceId = DEFAULT_WORKSPACE_ID,
+  dependencies = {},
+} = {}) {
   const readSchedules = dependencies.getScheduleRuns || getScheduleRuns;
   const readCandidates = dependencies.listProductReviewCandidates || listProductReviewCandidates;
   const readPosts = dependencies.listPosts || listPosts;
@@ -179,8 +194,8 @@ export async function getOperatorActivity(env, { limit, dependencies = {} } = {}
   const readAutoStatus = dependencies.getAutoPostStatus || getAutoPostStatus;
   const reads = await Promise.allSettled([
     readSchedules(env, MAX_LIMIT),
-    readCandidates(env, MAX_LIMIT),
-    readPosts(env, { status: "PUBLISHED" }),
+    readCandidates(env, MAX_LIMIT, workspaceId),
+    readPosts(env, { status: "PUBLISHED" }, workspaceId),
     readLogs(env),
     readAutoStatus(env),
   ]);
@@ -188,7 +203,12 @@ export async function getOperatorActivity(env, { limit, dependencies = {} } = {}
   const [runs, candidates, posts, logs, autoStatus] = reads.map((result) => result.status === "fulfilled" ? result.value : []);
   const partial = reads.some((result) => result.status === "rejected");
 
+  const workspaceRuns = (Array.isArray(runs) ? runs : [])
+    .filter((run) => belongsToWorkspace(run, workspaceId));
+  const workspaceLogs = (Array.isArray(logs) ? logs : [])
+    .filter((log) => belongsToWorkspace(log, workspaceId));
   const generalAutoExecutions = (Array.isArray(autoStatus?.recentGeneralAutoExecutions) ? autoStatus.recentGeneralAutoExecutions : [])
+    .filter((execution) => belongsToWorkspace(execution, workspaceId))
     .filter((execution) => safeIdentifier(execution?.id) && execution?.diagnostic);
   const diagnosticsByExecutionId = new Map(generalAutoExecutions.map((execution) => [execution.id, execution.diagnostic]));
   const matchedExecutionIds = new Set();
@@ -214,7 +234,7 @@ export async function getOperatorActivity(env, { limit, dependencies = {} } = {}
   const items = [];
   const externalPostIds = new Set();
   const generatedCandidateIds = new Set();
-  for (const [index, run] of (Array.isArray(runs) ? runs : []).entries()) {
+  for (const [index, run] of workspaceRuns.entries()) {
     const normalized = normalizeScheduleActivity(run, index);
     if (!normalized) continue;
     const diagnostic = normalized.type === "GENERAL_AUTO" ? generalAutoDiagnostic(run) : null;
@@ -249,7 +269,7 @@ export async function getOperatorActivity(env, { limit, dependencies = {} } = {}
     items.push(normalized);
     if (normalized.externalPostId) externalPostIds.add(normalized.externalPostId);
   }
-  for (const [index, log] of (Array.isArray(logs) ? logs : []).entries()) {
+  for (const [index, log] of workspaceLogs.entries()) {
     const normalized = normalizePostLogActivity(log, index);
     if (normalized?.type === "GENERAL_AUTO") continue;
     if (!normalized || (normalized.externalPostId && externalPostIds.has(normalized.externalPostId))) continue;

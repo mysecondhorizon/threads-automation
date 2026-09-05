@@ -60,7 +60,7 @@ assert.equal(result.limit, 50);
 assert.equal(result.hasMore, false);
 assert.equal(result.partial, false);
 assert.deepEqual(sourceReadArguments.schedules.slice(1), [50]);
-assert.deepEqual(sourceReadArguments.candidates.slice(1), [50]);
+assert.deepEqual(sourceReadArguments.candidates.slice(1), [50, "default-workspace"]);
 assert.deepEqual(sourceReadArguments.logs.slice(1), []);
 assert.deepEqual(sourceReadArguments.autoStatus.slice(1), []);
 assert.deepEqual(result.items.map((activity) => activity.id), [
@@ -147,6 +147,49 @@ assert.deepEqual(summarizeGeneralAutoActivity([
   imageUsagePercent:33,
   videoUsagePercent:33,
 });
+
+const scopedReadArguments = {};
+const scopedActivity = await getOperatorActivity({}, {
+  workspaceId: "workspace-next",
+  dependencies: {
+    async getScheduleRuns() {
+      return [
+        { id:"default-run", operation:"auto_general", status:"completed", completedAt:"2026-08-30T01:00:00.000Z" },
+        { id:"next-run", workspaceId:"workspace-next", operation:"auto_general", status:"completed", completedAt:"2026-08-30T02:00:00.000Z" },
+        { id:"other-run", workspaceId:"workspace-other", operation:"auto_general", status:"completed", completedAt:"2026-08-30T03:00:00.000Z" },
+      ];
+    },
+    async listProductReviewCandidates(...args) {
+      scopedReadArguments.candidates = args;
+      return [];
+    },
+    async listPosts(...args) {
+      scopedReadArguments.posts = args;
+      return [{ id:"next-manual", status:"PUBLISHED", publishedAt:"2026-08-30T04:00:00.000Z", publishedPostId:"next-manual" }];
+    },
+    async getPostLogs() {
+      return [
+        { status:"published", created_at:"2026-08-30T05:00:00.000Z", post_id:"default-log", metadata:{ source:"OPERATOR" } },
+        { status:"published", created_at:"2026-08-30T06:00:00.000Z", post_id:"next-log", metadata:{ source:"OPERATOR", workspaceId:"workspace-next" } },
+        { status:"published", created_at:"2026-08-30T07:00:00.000Z", post_id:"other-log", metadata:{ source:"OPERATOR", workspaceId:"workspace-other" } },
+      ];
+    },
+    async getAutoPostStatus() {
+      return { recentGeneralAutoExecutions:[
+        { id:"default-execution", diagnostic:{ attempts:[] } },
+        { id:"next-execution", workspaceId:"workspace-next", diagnostic:{ attempts:[] } },
+      ] };
+    },
+  },
+});
+assert.deepEqual(scopedReadArguments.candidates.slice(1), [50, "workspace-next"]);
+assert.deepEqual(scopedReadArguments.posts.slice(1), [{ status:"PUBLISHED" }, "workspace-next"]);
+assert.equal(scopedActivity.items.some((activity) => activity.id === "schedule:default-run"), false);
+assert.equal(scopedActivity.items.some((activity) => activity.id === "schedule:other-run"), false);
+assert.equal(scopedActivity.items.some((activity) => activity.id === "schedule:next-run"), true);
+assert.equal(scopedActivity.items.some((activity) => activity.externalPostId === "default-log"), false);
+assert.equal(scopedActivity.items.some((activity) => activity.externalPostId === "other-log"), false);
+assert.equal(scopedActivity.items.some((activity) => activity.externalPostId === "next-log"), true);
 const unsafeId = "https://example.com/secret?token=abc";
 const oversizedId = "x".repeat(300);
 const unsafeResult = await getOperatorActivity({}, { dependencies:{
