@@ -1,4 +1,6 @@
 import { resolveCurrentSession } from "../middleware/auth.js";
+import { getWorkspaceForOwner } from "../services/login-foundation.js";
+import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
 import { WorkspaceCloneError, cloneWorkspace } from "../services/workspace-clone.js";
 
 const CONFIRMATION = "CLONE_WORKSPACE";
@@ -43,7 +45,7 @@ function sanitizeCreated(created) {
   };
 }
 
-async function parseInput(request) {
+async function parseInput(request, allowedKeys) {
   let input;
   try {
     input = await request.json();
@@ -53,14 +55,47 @@ async function parseInput(request) {
 
   if (
     !isPlainObject(input) ||
-    Object.keys(input).some((key) => !ALLOWED_INPUT_KEYS.has(key)) ||
-    input.confirm !== CONFIRMATION ||
-    !isWorkspaceId(input.sourceWorkspaceId) ||
-    !isWorkspaceId(input.destinationWorkspaceId)
+    Object.keys(input).some((key) => !allowedKeys.has(key)) ||
+    input.confirm !== CONFIRMATION
   ) {
     return null;
   }
   return input;
+}
+
+async function resolveCloneInput(request, env, current) {
+  if (current.session.legacy) {
+    const input = await parseInput(request, ALLOWED_INPUT_KEYS);
+    if (!input || !isWorkspaceId(input.sourceWorkspaceId) || !isWorkspaceId(input.destinationWorkspaceId)) {
+      return null;
+    }
+    return {
+      sourceWorkspaceId: input.sourceWorkspaceId,
+      destinationWorkspaceId: input.destinationWorkspaceId,
+    };
+  }
+
+  const input = await parseInput(request, new Set(["confirm"]));
+  const selectedWorkspaceId = current.session.selectedWorkspaceId;
+  if (
+    !input ||
+    !isWorkspaceId(selectedWorkspaceId) ||
+    selectedWorkspaceId === DEFAULT_WORKSPACE_ID
+  ) {
+    return null;
+  }
+
+  const destinationWorkspace = await getWorkspaceForOwner(
+    env,
+    selectedWorkspaceId,
+    current.user.id,
+  );
+  if (!destinationWorkspace?.active) return null;
+
+  return {
+    sourceWorkspaceId: DEFAULT_WORKSPACE_ID,
+    destinationWorkspaceId: destinationWorkspace.id,
+  };
 }
 
 export async function handleAdminWorkspaceClone(
@@ -76,11 +111,7 @@ export async function handleAdminWorkspaceClone(
   if (!session) {
     return failure("Unauthorized", 401);
   }
-  if (!session.session.legacy) {
-    return failure("Forbidden", 403);
-  }
-
-  const input = await parseInput(request);
+  const input = await resolveCloneInput(request, env, session);
   if (!input) {
     return failure("Invalid workspace clone request", 400);
   }

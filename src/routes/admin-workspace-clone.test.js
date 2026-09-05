@@ -1,21 +1,40 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ADMIN_SESSION_KEY_PREFIX, USERS_KEY } from "../services/login-foundation.js";
+import {
+  ADMIN_SESSION_KEY_PREFIX,
+  USERS_KEY,
+  WORKSPACES_KEY,
+} from "../services/login-foundation.js";
 import { WorkspaceCloneError } from "../services/workspace-clone.js";
 import { handleAdminWorkspaceClone } from "./admin-workspace-clone.js";
 
 const NOW = "2026-08-30T00:00:00.000Z";
 const EXPIRES = "2099-08-30T00:00:00.000Z";
 
-function createEnv(session = "legacy") {
+function workspace({
+  id = "workspace-registered",
+  ownerUserId = "user-registered",
+  active = true,
+} = {}) {
+  return {
+    id,
+    ownerUserId,
+    name: `Workspace ${id}`,
+    active,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
+function createEnv(session = "legacy", { selectedWorkspaceId = "workspace-registered", workspaces } = {}) {
   const values = new Map();
   if (session === "legacy") values.set(`${ADMIN_SESSION_KEY_PREFIX}legacy`, "valid");
   if (session === "registered") {
     values.set(`${ADMIN_SESSION_KEY_PREFIX}registered`, JSON.stringify({
       version: 1,
       userId: "user-registered",
-      selectedWorkspaceId: "workspace-registered",
+      selectedWorkspaceId,
       createdAt: NOW,
       expiresAt: EXPIRES,
     }));
@@ -29,6 +48,10 @@ function createEnv(session = "legacy") {
         createdAt: NOW,
         updatedAt: NOW,
       }],
+    }));
+    values.set(WORKSPACES_KEY, JSON.stringify({
+      version: 1,
+      workspaces: workspaces ?? [workspace()],
     }));
   }
   return {
@@ -70,7 +93,77 @@ test("workspace clone route rejects unauthenticated and registered sessions with
   const registered = await handleAdminWorkspaceClone(request("POST", validInput(), "registered"), createEnv("registered"), { clone });
 
   assert.equal(unauthenticated.status, 401);
-  assert.equal(registered.status, 403);
+  assert.equal(registered.status, 400);
+  assert.equal(calls, 0);
+});
+
+test("registered session clones from Default Workspace into its owned active selection", async () => {
+  let received = null;
+  const result = await handleAdminWorkspaceClone(
+    request("POST", { confirm: "CLONE_WORKSPACE" }, "registered"),
+    createEnv("registered"),
+    {
+      clone: async (env, input) => {
+        received = { env, input };
+        return {
+          ...input,
+          operationId: "workspace_clone_safe",
+          created: {},
+        };
+      },
+    },
+  );
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(received.input, {
+    sourceWorkspaceId: "default-workspace",
+    destinationWorkspaceId: "workspace-registered",
+  });
+});
+
+test("registered session runner rejects missing, default, foreign, inactive, and missing Workspace selections", async () => {
+  let calls = 0;
+  const clone = async () => { calls += 1; };
+  const body = { confirm: "CLONE_WORKSPACE" };
+  const cases = [
+    [null, []],
+    ["default-workspace", []],
+    ["workspace-foreign", [workspace({ id: "workspace-foreign", ownerUserId: "user-other" })]],
+    ["workspace-inactive", [workspace({ id: "workspace-inactive", active: false })]],
+    ["workspace-missing", []],
+  ];
+
+  for (const [selectedWorkspaceId, workspaces] of cases) {
+    const response = await handleAdminWorkspaceClone(
+      request("POST", body, "registered"),
+      createEnv("registered", { selectedWorkspaceId, workspaces }),
+      { clone },
+    );
+    assert.equal(response.status, 400);
+  }
+  assert.equal(calls, 0);
+});
+
+test("registered session runner rejects caller workspace ids and wrong confirmation without calling clone core", async () => {
+  let calls = 0;
+  const clone = async () => { calls += 1; };
+  const env = createEnv("registered");
+  const suppliedDestination = await handleAdminWorkspaceClone(
+    request("POST", {
+      confirm: "CLONE_WORKSPACE",
+      destinationWorkspaceId: "workspace-attacker",
+    }, "registered"),
+    env,
+    { clone },
+  );
+  const wrongConfirmation = await handleAdminWorkspaceClone(
+    request("POST", { confirm: "wrong" }, "registered"),
+    env,
+    { clone },
+  );
+
+  assert.equal(suppliedDestination.status, 400);
+  assert.equal(wrongConfirmation.status, 400);
   assert.equal(calls, 0);
 });
 
