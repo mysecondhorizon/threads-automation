@@ -83,6 +83,7 @@ import {
 import {
   handleAdminWorkspaceClone,
   handleAdminWorkspaceClonePreflight,
+  handleAdminWorkspaceCloneReconcile,
 } from "./routes/admin-workspace-clone.js";
 
 import {
@@ -283,6 +284,10 @@ export default {
 
     if (pathname === "/admin/maintenance/workspace-clone/preflight") {
       return handleAdminWorkspaceClonePreflight(request, env);
+    }
+
+    if (pathname === "/admin/maintenance/workspace-clone/reconcile") {
+      return handleAdminWorkspaceCloneReconcile(request, env);
     }
 
     if (pathname === "/admin/maintenance/workspace-clone") {

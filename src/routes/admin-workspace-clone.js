@@ -6,9 +6,11 @@ import {
   cloneWorkspace,
   getCloneDestinationOccupancy,
   getCloneSourceDestinationComparison,
+  reconcileWorkspaceClone,
 } from "../services/workspace-clone.js";
 
 const CONFIRMATION = "CLONE_WORKSPACE";
+const RECONCILIATION_CONFIRMATION = "RECONCILE_WORKSPACE";
 const ALLOWED_INPUT_KEYS = new Set([
   "sourceWorkspaceId",
   "destinationWorkspaceId",
@@ -90,7 +92,7 @@ function sanitizeComparison(comparison) {
   };
 }
 
-async function parseInput(request, allowedKeys) {
+async function parseInput(request, allowedKeys, confirmation = CONFIRMATION) {
   let input;
   try {
     input = await request.json();
@@ -101,11 +103,23 @@ async function parseInput(request, allowedKeys) {
   if (
     !isPlainObject(input) ||
     Object.keys(input).some((key) => !allowedKeys.has(key)) ||
-    input.confirm !== CONFIRMATION
+    input.confirm !== confirmation
   ) {
     return null;
   }
   return input;
+}
+
+function sanitizeReconciliationCreated(created) {
+  const count = (field) => Number.isSafeInteger(created?.[field]) && created[field] >= 0
+    ? created[field]
+    : 0;
+  return {
+    products: count("products"),
+    media: count("media"),
+    contentPool: count("contentPool"),
+    promptProfile: count("promptProfile"),
+  };
 }
 
 async function resolveCloneInput(request, env, current) {
@@ -190,6 +204,49 @@ export async function handleAdminWorkspaceClonePreflight(
   } catch {
     return failure("Workspace clone preflight failed", 500, {
       code: "workspace_clone_preflight_failed",
+    });
+  }
+}
+
+export async function handleAdminWorkspaceCloneReconcile(
+  request,
+  env,
+  { reconcile = reconcileWorkspaceClone } = {},
+) {
+  if (request.method !== "POST") return failure("Method Not Allowed", 405);
+
+  const current = await resolveCurrentSession(request, env);
+  if (!current) return failure("Unauthorized", 401);
+  if (current.session.legacy) return failure("Forbidden", 403);
+  const destinationWorkspace = await resolveRegisteredDestination(env, current);
+  if (!destinationWorkspace) return failure("Invalid workspace reconciliation request", 400);
+  const input = await parseInput(
+    request,
+    new Set(["confirm"]),
+    RECONCILIATION_CONFIRMATION,
+  );
+  if (!input) return failure("Invalid workspace reconciliation request", 400);
+
+  try {
+    const result = await reconcile(env, {
+      sourceWorkspaceId: DEFAULT_WORKSPACE_ID,
+      destinationWorkspaceId: destinationWorkspace.id,
+    });
+    return response({
+      ok: true,
+      created: sanitizeReconciliationCreated(result.created),
+    }, 200);
+  } catch (error) {
+    if (error instanceof WorkspaceCloneError) {
+      return failure("Workspace reconciliation failed", error.code === "workspace_reconcile_partial" ? 500 : 409, {
+        code: error.code,
+        ...(error.code === "workspace_reconcile_partial"
+          ? { created: sanitizeReconciliationCreated(error.created) }
+          : {}),
+      });
+    }
+    return failure("Workspace reconciliation failed", 500, {
+      code: "workspace_reconcile_failed",
     });
   }
 }

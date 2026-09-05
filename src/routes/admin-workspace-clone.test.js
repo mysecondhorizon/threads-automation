@@ -10,6 +10,7 @@ import { WorkspaceCloneError } from "../services/workspace-clone.js";
 import {
   handleAdminWorkspaceClone,
   handleAdminWorkspaceClonePreflight,
+  handleAdminWorkspaceCloneReconcile,
 } from "./admin-workspace-clone.js";
 
 const NOW = "2026-08-30T00:00:00.000Z";
@@ -238,6 +239,51 @@ test("registered session preflight rejects legacy, missing, default, foreign, in
     );
     assert.equal(response.status, 400);
   }
+});
+
+test("registered session reconciliation uses only the selected Workspace and returns sanitized counts", async () => {
+  let received = null;
+  const response = await handleAdminWorkspaceCloneReconcile(
+    request("POST", { confirm: "RECONCILE_WORKSPACE" }, "registered"),
+    createEnv("registered"),
+    {
+      reconcile: async (_env, input) => {
+        received = input;
+        return { created: { products: 0, media: 0, contentPool: 1, promptProfile: 0, raw: "secret" } };
+      },
+    },
+  );
+  const payload = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual(received, {
+    sourceWorkspaceId: "default-workspace",
+    destinationWorkspaceId: "workspace-registered",
+  });
+  assert.deepEqual(payload, {
+    ok: true,
+    created: { products: 0, media: 0, contentPool: 1, promptProfile: 0 },
+  });
+  assert.equal(JSON.stringify(payload).includes("secret"), false);
+});
+
+test("reconciliation rejects caller Workspace ids and wrong confirmation without invoking service", async () => {
+  let calls = 0;
+  const reconcile = async () => { calls += 1; };
+  const env = createEnv("registered");
+  const suppliedDestination = await handleAdminWorkspaceCloneReconcile(
+    request("POST", { confirm: "RECONCILE_WORKSPACE", destinationWorkspaceId: "workspace-attacker" }, "registered"),
+    env,
+    { reconcile },
+  );
+  const wrongConfirmation = await handleAdminWorkspaceCloneReconcile(
+    request("POST", { confirm: "wrong" }, "registered"),
+    env,
+    { reconcile },
+  );
+  assert.equal(suppliedDestination.status, 400);
+  assert.equal(wrongConfirmation.status, 400);
+  assert.equal(calls, 0);
 });
 
 test("workspace clone route is POST-only and rejects invalid confirmation or required ids without mutation", async () => {
