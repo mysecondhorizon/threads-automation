@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { handleAppPromptsPage } from "./app-prompts-page.js";
+import { ADMIN_SESSION_KEY_PREFIX, USERS_KEY, WORKSPACES_KEY } from "../services/login-foundation.js";
 
 const fields = [
   "identityWriting",
@@ -31,5 +32,15 @@ assert.match(page, /id="prompt-reset" type="button">기본값 복원/u);
 assert.match(page, /min-height:136px/u);
 assert.doesNotMatch(page, /app-media-edit-form|app-media-button/u);
 assert.doesNotMatch(page, /validation\.js|json_schema|operator_prompt_profile/u);
+
+const values = new Map([
+  [USERS_KEY, JSON.stringify({ version: 1, users: [{ id: "user-next", loginId: "next", displayName: "Next", active: true, createdAt: "2026-01-01", updatedAt: "2026-01-01" }] })],
+  [WORKSPACES_KEY, JSON.stringify({ version: 1, workspaces: [{ id: "workspace-next", ownerUserId: "user-next", name: "Next Horizon", active: true, createdAt: "2026-01-01", updatedAt: "2026-01-01" }] })],
+  [`${ADMIN_SESSION_KEY_PREFIX}registered`, JSON.stringify({ version: 1, userId: "user-next", selectedWorkspaceId: "workspace-next", createdAt: "2026-01-01", expiresAt: "2099-01-01" })],
+]);
+const registeredEnv = { THREADS_KV: { async get(key, type) { const value = values.get(key); return value === undefined ? null : (type === "json" ? JSON.parse(value) : value); } } };
+const registeredPage = await handleAppPromptsPage(new Request("https://x/app/prompts", { headers: { cookie: "admin_session=registered" } }), registeredEnv);
+assert.equal(registeredPage.status, 200);
+assert.match(await registeredPage.text(), /Next Horizon/u);
 
 console.log("app prompts page fixture passed");

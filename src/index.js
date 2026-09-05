@@ -317,7 +317,8 @@ export default {
         isUnscopedAppAccessBlocked(appContext) &&
         pathname !== "/app/products" &&
         pathname !== "/app/daily" &&
-        pathname !== "/app/media"
+        pathname !== "/app/media" &&
+        pathname !== "/app/prompts"
       ) {
         return renderAppWorkspaceUnavailable(appContext, pathname);
       }

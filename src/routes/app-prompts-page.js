@@ -1,5 +1,7 @@
 import { requireAdminSession } from "../middleware/auth.js";
-import { renderAppShell } from "./app-shell.js";
+import { resolveCurrentAppContext } from "../services/app-context.js";
+import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
+import { renderAppShell, renderAppWorkspaceUnavailable } from "./app-shell.js";
 
 const fields = [
   ["identityWriting", "AI 정체성과 역할", "글의 말투, 관점, 역할을 정리합니다."],
@@ -110,10 +112,18 @@ function renderPromptPageContent() {
 export async function handleAppPromptsPage(request, env) {
   const auth = await requireAdminSession(request, env);
   if (!auth.ok) return auth.response;
+  const appContext = await resolveCurrentAppContext(request, env);
+  if (!auth.session.legacy && (
+    !auth.session.selectedWorkspaceId ||
+    (auth.session.selectedWorkspaceId !== DEFAULT_WORKSPACE_ID && !appContext?.currentWorkspace)
+  )) {
+    return renderAppWorkspaceUnavailable(appContext, "/app/prompts");
+  }
   return renderAppShell({
     activePath: "/app/prompts",
     title: "프롬프트",
     description: "직접 AI 글 작성, 자동 게시, 제품 후기 글 작성에 적용됩니다.",
     content: renderPromptPageContent(),
+    appContext,
   });
 }
