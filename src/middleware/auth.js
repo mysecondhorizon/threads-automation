@@ -2,6 +2,7 @@ import { getCookieValue } from "../utils/cookie.js";
 import { fail } from "../utils/response.js";
 import {
   LEGACY_USER_ID,
+  getWorkspaceForOwner,
   getParsedAdminSession,
   getUserById,
 } from "../services/login-foundation.js";
@@ -74,7 +75,8 @@ export async function requireAdminSession(request, env) {
 
 export async function requireAdminApiSession(
   request,
-  env
+  env,
+  { allowSelectedWorkspace = false } = {},
 ) {
   const result = await requireAdminSession(
     request,
@@ -82,6 +84,23 @@ export async function requireAdminApiSession(
   );
 
   if (result.ok) {
+    if (allowSelectedWorkspace) {
+      if (result.session.legacy || result.session.selectedWorkspaceId === DEFAULT_WORKSPACE_ID) {
+        return { ...result, workspaceId: DEFAULT_WORKSPACE_ID };
+      }
+      if (!result.session.selectedWorkspaceId) {
+        return { ok: false, response: fail("Workspace data access is not available yet", 409) };
+      }
+      const workspace = await getWorkspaceForOwner(
+        env,
+        result.session.selectedWorkspaceId,
+        result.user.id,
+      );
+      if (!workspace || !workspace.active) {
+        return { ok: false, response: fail("Workspace data access is not available yet", 409) };
+      }
+      return { ...result, workspaceId: workspace.id };
+    }
     if (
       !result.session.legacy &&
       result.session.selectedWorkspaceId &&

@@ -1,5 +1,7 @@
 import { requireAdminSession } from "../middleware/auth.js";
-import { renderAppShell } from "./app-shell.js";
+import { resolveCurrentAppContext } from "../services/app-context.js";
+import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
+import { renderAppShell, renderAppWorkspaceUnavailable } from "./app-shell.js";
 import { buildProductsClientScript } from "./app-products-client.js";
 
 function renderProductsPageContent() {
@@ -101,10 +103,18 @@ function renderProductsPageContent() {
 export async function handleAppProductsPage(request, env) {
   const auth = await requireAdminSession(request, env);
   if (!auth.ok) return auth.response;
+  const appContext = await resolveCurrentAppContext(request, env);
+  if (!auth.session.legacy && (
+    !auth.session.selectedWorkspaceId ||
+    (auth.session.selectedWorkspaceId !== DEFAULT_WORKSPACE_ID && !appContext?.currentWorkspace)
+  )) {
+    return renderAppWorkspaceUnavailable(appContext, "/app/products");
+  }
   return renderAppShell({
     activePath: "/app/products",
     title: "제품",
     description: "제품 정보, 게시 링크, 제품용 이미지를 관리합니다.",
     content: renderProductsPageContent(),
+    appContext,
   });
 }

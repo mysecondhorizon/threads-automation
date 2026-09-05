@@ -25,20 +25,19 @@ function toOperatorProductMedia(media) {
 }
 
 async function authorize(request, env) {
-  const auth = await requireAdminApiSession(request, env);
-  return auth.ok ? null : auth.response;
+  return requireAdminApiSession(request, env, { allowSelectedWorkspace: true });
 }
 
 export async function handleOperatorProductMedia(request, env, {
   list = listMedia,
   batchUpload = runBatchUpload,
 } = {}) {
-  const unauthorized = await authorize(request, env);
-  if (unauthorized) return unauthorized;
+  const authorization = await authorize(request, env);
+  if (!authorization.ok) return authorization.response;
 
   try {
     if (request.method === "GET") {
-      const media = await list(env, { sourceType: "product" });
+      const media = await list(env, { sourceType: "product" }, authorization.workspaceId);
       return ok({
         media: media
           .filter((item) => item.sourceType === "product" && (item.mediaKind === "image" || item.mediaKind === "video"))
@@ -65,7 +64,7 @@ export async function handleOperatorProductMedia(request, env, {
       // Preserve Product Content Pool behavior. Product type remains isolated
       // from the GENERAL AUTO media candidate path.
       createPoolItems: true,
-    });
+    }, authorization.workspaceId);
     const media = (Array.isArray(result?.results) ? result.results : [])
       .filter((item) => item?.status === "success" && item.media?.sourceType === "product")
       .map((item) => toOperatorProductMedia(item.media));

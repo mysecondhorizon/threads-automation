@@ -23,7 +23,7 @@ const productVideo = { ...productImage, id: "product-video-1", mediaKind: "video
 assert.equal((await handleOperatorProductMedia(request("GET", undefined, false), env(false))).status, 401);
 let listOptions = null;
 const listed = await handleOperatorProductMedia(request("GET"), env(), {
-  list: async (_env, options) => { listOptions = options; return [productImage, generalImage, productVideo]; },
+  list: async (_env, options, workspaceId) => { listOptions = options; assert.equal(workspaceId, "default-workspace"); return [productImage, generalImage, productVideo]; },
 });
 assert.deepEqual(listOptions, { sourceType: "product" });
 const listedBody = await listed.json();
@@ -38,8 +38,9 @@ const form = new FormData();
 form.append("files", new Blob(["image"], { type: "image/jpeg" }), "product.jpg");
 let uploadInput = null;
 const uploaded = await handleOperatorProductMedia(request("POST", form), env(), {
-  batchUpload: async (_env, input) => {
+  batchUpload: async (_env, input, workspaceId) => {
     uploadInput = input;
+    assert.equal(workspaceId, "default-workspace");
     return { results: [{ status: "success", media: productImage }] };
   },
 });

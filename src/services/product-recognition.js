@@ -24,8 +24,8 @@ export function normalizeRecognizedProduct(value) {
   return product;
 }
 
-export async function recognizeProductFromMedia(env, mediaId, { requestJson = requestOpenAiJson, get = getMedia, getObject = getMediaObject } = {}) {
-  const media = await get(env, mediaId);
+export async function recognizeProductFromMedia(env, mediaId, { requestJson = requestOpenAiJson, get = getMedia, getObject = getMediaObject, workspaceId } = {}) {
+  const media = await get(env, mediaId, workspaceId);
   if (!media || media.sourceType !== "product" || media.mediaKind !== "image") throw new Error("A product image is required");
   const object = await getObject(env, media.objectKey);
   if (!object || typeof object.arrayBuffer !== "function") throw new Error("Product image is unavailable");

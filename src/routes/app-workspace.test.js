@@ -140,11 +140,11 @@ test("Workspace selection route preserves session and GET cannot mutate", async 
   assert.equal(writes.length, 1);
 });
 
-test("selected non-default Workspace blocks unscoped app views and APIs while home remains available", async () => {
+test("selected non-default Workspace blocks other unscoped app views and APIs while home remains available", async () => {
   const { env } = createEnv("workspace-a");
   const home = await handleAppHome(request("/app"), env);
   const context = await resolveCurrentAppContext(request("/app"), env);
-  const unavailable = renderAppWorkspaceUnavailable(context, "/app/products");
+  const unavailable = renderAppWorkspaceUnavailable(context, "/app/write");
   const api = await requireAdminApiSession(request("/api/products"), env);
 
   assert.equal(home.status, 200);
@@ -152,6 +152,23 @@ test("selected non-default Workspace blocks unscoped app views and APIs while ho
   assert.match(await unavailable.text(), /Workspace data access is not available yet/u);
   assert.equal(api.ok, false);
   assert.equal(api.response.status, 409);
+
+  const products = await requireAdminApiSession(request("/api/products"), env, { allowSelectedWorkspace: true });
+  assert.equal(products.ok, true);
+  assert.equal(products.workspaceId, "workspace-a");
+});
+
+test("selected Workspace API opt-in rejects missing, foreign, and inactive Workspaces", async () => {
+  for (const selectedWorkspaceId of [null, "workspace-foreign", "workspace-inactive"]) {
+    const { env } = createEnv(selectedWorkspaceId);
+    const result = await requireAdminApiSession(
+      request("/api/products"),
+      env,
+      { allowSelectedWorkspace: true },
+    );
+    assert.equal(result.ok, false);
+    assert.equal(result.response.status, 409);
+  }
 });
 
 test("legacy and registered Default Workspace API behavior remains available", async () => {
@@ -160,6 +177,13 @@ test("legacy and registered Default Workspace API behavior remains available", a
 
   const registeredDefault = createEnv("default-workspace");
   assert.equal((await requireAdminApiSession(request("/api/products"), registeredDefault.env)).ok, true);
+  const productScope = await requireAdminApiSession(
+    request("/api/products"),
+    registeredDefault.env,
+    { allowSelectedWorkspace: true },
+  );
+  assert.equal(productScope.ok, true);
+  assert.equal(productScope.workspaceId, "default-workspace");
 });
 
 test("app home shows only safe Threads connection feedback", async () => {

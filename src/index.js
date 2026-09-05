@@ -313,7 +313,7 @@ export default {
 
     if (pathname.startsWith("/app/") && method === "GET") {
       const appContext = await resolveCurrentAppContext(request, env);
-      if (isUnscopedAppAccessBlocked(appContext)) {
+      if (isUnscopedAppAccessBlocked(appContext) && pathname !== "/app/products") {
         return renderAppWorkspaceUnavailable(appContext, pathname);
       }
     }
