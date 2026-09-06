@@ -13,12 +13,14 @@ import {
 
 export async function handleAutoPostStatus(
   request,
-  env
+  env,
+  { getStatus = getAutoPostStatus } = {}
 ) {
   const adminAuth =
     await requireAdminApiSession(
       request,
-      env
+      env,
+      { allowSelectedWorkspace: true }
     );
 
   if (!adminAuth.ok) {
@@ -27,8 +29,9 @@ export async function handleAutoPostStatus(
 
   try {
     const status =
-      await getAutoPostStatus(
-        env
+      await getStatus(
+        env,
+        { workspaceId: adminAuth.workspaceId }
       );
 
     return ok(
