@@ -62,6 +62,7 @@ import {
 
 import {
   selectGeneralAutoMedia,
+  selectGeneralAutoExperienceMedia,
 } from "../general-auto-media-selection.js";
 
 export {
@@ -338,6 +339,8 @@ export function buildGeneralAutoProvenance(
     contentBasis:
       decision.currentTopic
         ? "CURRENT_TOPIC"
+        : mediaSelection?.reason === "experience_basis"
+          ? "USER_EXPERIENCE"
         : "PERSONA",
   };
 
@@ -363,6 +366,29 @@ export function applySelectedDailyMediaContext(context, mediaSelection) {
   if (!mediaContext) return null;
   context.dailyMediaContext = mediaContext;
   return mediaContext;
+}
+
+export async function selectPlannedGeneralAutoMedia(
+  env,
+  context,
+  {
+    workspaceId = undefined,
+    selectCurrentTopicMedia = selectGeneralAutoMedia,
+    selectExperienceMedia = selectGeneralAutoExperienceMedia,
+  } = {}
+) {
+  if (context?.currentTopic) {
+    return selectCurrentTopicMedia(env, {
+      generatedPost: {
+        topic: context.currentTopic.subject,
+        contentType: "TEXT",
+      },
+      currentTopic: context.currentTopic,
+      workspaceId,
+    });
+  }
+
+  return selectExperienceMedia(env, { workspaceId });
 }
 
 function normalizeGenerationAttemptDiagnostics(value) {
@@ -1150,21 +1176,14 @@ async function runExecution(
       shouldSelectGeneralAutoMedia(
         source,
         generalOnly
-      ) &&
-      context.currentTopic
+      )
     ) {
       try {
         plannedMediaSelection =
-          await selectGeneralAutoMedia(
+          await selectPlannedGeneralAutoMedia(
             env,
-            {
-              generatedPost: {
-                topic: context.currentTopic.subject,
-                contentType: "TEXT",
-              },
-              currentTopic: context.currentTopic,
-              workspaceId: workspaceId || undefined,
-            }
+            context,
+            { workspaceId: workspaceId || undefined }
           );
         applySelectedDailyMediaContext(
           context,
@@ -1230,7 +1249,8 @@ async function runExecution(
       shouldSelectGeneralAutoMedia(
         source,
         generalOnly
-      )
+      ) &&
+      context.currentTopic
     ) {
       try {
         mediaSelection =

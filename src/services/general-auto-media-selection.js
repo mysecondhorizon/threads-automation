@@ -329,6 +329,68 @@ export function selectGeneralAutoMediaFromRecords(
   };
 }
 
+export function selectGeneralAutoExperienceMediaFromRecords(
+  {
+    poolItems = [],
+    mediaRecords = [],
+    at = new Date(),
+  } = {}
+) {
+  const generalMediaById = new Map(
+    mediaRecords
+      .filter((media) => media?.sourceType === "general" && !media?.productId)
+      .map((media) => [text(media.id), media])
+      .filter(([mediaId]) => Boolean(mediaId))
+  );
+  const scoredPoolItems = scoreContentPoolCandidates(poolItems, { at });
+  const candidates = [];
+
+  for (const scored of scoredPoolItems) {
+    const poolItem = scored.candidate;
+    if (poolItem?.type !== "general") continue;
+
+    for (const mediaId of poolItem.mediaIds || []) {
+      const media = generalMediaById.get(text(mediaId));
+      if (!media) continue;
+
+      candidates.push({
+        poolItem,
+        media,
+        eligible: scored.eligible
+          && isMediaAvailable(media, at)
+          && Boolean(text(media.experienceNote)),
+        poolScore: Number(scored.score || 0),
+        relevance: 0,
+      });
+    }
+  }
+
+  const candidateCount = candidates.length;
+  const eligible = candidates
+    .filter((candidate) => candidate.eligible)
+    .sort(compareCandidates);
+
+  if (!eligible.length) {
+    return textSelection(
+      candidateCount ? "no_eligible_experience_media" : "no_experience_media_candidates",
+      candidateCount,
+      0
+    );
+  }
+
+  const selected = eligible[0];
+  return {
+    mode: selected.media.mediaKind === "video" ? "VIDEO" : "IMAGE",
+    mediaId: text(selected.media.id),
+    contentPoolId: text(selected.poolItem.id),
+    reason: "experience_basis",
+    score: selected.poolScore,
+    candidateCount,
+    eligibleCount: eligible.length,
+    generationMediaContext: generationMediaContext(selected.media),
+  };
+}
+
 export async function selectGeneralAutoMedia(
   env,
   options = {},
@@ -350,6 +412,26 @@ export async function selectGeneralAutoMedia(
   ]);
 
   return selectGeneralAutoMediaFromRecords({
+    ...options,
+    poolItems,
+    mediaRecords,
+  });
+}
+
+export async function selectGeneralAutoExperienceMedia(
+  env,
+  options = {},
+  {
+    readContentPool = listContentPool,
+    readMedia = listMedia,
+  } = {}
+) {
+  const [poolItems, mediaRecords] = await Promise.all([
+    readContentPool(env, { type: "general" }, options.workspaceId),
+    readMedia(env, { sourceType: "general" }, options.workspaceId),
+  ]);
+
+  return selectGeneralAutoExperienceMediaFromRecords({
     ...options,
     poolItems,
     mediaRecords,

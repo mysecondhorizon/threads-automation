@@ -695,6 +695,7 @@ function normalizeDailyMediaContext(value) {
       ...(semanticCues.length ? { semanticCues } : {}),
       experienceTags,
       ...(experienceNote ? { experienceNote } : {}),
+      ...(experienceNote ? { experienceProvenance: "USER_EXPERIENCE" } : {}),
     }
     : null;
 }
@@ -1069,7 +1070,11 @@ export function buildGenerationInput(
         "currentTopic is a factual basis for a natural persona observation, not a news summary.",
         "Keep the currentTopic subject's core anchor clear enough that readers can understand what the post is about. Use a natural equivalent when appropriate; do not reduce a specific subject to a vague generic word.",
         "verifiedFacts are the factual boundary, not source sentences to copy. Prefer one talkingPoint when available as the everyday factual wording; otherwise use only the smallest needed verifiedFacts fragment. Use at most one fact naturally, and do not invent numbers, dates, launch details, product features, or certainty.",
-        "Do not claim direct use, attendance, or personal experience. Do not start as a news report or say you saw it in the news.",
+        (
+          contextData.dailyMediaContext?.experienceProvenance === "USER_EXPERIENCE"
+            ? "Do not claim direct use, attendance, or personal experience from currentTopic alone. A direct first-person expression is allowed only within the explicit factual scope of dailyMediaContext.experienceNote; do not combine it with currentTopic to invent a new fact."
+            : "Do not claim direct use, attendance, or personal experience. Do not start as a news report or say you saw it in the news."
+        ),
         "Use personaRelevance as everyday context and selectedAngle as the main angle. Follow forbiddenClaims and keep facts, curiosity, and preference clearly distinct."
       );
     }
@@ -1081,6 +1086,13 @@ export function buildGenerationInput(
         "The post's core subject must remain meaningfully compatible with dailyMediaContext.semanticCues; never attach Daily media as decoration for an unrelated subject.",
         "Do not invent a visit, purchase, meal, office connection, time of day, menu, taste, ownership, or any other fact that dailyMediaContext does not support."
       );
+
+      if (contextData.dailyMediaContext.experienceProvenance === "USER_EXPERIENCE") {
+        lines.push(
+          "dailyMediaContext.experienceNote is explicit USER_EXPERIENCE factual basis supplied by the user. You may use a natural first-person expression only within that note's stated facts; do not copy the note verbatim or extend it with unsupported details.",
+          "dailyMediaContext.experienceTags are classification hints, not evidence of a personal experience. dailyMediaContext.semanticCues provide visual or semantic context, not additional personal facts."
+        );
+      }
     }
   }
 

@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   selectGeneralAutoMedia,
   selectGeneralAutoMediaFromRecords,
+  selectGeneralAutoExperienceMedia,
+  selectGeneralAutoExperienceMediaFromRecords,
 } from "./general-auto-media-selection.js";
 
 const scopes = [];
@@ -250,5 +252,66 @@ const relevantVideo = selectGeneralAutoMediaFromRecords({
   at:new Date("2026-09-01T00:00:00.000Z"),
 });
 assert.equal(relevantVideo.mode, "VIDEO");
+
+const experienceFirstSelection = selectGeneralAutoExperienceMediaFromRecords({
+  poolItems:[
+    { ...poolItem("pool-experience-low", "media-experience-low"), priority:1 },
+    { ...poolItem("pool-experience-best", "media-experience-best"), priority:2 },
+    poolItem("pool-tags-only", "media-tags-only"),
+  ],
+  mediaRecords:[
+    dailyMedia("media-experience-low", { experienceNote:"A calm commute coffee stop" }),
+    dailyMedia("media-experience-best", { experienceNote:"I often bring coffee for my commute", experienceTags:["commute", "coffee"] }),
+    dailyMedia("media-tags-only", { experienceTags:["commute", "coffee"] }),
+  ],
+  at:new Date("2026-09-01T00:00:00.000Z"),
+});
+assert.equal(experienceFirstSelection.reason, "experience_basis");
+assert.equal(experienceFirstSelection.mode, "IMAGE");
+assert.equal(experienceFirstSelection.mediaId, "media-experience-best");
+assert.deepEqual(experienceFirstSelection.generationMediaContext, {
+  semanticCues:["commute", "coffee", "I often bring coffee for my commute"],
+  experienceTags:["commute", "coffee"],
+  experienceNote:"I often bring coffee for my commute",
+});
+
+const unavailableExperienceSelection = selectGeneralAutoExperienceMediaFromRecords({
+  poolItems:[
+    poolItem("pool-experience-inactive", "media-experience-inactive"),
+    poolItem("pool-experience-cooldown", "media-experience-cooldown"),
+    poolItem("pool-experience-max", "media-experience-max"),
+    poolItem("pool-experience-product", "media-experience-product"),
+  ],
+  mediaRecords:[
+    dailyMedia("media-experience-inactive", { active:false, experienceNote:"inactive" }),
+    dailyMedia("media-experience-cooldown", { experienceNote:"cooldown", cooldownDays:1, lastUsedAt:"2026-08-31T12:00:00.000Z" }),
+    dailyMedia("media-experience-max", { experienceNote:"max", maxUses:1, usedCount:1 }),
+    dailyMedia("media-experience-product", { sourceType:"product", experienceNote:"product" }),
+  ],
+  at:new Date("2026-09-01T00:00:00.000Z"),
+});
+assert.equal(unavailableExperienceSelection.mode, "TEXT");
+assert.equal(unavailableExperienceSelection.reason, "no_eligible_experience_media");
+
+const experienceScopes = [];
+const scopedExperienceSelection = await selectGeneralAutoExperienceMedia(
+  {},
+  { workspaceId:"workspace-experience" },
+  {
+    readContentPool: async (_env, _filters, workspaceId) => {
+      experienceScopes.push({ service:"pool", workspaceId });
+      return [poolItem("pool-scoped", "media-scoped")];
+    },
+    readMedia: async (_env, _filters, workspaceId) => {
+      experienceScopes.push({ service:"media", workspaceId });
+      return [dailyMedia("media-scoped", { experienceNote:"scoped experience" })];
+    },
+  }
+);
+assert.equal(scopedExperienceSelection.reason, "experience_basis");
+assert.deepEqual(experienceScopes, [
+  { service:"pool", workspaceId:"workspace-experience" },
+  { service:"media", workspaceId:"workspace-experience" },
+]);
 
 console.log("workspace-aware General AUTO media selection fixtures passed");

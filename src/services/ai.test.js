@@ -31,6 +31,21 @@ assert.match(input, /같은 말을 바꿔 반복하지 말고/u);
 assert.match(input, /dailyMediaContext describes the Daily media/i);
 assert.match(input, /must remain meaningfully compatible/i);
 assert.match(input, /Do not invent a visit, purchase, meal, office connection/i);
+assert.match(input, /explicit USER_EXPERIENCE factual basis supplied by the user/i);
+assert.match(input, /experienceTags are classification hints, not evidence of a personal experience/i);
+assert.match(input, /only within that note's stated facts/i);
 assert.match(input, /OTT content after work/);
+
+const tagsOnlyInput = buildGenerationInput({
+  topic: "General AUTO",
+  tone: "plain",
+  context: {
+    dailyMediaContext: {
+      semanticCues:["cafe"],
+      experienceTags:["cafe"],
+    },
+  },
+});
+assert.doesNotMatch(tagsOnlyInput, /USER_EXPERIENCE factual basis/i);
 
 console.log("AI generation context fixtures passed");
