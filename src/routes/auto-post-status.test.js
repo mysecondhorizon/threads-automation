@@ -56,8 +56,8 @@ function createEnv(sessionId = "registered", selectedWorkspaceId = "workspace-a"
   };
 }
 
-function request(sessionId) {
-  return new Request("https://example.test/admin/auto-post/status", {
+function request(sessionId, path = "/admin/auto-post/status") {
+  return new Request(`https://example.test${path}`, {
     headers: { cookie: `admin_session=${sessionId}` },
   });
 }
@@ -78,6 +78,20 @@ assert.equal(scopedResponse.status, 200);
 assert.deepEqual(receivedOptions, { workspaceId:"workspace-a" });
 
 receivedOptions = null;
+const scopedQueryResponse = await handleAutoPostStatus(
+  request(scoped.sessionId, "/admin/auto-post/status?workspaceId=workspace-foreign"),
+  scoped,
+  {
+    getStatus: async (_env, options) => {
+      receivedOptions = options;
+      return { isRunning:false, activeExecution:null, latestExecution:null, recentGeneralAutoExecutions:[] };
+    },
+  }
+);
+assert.equal(scopedQueryResponse.status, 200);
+assert.deepEqual(receivedOptions, { workspaceId:"workspace-a" });
+
+receivedOptions = null;
 const legacy = createEnv("legacy");
 const legacyResponse = await handleAutoPostStatus(
   request(legacy.sessionId),
@@ -90,6 +104,6 @@ const legacyResponse = await handleAutoPostStatus(
   }
 );
 assert.equal(legacyResponse.status, 200);
-assert.deepEqual(receivedOptions, { workspaceId:"default-workspace" });
+assert.deepEqual(receivedOptions, { workspaceId:null });
 
 console.log("workspace-aware auto post status route fixtures passed");

@@ -7,6 +7,10 @@ import {
 } from "../services/auto-post-engine.js";
 
 import {
+  DEFAULT_WORKSPACE_ID,
+} from "../services/workspace-foundation.js";
+
+import {
   ok,
   fail,
 } from "../utils/response.js";
@@ -28,10 +32,15 @@ export async function handleAutoPostStatus(
   }
 
   try {
+    const statusWorkspaceId =
+      adminAuth.workspaceId === DEFAULT_WORKSPACE_ID
+        ? null
+        : adminAuth.workspaceId;
+
     const status =
       await getStatus(
         env,
-        { workspaceId: adminAuth.workspaceId }
+        { workspaceId: statusWorkspaceId }
       );
 
     return ok(
