@@ -14,14 +14,21 @@ const AUTO_POST_LOCK_KEY =
 const AUTO_POST_LOCK_TTL_SECONDS =
   120;
 
+function lockKey(workspaceId = null) {
+  return typeof workspaceId === "string" && workspaceId.trim()
+    ? `${AUTO_POST_LOCK_KEY}:${workspaceId.trim()}`
+    : AUTO_POST_LOCK_KEY;
+}
+
 export async function acquireExecutionLock(
   env,
-  executionId
+  executionId,
+  workspaceId = null
 ) {
   const currentLock =
     await getJson(
       env,
-      AUTO_POST_LOCK_KEY
+      lockKey(workspaceId)
     );
 
   if (
@@ -52,7 +59,7 @@ export async function acquireExecutionLock(
 
   await putJson(
     env,
-    AUTO_POST_LOCK_KEY,
+      lockKey(workspaceId),
     {
       executionId,
 
@@ -68,12 +75,13 @@ export async function acquireExecutionLock(
 
 export async function releaseExecutionLock(
   env,
-  executionId
+  executionId,
+  workspaceId = null
 ) {
   const currentLock =
     await getJson(
       env,
-      AUTO_POST_LOCK_KEY
+      lockKey(workspaceId)
     );
 
   if (
@@ -82,16 +90,17 @@ export async function releaseExecutionLock(
   ) {
     await deleteKey(
       env,
-      AUTO_POST_LOCK_KEY
+      lockKey(workspaceId)
     );
   }
 }
 
 export async function getExecutionLock(
-  env
+  env,
+  workspaceId = null
 ) {
   return getJson(
     env,
-    AUTO_POST_LOCK_KEY
+    lockKey(workspaceId)
   );
 }

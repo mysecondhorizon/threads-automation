@@ -59,10 +59,10 @@ const result = await getOperatorActivity({}, { limit:50, dependencies });
 assert.equal(result.limit, 50);
 assert.equal(result.hasMore, false);
 assert.equal(result.partial, false);
-assert.deepEqual(sourceReadArguments.schedules.slice(1), [50]);
+assert.deepEqual(sourceReadArguments.schedules.slice(1), [50, "default-workspace"]);
 assert.deepEqual(sourceReadArguments.candidates.slice(1), [50, "default-workspace"]);
 assert.deepEqual(sourceReadArguments.logs.slice(1), []);
-assert.deepEqual(sourceReadArguments.autoStatus.slice(1), []);
+assert.deepEqual(sourceReadArguments.autoStatus.slice(1), [{ workspaceId: null }]);
 assert.deepEqual(result.items.map((activity) => activity.id), [
   "post-log:legacy-post",
   "operator-post:manual-post",

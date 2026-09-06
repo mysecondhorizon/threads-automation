@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { runRuntimeSchedule } from "../services/runtime-schedule-dispatcher.js";
 import { isRuntimeSchedulerActive } from "../services/scheduler-ownership.js";
 import { getScheduleRuns } from "../services/auto-post/schedule-store.js";
+import { listStoredWorkspaceRuntimeSchedules } from "../services/runtime-schedules.js";
 
 export const RUNTIME_SCHEDULER_EXECUTION_ENABLED = isRuntimeSchedulerActive();
 export const RUNTIME_SCHEDULE_TIME_ZONE = "Asia/Seoul";
@@ -34,6 +35,12 @@ function scheduleKey(id) {
 
 function slotKey(id, scheduledFor) {
   return `${SLOT_PREFIX}${id}:${scheduledFor}`;
+}
+
+function workspaceSlotKey(schedule, scheduledFor) {
+  return schedule?.workspaceId
+    ? `${SLOT_PREFIX}${schedule.workspaceId}:${schedule.connectedAccountId || "missing"}:${schedule.id}:${scheduledFor}`
+    : slotKey(schedule.id, scheduledFor);
 }
 
 function asIso(value) {
@@ -212,6 +219,28 @@ export class ScheduleCoordinator extends DurableObject {
     return [...entries.values()].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   }
 
+  async readWorkspaceSchedules() {
+    if (!this.env?.THREADS_KV) return [];
+    try {
+      return await listStoredWorkspaceRuntimeSchedules(this.env);
+    } catch (error) {
+      // A malformed workspace schedule store must not break the legacy alarm
+      // loop or suppress another Workspace's already-valid schedule.
+      console.error("Workspace schedule discovery failed", {
+        message: String(error?.message || "workspace_schedule_discovery_failed").slice(0, 256),
+      });
+      return [];
+    }
+  }
+
+  async readAllSchedules() {
+    const [legacy, workspace] = await Promise.all([
+      this.readSchedules(),
+      this.readWorkspaceSchedules(),
+    ]);
+    return [...legacy, ...workspace];
+  }
+
   async getLastRun(scheduleId) {
     const entries = await this.ctx.storage.list({ prefix: `${SLOT_PREFIX}${scheduleId}:` });
     return [...entries.values()].sort((left, right) => right.scheduledFor - left.scheduledFor)[0] || null;
@@ -237,7 +266,10 @@ export class ScheduleCoordinator extends DurableObject {
     let recovered = 0;
     for (const [key, receipt] of staleReceipts) {
       const schedule = scheduleById.get(receipt.scheduleId);
-      const outcome = schedule ? terminalHistoryOutcome(receipt, schedule, history) : null;
+      const scopedHistory = schedule?.workspaceId
+        ? await getScheduleRuns(this.env, 50, schedule.workspaceId)
+        : history;
+      const outcome = schedule ? terminalHistoryOutcome(receipt, schedule, scopedHistory) : null;
       const normalized = {
         ...receipt,
         status: outcome?.status || "UNCERTAIN",
@@ -289,7 +321,7 @@ export class ScheduleCoordinator extends DurableObject {
 
   async reconcileAlarm() {
     const now = Date.now();
-    const schedules = await this.readSchedules();
+    const schedules = await this.readAllSchedules();
     const expected = this.earliestEnabledNextRunAt(schedules, now);
     const current = await this.ctx.storage.getAlarm();
     const before = await this.buildCoordinatorStatus(schedules, now, current);
@@ -333,7 +365,7 @@ export class ScheduleCoordinator extends DurableObject {
   }
 
   async rescheduleAlarm(now = Date.now()) {
-    const next = this.earliestEnabledNextRunAt(await this.readSchedules(), now);
+    const next = this.earliestEnabledNextRunAt(await this.readAllSchedules(), now);
     if (next === null) {
       await this.ctx.storage.deleteAlarm();
       return null;
@@ -344,7 +376,7 @@ export class ScheduleCoordinator extends DurableObject {
 
   async alarm() {
     const now = Date.now();
-    const schedules = await this.readSchedules();
+    const schedules = await this.readAllSchedules();
     for (const schedule of schedules.filter((item) => item.enabled)) {
       const scheduledFor = getMostRecentScheduledFor(schedule, now);
       if (scheduledFor > now) continue;
@@ -355,7 +387,7 @@ export class ScheduleCoordinator extends DurableObject {
 
   async processDueSchedule(schedule, scheduledFor, now) {
     if (!schedule?.enabled) return null;
-    const key = slotKey(schedule.id, scheduledFor);
+    const key = workspaceSlotKey(schedule, scheduledFor);
     const existing = await this.ctx.storage.get(key);
     if (existing) return existing;
     const startedAt = nowIso();
@@ -364,7 +396,7 @@ export class ScheduleCoordinator extends DurableObject {
       await this.ctx.storage.put(key, receipt);
       return receipt;
     }
-    if (!RUNTIME_SCHEDULER_EXECUTION_ENABLED) {
+    if (!schedule.workspaceId && !RUNTIME_SCHEDULER_EXECUTION_ENABLED) {
       const receipt = { scheduleId: schedule.id, scheduledFor, status: "SUPPRESSED", startedAt, completedAt: nowIso(), reason: "runtime_execution_disabled" };
       await this.ctx.storage.put(key, receipt);
       return receipt;

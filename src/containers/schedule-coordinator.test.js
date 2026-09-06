@@ -9,8 +9,9 @@ const testableSource = source
   .replace('import { runRuntimeSchedule } from "../services/runtime-schedule-dispatcher.js";', 'const runtimeCalls = []; const runRuntimeSchedule = async (input) => { runtimeCalls.push(input); return { ok: true }; };')
   .replace('import { isRuntimeSchedulerActive } from "../services/scheduler-ownership.js";', 'const isRuntimeSchedulerActive = () => false;')
   .replace('import { getScheduleRuns } from "../services/auto-post/schedule-store.js";', 'const historyRuns = []; const getScheduleRuns = async () => historyRuns;')
-  .concat('\nexport { runtimeCalls, historyRuns };');
-const { ScheduleCoordinator, getNextRunAt, getMostRecentScheduledFor, RUNTIME_SCHEDULER_EXECUTION_ENABLED, RUNTIME_RECEIPT_STALE_MS, runtimeCalls, historyRuns } = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(testableSource)}`);
+  .replace('import { listStoredWorkspaceRuntimeSchedules } from "../services/runtime-schedules.js";', 'const workspaceSchedules = []; const listStoredWorkspaceRuntimeSchedules = async () => workspaceSchedules;')
+  .concat('\nexport { runtimeCalls, historyRuns, workspaceSchedules };');
+const { ScheduleCoordinator, getNextRunAt, getMostRecentScheduledFor, RUNTIME_SCHEDULER_EXECUTION_ENABLED, RUNTIME_RECEIPT_STALE_MS, runtimeCalls, historyRuns, workspaceSchedules } = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(testableSource)}`);
 
 class Storage {
   constructor() { this.values = new Map(); this.alarm = null; this.setAlarmCalls = []; this.deleteAlarmCalls = 0; }
@@ -127,4 +128,18 @@ await recoveryStorage.put(uncertainKey, { scheduleId: recoverySchedule.id, sched
 await recoveryCoordinator.recoverStaleReceipts(recoverySchedules, fixedNow);
 assert.equal((await recoveryStorage.get(uncertainKey)).status, "UNCERTAIN");
 assert.equal(runtimeCalls.length, 0);
+
+const workspaceStorage = new Storage();
+const workspaceCoordinator = new ScheduleCoordinator({ storage: workspaceStorage }, { THREADS_KV: {} });
+const workspaceDue = fixedNow;
+workspaceSchedules.push(
+  { id: "shared-id", workspaceId: "workspace-a", connectedAccountId: "threads-a", type: "GENERAL_AUTO", enabled: true, cadence: { kind: "daily", time: "09:00" } },
+  { id: "shared-id", workspaceId: "workspace-b", connectedAccountId: "threads-b", type: "GENERAL_AUTO", enabled: true, cadence: { kind: "daily", time: "09:00" } },
+);
+await workspaceCoordinator.processDueSchedule(workspaceSchedules[0], workspaceDue, workspaceDue);
+await workspaceCoordinator.processDueSchedule(workspaceSchedules[1], workspaceDue, workspaceDue);
+assert.equal(runtimeCalls.length, 2);
+assert.equal(runtimeCalls[0].schedule.workspaceId, "workspace-a");
+assert.equal(runtimeCalls[1].schedule.workspaceId, "workspace-b");
+assert.equal([...workspaceStorage.values.keys()].filter((key) => key.startsWith("slot:workspace-")).length, 2);
 console.log("schedule coordinator fixture passed");

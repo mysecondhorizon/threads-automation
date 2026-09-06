@@ -11,8 +11,8 @@ import {
 } from "../threads.js";
 
 import {
-  getJson,
-} from "../kv.js";
+  getThreadsCredentialForAccount,
+} from "../connected-accounts.js";
 
 import {
   logPostFailure,
@@ -107,8 +107,7 @@ const PRODUCT_CONTENT_TYPES =
     "제품 연결형",
   ]);
 
-let activeExecutionPromise =
-  null;
+const activeExecutionPromises = new Map();
 
 function normalizeExecutionSource(
   source
@@ -488,7 +487,8 @@ function createExecutionId() {
 
 function createExecution(
   executionId,
-  source
+  source,
+  workspaceId = null
 ) {
   const now =
     new Date().toISOString();
@@ -498,6 +498,10 @@ function createExecution(
       executionId,
 
     source,
+
+    ...(typeof workspaceId === "string" && workspaceId.trim()
+      ? { workspaceId: workspaceId.trim() }
+      : {}),
 
     status:
       "starting",
@@ -981,15 +985,23 @@ function buildSuccessResult(
 async function runExecution(
   env,
   source,
-  { generalOnly = false } = {}
+  { generalOnly = false, workspaceId = null, executionContext = null } = {}
 ) {
+  if (workspaceId && (!executionContext || executionContext.workspaceId !== workspaceId ||
+    typeof executionContext.connectedAccountId !== "string" || !executionContext.connectedAccountId.trim())) {
+    throw new AutoPostEngineError(
+      "Workspace execution context is unavailable",
+      { code: "workspace_execution_context_missing", status: 409, step: "loading_auth" }
+    );
+  }
   const executionId =
     createExecutionId();
 
   const execution =
     createExecution(
       executionId,
-      source
+      source,
+      workspaceId
     );
 
   let lockAcquired =
@@ -1016,7 +1028,8 @@ async function runExecution(
   try {
     await acquireExecutionLock(
       env,
-      executionId
+      executionId,
+      workspaceId
     );
 
     lockAcquired =
@@ -1034,11 +1047,21 @@ async function runExecution(
       }
     );
 
-    const threadsAuth =
-      await getJson(
+    let threadsAuth = null;
+    try {
+      const resolvedCredential = await getThreadsCredentialForAccount(
         env,
-        "threads_auth"
+        executionContext
+          ? {
+            workspaceId: executionContext.workspaceId,
+            connectedAccountId: executionContext.connectedAccountId,
+          }
+          : {}
       );
+      threadsAuth = resolvedCredential.credential;
+    } catch {
+      threadsAuth = null;
+    }
 
     if (
       !threadsAuth?.access_token
@@ -1069,7 +1092,8 @@ async function runExecution(
 
     const context =
       await buildThreadContext(
-        env
+        env,
+        workspaceId || undefined
       );
 
     context.publishing.goal =
@@ -1139,6 +1163,7 @@ async function runExecution(
                 contentType: "TEXT",
               },
               currentTopic: context.currentTopic,
+              workspaceId: workspaceId || undefined,
             }
           );
         applySelectedDailyMediaContext(
@@ -1176,6 +1201,7 @@ async function runExecution(
 
           excludeInfeasibleTargets:
             !generalOnly,
+          workspaceId: workspaceId || undefined,
         }
       );
 
@@ -1215,6 +1241,7 @@ async function runExecution(
               currentTopic:
                 context.currentTopic ||
                 null,
+              workspaceId: workspaceId || undefined,
             }
           );
 
@@ -1346,8 +1373,14 @@ async function runExecution(
 
         mediaSelection,
 
+        executionContext,
+
+        workspaceId,
+
         metadata: {
           source,
+
+          ...(workspaceId ? { workspaceId } : {}),
 
           style:
             generatedPost
@@ -1544,7 +1577,8 @@ async function runExecution(
       engineError.details || {
         message:
           engineError.message,
-      }
+      },
+      workspaceId
     );
 
     await updateExecution(
@@ -1596,7 +1630,8 @@ async function runExecution(
       try {
         await releaseExecutionLock(
           env,
-          executionId
+          executionId,
+          workspaceId
         );
       } catch (
         releaseError
@@ -1624,6 +1659,8 @@ export async function executeAutoPost(
   {
     source = "manual",
     generalOnly = false,
+    workspaceId = null,
+    executionContext = null,
   } = {}
 ) {
   const executionSource =
@@ -1631,9 +1668,11 @@ export async function executeAutoPost(
       source
     );
 
-  if (
-    activeExecutionPromise
-  ) {
+  const executionScope = typeof workspaceId === "string" && workspaceId.trim()
+    ? workspaceId.trim()
+    : "__default__";
+
+  if (activeExecutionPromises.has(executionScope)) {
     throw new AutoPostEngineError(
       "자동 게시가 이미 실행 중입니다.",
       {
@@ -1654,17 +1693,17 @@ export async function executeAutoPost(
     );
   }
 
-  activeExecutionPromise =
+  const activeExecutionPromise =
     runExecution(
       env,
       executionSource,
-      { generalOnly }
+      { generalOnly, workspaceId: workspaceId || null, executionContext }
     );
+  activeExecutionPromises.set(executionScope, activeExecutionPromise);
 
   try {
     return await activeExecutionPromise;
   } finally {
-    activeExecutionPromise =
-      null;
+    activeExecutionPromises.delete(executionScope);
   }
 }

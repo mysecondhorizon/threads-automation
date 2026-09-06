@@ -311,7 +311,8 @@ function normalizeExecution(execution) {
 }
 
 export async function getAutoPostStatus(
-  env
+  env,
+  { workspaceId = null } = {}
 ) {
   const [
     activeLock,
@@ -319,16 +320,18 @@ export async function getAutoPostStatus(
     executions,
   ] = await Promise.all([
     getExecutionLock(
-      env
+      env,
+      workspaceId
     ),
 
     getLatestExecution(
-      env
+      env,
+      workspaceId
     ),
 
     listRecentExecutions(
       env,
-      { limit: 24 }
+      { limit: 24, workspaceId }
     ),
   ]);
 

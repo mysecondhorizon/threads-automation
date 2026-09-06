@@ -181,6 +181,7 @@ import {
 } from "./routes/cron-auto-general-diagnostic.js";
 
 import { handleLegacyScheduledExecution } from "./services/legacy-scheduled-execution.js";
+import { reconcileRuntimeScheduleAlarm } from "./services/runtime-schedules.js";
 
 export {
   VideoNormalizerContainer,
@@ -820,6 +821,16 @@ export default {
   ) {
     ctx.waitUntil(
       handleLegacyScheduledExecution(env, controller)
+    );
+    // Legacy Cron business execution remains untouched. This only wakes the
+    // existing coordinator so workspace-scoped schedules are discovered and
+    // their own Durable Object alarm is maintained.
+    ctx.waitUntil(
+      reconcileRuntimeScheduleAlarm(env).catch((error) => {
+        console.error("Workspace schedule alarm reconciliation failed", {
+          message: String(error?.message || "runtime_schedule_reconcile_failed").slice(0, 256),
+        });
+      })
     );
   },
 };

@@ -47,7 +47,7 @@ const scheduleB = await createWorkspaceRuntimeSchedule(env, {
 });
 
 const listedA = await listWorkspaceRuntimeSchedules(env, "workspace-a");
-assert.equal(listedA.runtimeExecutionEnabled, false);
+assert.equal(listedA.runtimeExecutionEnabled, true);
 assert.deepEqual(listedA.schedules.map((schedule) => schedule.id), [scheduleA.id]);
 assert.equal("workspaceId" in listedA.schedules[0], false);
 assert.equal("connectedAccountId" in listedA.schedules[0], false);

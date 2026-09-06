@@ -57,6 +57,7 @@ export async function runCronAiSelectionShadow(
   {
     services = {},
     at = new Date(),
+    workspaceId = undefined,
   } = {}
 ) {
   if (!isShadowSelectionEnabled(env)) {
@@ -76,7 +77,7 @@ export async function runCronAiSelectionShadow(
       selectAiCandidate;
 
     const candidatePackage =
-      await buildPackage(env, { at });
+      await buildPackage(env, { at, workspaceId });
 
     if (!candidatePackage.candidates.length) {
       console.log(
@@ -337,6 +338,8 @@ export async function runScheduledAutoPost(
     operation: requestedOperation = null,
     source = "cron",
     scheduleId = null,
+    workspaceId = null,
+    executionContext = null,
     services = {},
   } = {}
 ) {
@@ -380,7 +383,8 @@ export async function runScheduledAutoPost(
             source: "cron_product_review",
             cron,
             scheduledTime,
-          }
+          },
+          workspaceId || undefined
         );
 
       const completedAt =
@@ -392,6 +396,7 @@ export async function runScheduledAutoPost(
           operation,
           source,
           scheduleId,
+          workspaceId,
           cron,
           scheduledTime,
           startedAt,
@@ -420,36 +425,37 @@ export async function runScheduledAutoPost(
       };
     }
 
-    const syncResult =
-      await syncThreadsData(
-        env
-      );
+    // Sync is a legacy Default-account operation. A workspace scheduler must
+    // never read the legacy credential as a side effect of a scoped run.
+    const syncResult = workspaceId
+      ? null
+      : await syncThreadsData(env);
 
     console.log(
       "Scheduled Threads sync completed",
       {
         deleted:
-          syncResult.sync
+          syncResult?.sync
             ?.deleted ||
           0,
 
         updated:
-          syncResult.sync
+          syncResult?.sync
             ?.updated ||
           0,
 
         unchanged:
-          syncResult.sync
+          syncResult?.sync
             ?.unchanged ||
           0,
 
         refreshed:
-          syncResult.insights
+          syncResult?.insights
             ?.refreshed ||
           0,
 
         failed:
-          syncResult.insights
+          syncResult?.insights
             ?.failed ||
           0,
       }
@@ -461,6 +467,7 @@ export async function runScheduledAutoPost(
         {
           dailyLimit:
             DAILY_AUTO_POST_LIMIT,
+          workspaceId,
         }
       );
 
@@ -484,6 +491,7 @@ export async function runScheduledAutoPost(
         {
           minimumIntervalMinutes:
             MINIMUM_INTERVAL_MINUTES,
+          workspaceId,
         }
       );
 
@@ -510,6 +518,7 @@ export async function runScheduledAutoPost(
       {
         services,
         at: scheduledTime || new Date(),
+        workspaceId,
       }
     );
 
@@ -522,6 +531,10 @@ export async function runScheduledAutoPost(
 
           generalOnly:
             true,
+
+          workspaceId,
+
+          executionContext,
         }
       );
 
@@ -535,6 +548,7 @@ export async function runScheduledAutoPost(
 
         source,
         scheduleId,
+        workspaceId,
 
         cron,
 
@@ -562,29 +576,32 @@ export async function runScheduledAutoPost(
         similarity:
           publishResult.similarity,
 
+        provenance:
+          publishResult.provenance || null,
+
         sync: {
           deleted:
-            syncResult.sync
+            syncResult?.sync
               ?.deleted ||
             0,
 
           updated:
-            syncResult.sync
+            syncResult?.sync
               ?.updated ||
             0,
 
           unchanged:
-            syncResult.sync
+            syncResult?.sync
               ?.unchanged ||
             0,
 
           refreshed:
-            syncResult.insights
+            syncResult?.insights
               ?.refreshed ||
             0,
 
           failed:
-            syncResult.insights
+            syncResult?.insights
               ?.failed ||
             0,
         },
@@ -673,6 +690,7 @@ export async function runScheduledAutoPost(
           operation,
           source,
           scheduleId,
+          workspaceId,
 
           cron,
 
@@ -762,6 +780,7 @@ export async function runScheduledAutoPost(
           operation,
           source,
           scheduleId,
+          workspaceId,
 
         cron,
 

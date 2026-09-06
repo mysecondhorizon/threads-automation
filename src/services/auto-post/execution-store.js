@@ -12,6 +12,12 @@ const AUTO_POST_EXECUTION_PREFIX =
 const AUTO_POST_EXECUTION_TTL_SECONDS =
   60 * 60 * 24 * 7;
 
+function latestExecutionKey(workspaceId = null) {
+  return typeof workspaceId === "string" && workspaceId.trim()
+    ? `${AUTO_POST_LATEST_EXECUTION_KEY}:${workspaceId.trim()}`
+    : AUTO_POST_LATEST_EXECUTION_KEY;
+}
+
 function getExecutionKey(
   executionId
 ) {
@@ -41,7 +47,7 @@ export async function saveExecution(
 
     putJson(
       env,
-      AUTO_POST_LATEST_EXECUTION_KEY,
+      latestExecutionKey(execution?.workspaceId),
       execution
     ),
   ]);
@@ -83,17 +89,18 @@ export async function getExecution(
 }
 
 export async function getLatestExecution(
-  env
+  env,
+  workspaceId = null
 ) {
   return getJson(
     env,
-    AUTO_POST_LATEST_EXECUTION_KEY
+    latestExecutionKey(workspaceId)
   );
 }
 
 export async function listRecentExecutions(
   env,
-  { limit = 12 } = {}
+  { limit = 12, workspaceId = null } = {}
 ) {
   const maximum = Math.min(
     Math.max(
@@ -126,6 +133,14 @@ export async function listRecentExecutions(
 
   return executions
     .filter((execution) => execution && typeof execution === "object")
+    .filter((execution) => {
+      const storedWorkspaceId = typeof execution.workspaceId === "string" && execution.workspaceId.trim()
+        ? execution.workspaceId.trim()
+        : null;
+      return workspaceId
+        ? storedWorkspaceId === workspaceId
+        : !storedWorkspaceId;
+    })
     .sort((left, right) =>
       String(right.startedAt || "").localeCompare(
         String(left.startedAt || "")

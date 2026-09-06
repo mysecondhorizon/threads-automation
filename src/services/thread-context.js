@@ -376,7 +376,8 @@ export async function buildThreadContext(
     activeProducts,
   ] = await Promise.all([
     getPostingHistory(
-      env
+      env,
+      workspaceId
     ),
 
     getActiveProducts(

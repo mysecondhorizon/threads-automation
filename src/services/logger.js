@@ -39,6 +39,13 @@ function normalizePostMetadata(
       : "TEXT";
 
   return {
+    // Absence is legacy Default Workspace data. New workspace-aware writers
+    // always stamp this service-owned scope; it is never client supplied.
+    workspaceId:
+      typeof metadata?.workspaceId === "string" && metadata.workspaceId.trim()
+        ? metadata.workspaceId.trim()
+        : null,
+
     source:
       metadata?.source ||
       null,
@@ -236,7 +243,8 @@ export async function logPostFailure(
   env,
   step,
   text,
-  details
+  details,
+  workspaceId = null
 ) {
   const key =
     `post_log:${Date.now()}:${crypto.randomUUID()}`;
@@ -253,6 +261,10 @@ export async function logPostFailure(
       text,
 
       details,
+
+      ...(typeof workspaceId === "string" && workspaceId.trim()
+        ? { workspaceId: workspaceId.trim() }
+        : {}),
 
       created_at:
         new Date().toISOString(),

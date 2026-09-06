@@ -404,6 +404,8 @@ export async function publishGeneralAutoPost(
     firstCommentTopicTag = null,
     metadata = null,
     mediaSelection = null,
+    executionContext = null,
+    workspaceId = null,
     dependencies = {},
   }
 ) {
@@ -419,6 +421,7 @@ export async function publishGeneralAutoPost(
         source: "GENERAL_AUTO",
         mediaSelection: selection,
       },
+      executionContext,
       dependencies,
     });
   } catch (error) {
@@ -468,13 +471,13 @@ export async function publishGeneralAutoPost(
 
   if (selection.mode === "IMAGE" || selection.mode === "VIDEO") {
     try {
-      await markUsed(env, selection.mediaId);
+      await markUsed(env, selection.mediaId, new Date(), workspaceId);
     } catch (error) {
       recordTrackingWarning(trackingWarnings, publishResult.postId, "media_usage_update_failed");
     }
     if (selection.contentPoolId) {
       try {
-        await markPoolUsed(env, selection.contentPoolId);
+        await markPoolUsed(env, selection.contentPoolId, new Date(), workspaceId);
       } catch (error) {
         recordTrackingWarning(trackingWarnings, publishResult.postId, "content_pool_usage_update_failed");
       }

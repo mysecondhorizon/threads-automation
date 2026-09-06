@@ -71,11 +71,15 @@ function getSeoulDateKey(
 }
 
 function isCompletedCronPost(
-  run
+  run,
+  workspaceId
 ) {
   return (
     run &&
-    run.source === "cron" &&
+    (run.source === "cron" || run.source === "runtime_scheduler") &&
+    (workspaceId
+      ? run.workspaceId === workspaceId
+      : !run.workspaceId) &&
     run.status === "completed" &&
     run.skipped !== true &&
     Boolean(
@@ -106,6 +110,7 @@ export async function checkDailyAutoPostLimit(
   {
     dailyLimit =
       DEFAULT_DAILY_AUTO_POST_LIMIT,
+    workspaceId = null,
   } = {}
 ) {
   const now =
@@ -125,9 +130,7 @@ export async function checkDailyAutoPostLimit(
   const todayCompletedRuns =
     runs.filter(
       (run) =>
-        isCompletedCronPost(
-          run
-        ) &&
+        isCompletedCronPost(run, workspaceId) &&
         isRunFromToday(
           run,
           todayKey

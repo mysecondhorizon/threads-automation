@@ -31,11 +31,13 @@ export async function checkScheduleGuard(
   {
     minimumIntervalMinutes =
       DEFAULT_MINIMUM_INTERVAL_MINUTES,
+    workspaceId = undefined,
   } = {}
 ) {
   const history =
     await getPostingHistory(
-      env
+      env,
+      workspaceId
     );
 
   const latestPost =

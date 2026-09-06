@@ -53,14 +53,14 @@ function isDefaultWorkspace(auth) {
 function workspaceScheduleResponse(runtime) {
   const schedules = (Array.isArray(runtime?.schedules) ? runtime.schedules : []).map((schedule) => ({
     ...schedule,
-    actualProductionStatus: "WORKSPACE_EXECUTION_NOT_READY",
+    actualProductionStatus: schedule.enabled ? "CURRENTLY_OPERATING" : "STOPPED",
     actualProductionNextRunAt: null,
     actualProductionLastRun: null,
   }));
   return {
     schedules,
     schedulerMode: SCHEDULER_MODE,
-    runtimeExecutionEnabled: false,
+    runtimeExecutionEnabled: true,
     coordinatorStatus: {
       alarmScheduled: false,
       alarmAt: null,
@@ -131,6 +131,7 @@ export async function handleSchedulesCollection(request, env, {
   history = getScheduleRuns,
   listWorkspace = listWorkspaceRuntimeSchedules,
   createWorkspace = createWorkspaceRuntimeSchedule,
+  reconcile = reconcileRuntimeScheduleAlarm,
   resolveWorkspaceContext = resolveWorkspaceScheduleContext,
   now = () => Date.now(),
 } = {}) {
@@ -163,10 +164,12 @@ export async function handleSchedulesCollection(request, env, {
       const input = await json(request);
       if (isDefaultWorkspace(auth)) return ok({ schedule: await create(env, input) }, 201);
       const executionContext = await resolveWorkspaceContext(env, auth.workspaceId);
-      return ok({ schedule: await createWorkspace(env, input, {
+      const schedule = await createWorkspace(env, input, {
         workspaceId: auth.workspaceId,
         connectedAccountId: executionContext.connectedAccountId,
-      }) }, 201);
+      });
+      await reconcile(env);
+      return ok({ schedule }, 201);
     }
     return fail("Method Not Allowed", 405);
   } catch (error) {
@@ -202,6 +205,7 @@ export async function handleScheduleById(request, env, scheduleId, {
   update = updateRuntimeSchedule,
   getWorkspace = getWorkspaceRuntimeSchedule,
   updateWorkspace = updateWorkspaceRuntimeSchedule,
+  reconcile = reconcileRuntimeScheduleAlarm,
   resolveWorkspaceContext = resolveWorkspaceScheduleContext,
 } = {}) {
   const auth = await authorize(request, env);
@@ -221,6 +225,7 @@ export async function handleScheduleById(request, env, scheduleId, {
       const schedule = await updateWorkspace(env, scheduleId, input, {
         workspaceId: auth.workspaceId,
       });
+      if (schedule) await reconcile(env);
       return schedule ? ok({ schedule }) : fail("Schedule not found", 404, { code: "schedule_not_found" });
     }
     const schedule = await update(env, scheduleId, input);

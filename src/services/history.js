@@ -6,6 +6,10 @@ import {
   analyzePostFormat,
 } from "./post-format.js";
 
+import {
+  DEFAULT_WORKSPACE_ID,
+} from "./workspace-foundation.js";
+
 const SEOUL_TIME_ZONE =
   "Asia/Seoul";
 
@@ -117,6 +121,10 @@ function normalizePublishedPost(
     );
 
   return {
+    workspaceId:
+      typeof metadata.workspaceId === "string" && metadata.workspaceId.trim()
+        ? metadata.workspaceId.trim()
+        : DEFAULT_WORKSPACE_ID,
     postId:
       typeof log.post_id ===
       "string"
@@ -301,7 +309,8 @@ function getMinutesSince(
 }
 
 export async function getPostingHistory(
-  env
+  env,
+  workspaceId = DEFAULT_WORKSPACE_ID
 ) {
   const now =
     new Date();
@@ -321,6 +330,7 @@ export async function getPostingHistory(
         .map(
           normalizePublishedPost
         )
+        .filter((post) => post.workspaceId === workspaceId)
     );
 
   const todayPosts =

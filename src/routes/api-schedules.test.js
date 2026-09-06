@@ -96,7 +96,7 @@ assert.equal(workspaceListed.status, 200);
 assert.equal(listedWorkspaceId, "workspace-next");
 const workspaceListedBody = await workspaceListed.json();
 assert.equal(workspaceListedBody.schedules.length, 1);
-assert.equal(workspaceListedBody.schedules[0].actualProductionStatus, "WORKSPACE_EXECUTION_NOT_READY");
+assert.equal(workspaceListedBody.schedules[0].actualProductionStatus, "CURRENTLY_OPERATING");
 assert.equal(workspaceListedBody.history.length, 0);
 
 let workspaceCreate = null;
@@ -106,6 +106,7 @@ const workspaceCreated = await handleSchedulesCollection(registeredRequest("/api
     workspaceCreate = { input, options };
     return { id:"workspace-schedule", ...input, timezone:"Asia/Seoul" };
   },
+  reconcile: async () => ({ reconciled:true }),
 });
 assert.equal(workspaceCreated.status, 201);
 assert.deepEqual(workspaceCreate.options, { workspaceId:"workspace-next", connectedAccountId:"threads-next" });

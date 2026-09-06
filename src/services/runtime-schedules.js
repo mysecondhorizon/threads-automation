@@ -89,6 +89,16 @@ async function readWorkspaceScheduleStore(env) {
   return { version: WORKSPACE_SCHEDULES_VERSION, schedules: stored.schedules };
 }
 
+// Internal runtime discovery only. The browser-facing list deliberately keeps
+// ConnectedAccount and workspace identifiers out of its schedule payload.
+export async function listStoredWorkspaceRuntimeSchedules(env) {
+  const store = await readWorkspaceScheduleStore(env);
+  return store.schedules
+    .map(normalizeStoredWorkspaceSchedule)
+    .filter(Boolean)
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+}
+
 async function writeWorkspaceScheduleStore(env, schedules) {
   await putJson(env, WORKSPACE_SCHEDULES_KEY, {
     version: WORKSPACE_SCHEDULES_VERSION,
@@ -114,14 +124,13 @@ function publicWorkspaceSchedule(schedule) {
 
 export async function listWorkspaceRuntimeSchedules(env, workspaceId) {
   const scope = normalizeWorkspaceId(workspaceId);
-  const store = await readWorkspaceScheduleStore(env);
+  const schedules = await listStoredWorkspaceRuntimeSchedules(env);
   return {
-    schedules: store.schedules
-      .map(normalizeStoredWorkspaceSchedule)
+    schedules: schedules
       .filter((schedule) => schedule?.workspaceId === scope)
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
       .map(publicWorkspaceSchedule),
-    runtimeExecutionEnabled: false,
+    runtimeExecutionEnabled: true,
   };
 }
 
@@ -129,8 +138,7 @@ export async function getWorkspaceRuntimeSchedule(env, scheduleId, workspaceId) 
   const scope = normalizeWorkspaceId(workspaceId);
   const id = typeof scheduleId === "string" ? scheduleId.trim() : "";
   if (!id) return null;
-  const store = await readWorkspaceScheduleStore(env);
-  const schedule = store.schedules.map(normalizeStoredWorkspaceSchedule)
+  const schedule = (await listStoredWorkspaceRuntimeSchedules(env))
     .find((item) => item?.id === id && item.workspaceId === scope);
   return schedule || null;
 }

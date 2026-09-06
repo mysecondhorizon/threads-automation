@@ -9,6 +9,12 @@ const SCHEDULE_HISTORY_KEY =
 const MAX_HISTORY_ITEMS =
   50;
 
+function storedWorkspaceId(value) {
+  return typeof value?.workspaceId === "string" && value.workspaceId.trim()
+    ? value.workspaceId.trim()
+    : null;
+}
+
 function normalizeArray(
   value
 ) {
@@ -150,6 +156,10 @@ export async function saveScheduleRun(
       input?.operation ||
       "auto_general",
 
+    ...(storedWorkspaceId(input)
+      ? { workspaceId: storedWorkspaceId(input) }
+      : {}),
+
     cron:
       input?.cron ||
       null,
@@ -231,7 +241,8 @@ export async function saveScheduleRun(
 
 export async function getScheduleRuns(
   env,
-  limit = 20
+  limit = 20,
+  workspaceId = null
 ) {
   const store =
     await readStore(
@@ -250,10 +261,11 @@ export async function getScheduleRuns(
       )
     );
 
-  return store.runs.slice(
-    0,
-    safeLimit
-  );
+  return store.runs
+    .filter((run) => workspaceId
+      ? storedWorkspaceId(run) === workspaceId
+      : storedWorkspaceId(run) === null)
+    .slice(0, safeLimit);
 }
 
 export async function getLatestScheduleRun(

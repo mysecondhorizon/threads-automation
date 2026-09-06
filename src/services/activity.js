@@ -193,11 +193,11 @@ export async function getOperatorActivity(env, {
   const readLogs = dependencies.getPostLogs || getPostLogs;
   const readAutoStatus = dependencies.getAutoPostStatus || getAutoPostStatus;
   const reads = await Promise.allSettled([
-    readSchedules(env, MAX_LIMIT),
+    readSchedules(env, MAX_LIMIT, workspaceId),
     readCandidates(env, MAX_LIMIT, workspaceId),
     readPosts(env, { status: "PUBLISHED" }, workspaceId),
     readLogs(env),
-    readAutoStatus(env),
+    readAutoStatus(env, { workspaceId: workspaceId === DEFAULT_WORKSPACE_ID ? null : workspaceId }),
   ]);
   if (reads.slice(0, 4).every((result) => result.status === "rejected")) throw new Error("All activity sources are unavailable");
   const [runs, candidates, posts, logs, autoStatus] = reads.map((result) => result.status === "fulfilled" ? result.value : []);
