@@ -161,6 +161,7 @@ function normalizeDiagnostic(diagnostic) {
     "PERSONA",
     "CURRENT_TOPIC",
     "CONTENT_POOL",
+    "USER_EXPERIENCE",
   ].includes(provenance?.contentBasis)
     ? provenance.contentBasis
     : null;

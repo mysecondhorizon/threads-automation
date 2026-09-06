@@ -118,8 +118,8 @@ const successfulExecution = {
       fallbackReason: null,
     },
     provenance: {
-      contentBasis: "PERSONA",
-      mediaBasis: "NONE",
+      contentBasis: "USER_EXPERIENCE",
+      mediaBasis: "DAILY_IMAGE",
     },
     attempts: [],
   },
@@ -152,8 +152,8 @@ assert.deepEqual(status.recentGeneralAutoExecutions[0].diagnostic.provenance, {
   mediaBasis: "DAILY_IMAGE",
 });
 assert.deepEqual(status.recentGeneralAutoExecutions[1].diagnostic.provenance, {
-  contentBasis: "PERSONA",
-  mediaBasis: "NONE",
+  contentBasis: "USER_EXPERIENCE",
+  mediaBasis: "DAILY_IMAGE",
 });
 assert.equal(JSON.stringify(status).includes("RAW_SYSTEM_PROMPT_MUST_NOT_LEAK"), false);
 assert.equal(JSON.stringify(status).includes("MUST_NOT_LEAK"), false);
