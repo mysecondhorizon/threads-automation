@@ -120,6 +120,15 @@ function normalizePublishedPost(
       normalizedText
     );
 
+  const contentBasis = [
+    "CURRENT_TOPIC",
+    "USER_EXPERIENCE",
+    "PERSONA",
+    "CONTENT_POOL",
+  ].includes(metadata.contentBasis)
+    ? metadata.contentBasis
+    : null;
+
   return {
     workspaceId:
       typeof metadata.workspaceId === "string" && metadata.workspaceId.trim()
@@ -158,6 +167,8 @@ function normalizePublishedPost(
     contentMode:
       metadata.contentMode ||
       null,
+
+    contentBasis,
 
     currentTopicId:
       metadata.currentTopicId ||

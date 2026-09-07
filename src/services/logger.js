@@ -4,6 +4,19 @@ import {
   getJson,
 } from "./kv.js";
 
+const CONTENT_BASIS_VALUES = new Set([
+  "CURRENT_TOPIC",
+  "USER_EXPERIENCE",
+  "PERSONA",
+  "CONTENT_POOL",
+]);
+
+function normalizeContentBasis(value) {
+  return CONTENT_BASIS_VALUES.has(value)
+    ? value
+    : null;
+}
+
 function normalizeFirstCommentMetadata(
   metadata
 ) {
@@ -53,6 +66,11 @@ function normalizePostMetadata(
     contentMode:
       metadata?.contentMode ||
       null,
+
+    contentBasis:
+      normalizeContentBasis(
+        metadata?.contentBasis
+      ),
 
     currentTopicId:
       metadata?.currentTopicId ||

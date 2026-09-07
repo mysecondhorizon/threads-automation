@@ -30,11 +30,12 @@ function dependencies(overrides = {}) {
 
 const text = dependencies();
 const textResult = await publishGeneralAutoPost({}, {
-  accessToken: "token", text: "same text", metadata: { source: "cron_auto_general" }, dependencies: text.value,
+  accessToken: "token", text: "same text", metadata: { source: "cron_auto_general", contentBasis: "USER_EXPERIENCE" }, dependencies: text.value,
 });
 assert.equal(textResult.publishResult.postId, "text-1");
 assert.deepEqual(text.calls.filter((call) => call.mode === "TEXT"), [{ mode: "TEXT", token: "token", userId: "user-1", text: "same text" }]);
 assert.equal(text.calls.find((call) => call.mode === "LOG").metadata.publishMode, "TEXT");
+assert.equal(text.calls.find((call) => call.mode === "LOG").metadata.contentBasis, "USER_EXPERIENCE");
 
 const image = dependencies();
 const imageResult = await publishGeneralAutoPost({ env: "image" }, {

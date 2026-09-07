@@ -28,6 +28,10 @@ function normalizeCachedInsights(
         post.contentType ||
         null,
 
+      contentBasis:
+        post.contentBasis ||
+        null,
+
       topic:
         post.topic ||
         null,
@@ -77,6 +81,10 @@ function normalizeCachedInsights(
 
     contentType:
       post.contentType ||
+      null,
+
+    contentBasis:
+      post.contentBasis ||
       null,
 
     topic:
@@ -375,6 +383,7 @@ export function buildAnalyticsSummary(
       worstPost:        null,
       insightCoverage:  0,
       byContentType:    [],
+      byContentBasis:   [],
       byTopic:          [],
       byHookStyle:      [],
       byEndingStyle:    [],
@@ -426,6 +435,12 @@ export function buildAnalyticsSummary(
       buildGroupedSummary(
         available,
         "contentType"
+      ),
+
+    byContentBasis:
+      buildGroupedSummary(
+        available,
+        "contentBasis"
       ),
 
     byTopic:

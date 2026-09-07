@@ -1471,7 +1471,12 @@ async function runExecution(
             mediaSelection.contentPoolId,
 
           ...(generalOnly
-            ? buildGeneralAutoContentMetadata(context)
+            ? {
+              ...buildGeneralAutoContentMetadata(context),
+              contentBasis:
+                generalAutoProvenance?.contentBasis ||
+                null,
+            }
             : {}),
         },
       }
