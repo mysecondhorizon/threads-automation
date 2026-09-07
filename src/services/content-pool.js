@@ -5,16 +5,11 @@ import {
 } from "./media.js";
 
 import {
-  getProductById,
-} from "./products.js";
-
-import {
   DEFAULT_WORKSPACE_ID,
 } from "./workspace-foundation.js";
 
 const CONTENT_POOL_KEY = "content_pool";
 const MAX_POOL_ITEMS = 1000;
-const TYPES = new Set(["general", "product"]);
 
 function normalizeWorkspaceId(workspaceId) {
   if (workspaceId === undefined || workspaceId === null) {
@@ -76,8 +71,8 @@ function stringList(value) {
 
 function typeValue(value, fallback = "general") {
   const normalized = text(value ?? fallback).toLowerCase();
-  if (!TYPES.has(normalized)) {
-    throw fail("Content Pool type must be general or product", "content_pool_type_invalid");
+  if (normalized !== "general") {
+    throw fail("Content Pool type must be general", "content_pool_type_invalid");
   }
   return normalized;
 }
@@ -137,9 +132,6 @@ function normalizeItem(input, existing = null, workspaceId = DEFAULT_WORKSPACE_I
     workspaceId,
     type,
     mediaIds,
-    productId: type === "product"
-      ? nullableText(input?.productId === undefined ? existing?.productId : input.productId)
-      : null,
     topics: stringList(input?.topics === undefined ? existing?.topics : input.topics),
     allowedContentTypes: stringList(
       input?.allowedContentTypes === undefined
@@ -149,14 +141,10 @@ function normalizeItem(input, existing = null, workspaceId = DEFAULT_WORKSPACE_I
     priority: integer(input?.priority, existing?.priority ?? 0, "priority"),
     availableFrom,
     availableUntil,
-    maxUses: type === "general"
-      ? integer(input?.maxUses, existing?.maxUses ?? 1, "max_uses", {
-        min: 1,
-        nullable: true,
-      })
-      : integer(input?.maxUses, existing?.maxUses ?? 1, "max_uses", {
-        min: 1,
-      }),
+    maxUses: integer(input?.maxUses, existing?.maxUses ?? 1, "max_uses", {
+      min: 1,
+      nullable: true,
+    }),
     usedCount: integer(input?.usedCount, existing?.usedCount ?? 0, "used_count"),
     lastUsedAt: dateValue(input?.lastUsedAt, existing?.lastUsedAt ?? null),
     cooldownDays: integer(input?.cooldownDays, existing?.cooldownDays ?? 0, "cooldown_days"),
@@ -167,22 +155,21 @@ function normalizeItem(input, existing = null, workspaceId = DEFAULT_WORKSPACE_I
 }
 
 function hydrateItem(input) {
-  const type = TYPES.has(input?.type) ? input.type : "general";
+  if (input?.type && input.type !== "general") return null;
   const workspaceId = typeof input?.workspaceId === "string" && input.workspaceId.trim()
     ? input.workspaceId.trim()
     : null;
   return {
     id: text(input?.id),
     ...(workspaceId ? { workspaceId } : {}),
-    type,
+    type: "general",
     mediaIds: stringList(input?.mediaIds),
-    productId: type === "product" ? nullableText(input?.productId) : null,
     topics: stringList(input?.topics),
     allowedContentTypes: stringList(input?.allowedContentTypes),
     priority: Number.isInteger(input?.priority) ? input.priority : 0,
     availableFrom: nullableText(input?.availableFrom),
     availableUntil: nullableText(input?.availableUntil),
-    maxUses: type === "general" && input?.maxUses === null
+    maxUses: input?.maxUses === null
       ? null
       : Number.isInteger(input?.maxUses) && input.maxUses > 0
         ? input.maxUses
@@ -206,7 +193,7 @@ async function readStore(env) {
     version: Number(stored.version || 1),
     updatedAt: stored.updatedAt || null,
     rawItems: stored.items,
-    items: stored.items.map(hydrateItem).filter((item) => item.id && item.mediaIds.length),
+    items: stored.items.map(hydrateItem).filter((item) => item?.id && item.mediaIds.length),
   };
 }
 
@@ -226,18 +213,6 @@ async function assertMediaReferences(env, item, workspaceId) {
         { mediaId }
       );
     }
-  }
-}
-
-async function assertProductReference(env, item, workspaceId) {
-  if (!item.productId) return;
-  const product = await getProductById(env, item.productId, workspaceId);
-  if (!product) {
-    throw fail(
-      "Content Pool product must belong to the same workspace",
-      "content_pool_product_workspace_mismatch",
-      { productId: item.productId }
-    );
   }
 }
 
@@ -268,7 +243,6 @@ export async function createContentPoolItem(
   }
   const item = normalizeItem(input, null, resolvedWorkspaceId, createdItemId);
   await assertMediaReferences(env, item, resolvedWorkspaceId);
-  await assertProductReference(env, item, resolvedWorkspaceId);
   await writeStore(env, mergeWorkspaceItems(store.rawItems, resolvedWorkspaceId, [item, ...workspaceItems]));
   return item;
 }
@@ -290,7 +264,6 @@ export async function createContentPoolBatch(env, inputs, workspaceId) {
     try {
       const item = normalizeItem(inputs[index], null, resolvedWorkspaceId);
       await assertMediaReferences(env, item, resolvedWorkspaceId);
-      await assertProductReference(env, item, resolvedWorkspaceId);
       created.push(item);
     } catch (error) {
       failures.push({ index, code: error?.code || "content_pool_validation_failed", message: error?.message || String(error) });
@@ -343,9 +316,6 @@ export async function updateContentPoolItem(env, itemId, input, workspaceId) {
   const item = normalizeItem(input, workspaceItems[index], resolvedWorkspaceId);
   if (input?.mediaIds !== undefined) {
     await assertMediaReferences(env, item, resolvedWorkspaceId);
-  }
-  if (input?.productId !== undefined) {
-    await assertProductReference(env, item, resolvedWorkspaceId);
   }
   const nextWorkspaceItems = [...workspaceItems];
   nextWorkspaceItems[index] = item;

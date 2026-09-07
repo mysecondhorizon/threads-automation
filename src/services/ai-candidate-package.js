@@ -1,5 +1,4 @@
 import { config } from "../config.js";
-import { getProducts } from "./products.js";
 import { isMediaAvailable, listMedia } from "./media.js";
 import { getScoredContentPoolCandidates } from "./content-pool-scoring.js";
 
@@ -27,20 +26,6 @@ function mediaPublicUrl(mediaId) {
   return `${config.app.baseUrl}/media/${encodeURIComponent(mediaId)}`;
 }
 
-function publicProduct(product) {
-  if (!product || product.active !== true) return null;
-  return {
-    productId: product.id,
-    productKey: product.productKey || null,
-    name: product.name,
-    category: product.category,
-    description: product.description,
-    experienceStatus: product.experienceStatus,
-    experience: product.experience,
-    selectionReason: product.selectionReason,
-  };
-}
-
 function publicMedia(media, at) {
   if (!media || media.active !== true) return null;
   return {
@@ -61,11 +46,8 @@ function publicMedia(media, at) {
   };
 }
 
-function packageCandidate(scored, productsById, mediaById, at) {
+function packageCandidate(scored, mediaById, at) {
   const candidate = scored.candidate || {};
-  const product = candidate.productId
-    ? publicProduct(productsById.get(candidate.productId))
-    : null;
   const media = (Array.isArray(candidate.mediaIds) ? candidate.mediaIds : [])
     .map((mediaId) => publicMedia(mediaById.get(mediaId), at))
     .filter((item) => item?.availability.available === true);
@@ -80,8 +62,6 @@ function packageCandidate(scored, productsById, mediaById, at) {
     allowedContentTypes: Array.isArray(candidate.allowedContentTypes)
       ? [...candidate.allowedContentTypes]
       : [],
-    productId: candidate.productId || null,
-    product,
     mediaIds: Array.isArray(candidate.mediaIds) ? [...candidate.mediaIds] : [],
     media,
   };
@@ -103,23 +83,20 @@ export async function buildAiCandidatePackage(env, options = {}) {
     workspaceId: options.workspaceId,
   });
   const eligible = scored.filter((item) => item.eligible).slice(0, normalizeLimit(options.limit));
-  const productIds = new Set(eligible.map((item) => item.candidate?.productId).filter(Boolean));
   const mediaIds = new Set(
     eligible.flatMap((item) => Array.isArray(item.candidate?.mediaIds) ? item.candidate.mediaIds : [])
   );
 
-  const [products, mediaRecords] = await Promise.all([
-    productIds.size ? getProducts(env, options.workspaceId) : [],
-    mediaIds.size ? listMedia(env, {}, options.workspaceId) : [],
-  ]);
-  const productsById = new Map(products.map((product) => [product.id, product]));
+  const mediaRecords = mediaIds.size
+    ? await listMedia(env, {}, options.workspaceId)
+    : [];
   const mediaById = new Map(mediaRecords.map((media) => [media.id, media]));
 
   return {
     version: 1,
     generatedAt: at.toISOString(),
     limit: normalizeLimit(options.limit),
-    candidates: eligible.map((item) => packageCandidate(item, productsById, mediaById, at)),
+    candidates: eligible.map((item) => packageCandidate(item, mediaById, at)),
   };
 }
 
@@ -145,16 +122,9 @@ export function validateAiCandidateSelection(candidatePackage, selection) {
     throw selectionError("AI selected an unsupported contentType", "ai_selection_content_type_mismatch", { candidateId, contentType });
   }
 
-  if (candidate.productId && !candidate.product) {
-    throw selectionError("AI candidate product is missing or inactive", "ai_selection_product_unavailable", { candidateId, productId: candidate.productId });
-  }
-
   const productId = selection?.productId == null ? null : text(selection.productId);
-  if (productId !== null && productId !== candidate.productId) {
-    throw selectionError("AI selected a product not linked to the candidate", "ai_selection_product_mismatch", { candidateId, productId });
-  }
-  if (productId !== null && !candidate.product) {
-    throw selectionError("AI selected a missing or inactive product", "ai_selection_product_unavailable", { candidateId, productId });
+  if (productId !== null) {
+    throw selectionError("AI candidate products are unsupported", "ai_selection_product_unsupported", { candidateId });
   }
 
   const mediaId = selection?.mediaId == null ? null : text(selection.mediaId);
@@ -183,7 +153,7 @@ export function selectDeterministicAiFallback(candidatePackage, contentType = "T
     : candidate.allowedContentTypes[0] || contentType;
   return validateAiCandidateSelection(candidatePackage, {
     candidateId: candidate.candidateId,
-    productId: candidate.productId,
+    productId: null,
     mediaId: candidate.media?.[0]?.mediaId || null,
     contentType: selectedType,
     reason: "deterministic_scoring_fallback",

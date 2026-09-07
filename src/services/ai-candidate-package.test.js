@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 
 import {
   buildAiCandidatePackage,
+  selectDeterministicAiFallback,
+  validateAiCandidateSelection,
 } from "./ai-candidate-package.js";
 
 class MemoryKv {
@@ -23,7 +25,7 @@ function media(id, workspaceId) {
     id,
     workspaceId,
     mediaKind: "image",
-    sourceType: "product",
+    sourceType: "general",
     objectKey: `media/${id}.jpg`,
     active: true,
     maxUses: 1,
@@ -32,12 +34,11 @@ function media(id, workspaceId) {
   };
 }
 
-function pool(id, workspaceId, productId, mediaId) {
+function pool(id, workspaceId, mediaId) {
   return {
     id,
     workspaceId,
-    type: "product",
-    productId,
+    type: "general",
     mediaIds: [mediaId],
     topics: [],
     allowedContentTypes: [],
@@ -51,13 +52,6 @@ function pool(id, workspaceId, productId, mediaId) {
 
 const env = {
   THREADS_KV: new MemoryKv({
-    content_products: {
-      version: 1,
-      products: [
-        { id: "product-a", workspaceId: "workspace-a", active: true, name: "Product A" },
-        { id: "product-b", workspaceId: "workspace-b", active: true, name: "Product B" },
-      ],
-    },
     content_media_library: {
       version: 1,
       records: [media("media-a", "workspace-a"), media("media-b", "workspace-b")],
@@ -65,8 +59,8 @@ const env = {
     content_pool: {
       version: 1,
       items: [
-        pool("pool-a", "workspace-a", "product-a", "media-a"),
-        pool("pool-b", "workspace-b", "product-b", "media-b"),
+        pool("pool-a", "workspace-a", "media-a"),
+        pool("pool-b", "workspace-b", "media-b"),
       ],
     },
   }),
@@ -82,10 +76,20 @@ const packageB = await buildAiCandidatePackage(env, {
 });
 
 assert.deepEqual(packageA.candidates.map((item) => item.candidateId), ["pool-a"]);
-assert.deepEqual(packageA.candidates[0].productId, "product-a");
 assert.deepEqual(packageA.candidates[0].mediaIds, ["media-a"]);
 assert.deepEqual(packageB.candidates.map((item) => item.candidateId), ["pool-b"]);
-assert.deepEqual(packageB.candidates[0].productId, "product-b");
 assert.deepEqual(packageB.candidates[0].mediaIds, ["media-b"]);
+assert.equal("product" in packageA.candidates[0], false);
+assert.equal("productId" in packageA.candidates[0], false);
+assert.equal(selectDeterministicAiFallback(packageA).productId, null);
+assert.throws(
+  () => validateAiCandidateSelection(packageA, {
+    candidateId: "pool-a",
+    productId: "legacy-product",
+    mediaId: null,
+    contentType: "TEXT",
+  }),
+  (error) => error?.code === "ai_selection_product_unsupported"
+);
 
 console.log("workspace-aware AI candidate package fixtures passed");

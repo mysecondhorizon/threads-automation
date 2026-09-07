@@ -16,7 +16,6 @@ import {
 
 const MEDIA_KEY = "content_media_library";
 const POOL_KEY = "content_pool";
-const PRODUCTS_KEY = "content_products";
 
 class MemoryKv {
   constructor(entries = {}) {
@@ -67,11 +66,10 @@ function poolItem(id, mediaId, overrides = {}) {
   };
 }
 
-function createEnv(records, items, products = []) {
+function createEnv(records, items) {
   const kv = new MemoryKv({
     [MEDIA_KEY]: { version: 1, records },
     [POOL_KEY]: { version: 1, items },
-    [PRODUCTS_KEY]: { version: 1, products },
   });
   return { env: { THREADS_KV: kv }, kv };
 }
@@ -205,92 +203,21 @@ assert.ok((await rawItems(capacityKv)).some((item) => item.id === capacityForeig
 
 await assert.rejects(listContentPool(env, {}, ""), /workspace id is invalid/u);
 
-const productMedia = media("product-media");
-const productWorkspaceBMedia = media("product-workspace-b-media", "workspace-b");
-const legacyProductItem = poolItem("legacy-product-pool", productMedia.id, {
-  type: "product",
+await assert.rejects(
+  createContentPoolItem(env, { type: "product", mediaIds: [legacyMedia.id] }),
+  (error) => error?.code === "content_pool_type_invalid"
+);
+
+const noProductLookup = await createContentPoolItem(env, {
+  mediaIds: [legacyMedia.id],
   productId: "legacy-product-id",
 });
-const productWorkspaceBItem = poolItem("product-workspace-b-pool", productWorkspaceBMedia.id, {
-  workspaceId: "workspace-b",
-  type: "product",
-  productId: "product-workspace-b",
-});
-const { env: productEnv, kv: productKv } = createEnv(
-  [productMedia, productWorkspaceBMedia],
-  [legacyProductItem, productWorkspaceBItem],
-  [
-    { id: "product-default", active: true, name: "Default Product" },
-    { id: "product-workspace-b", workspaceId: "workspace-b", active: true, name: "Workspace B Product" },
-  ]
+assert.equal("productId" in noProductLookup, false);
+
+const legacyProductEnv = createEnv(
+  [legacyMedia],
+  [poolItem("legacy-product-pool", legacyMedia.id, { type: "product", productId: "legacy-product-id" })]
 );
-
-const productPool = await createContentPoolItem(productEnv, {
-  type: "product",
-  mediaIds: [productMedia.id],
-  productId: "product-default",
-});
-assert.equal(productPool.productId, "product-default");
-assert.equal(productPool.maxUses, 1);
-
-await assert.rejects(
-  createContentPoolItem(productEnv, {
-    type: "product",
-    mediaIds: [productMedia.id],
-    productId: "product-default",
-    maxUses: null,
-  }),
-  (error) => error?.code === "content_pool_max_uses_invalid"
-);
-
-await assert.rejects(
-  createContentPoolItem(productEnv, {
-    type: "product",
-    mediaIds: [productMedia.id],
-    productId: "product-workspace-b",
-  }),
-  (error) => error?.code === "content_pool_product_workspace_mismatch"
-);
-
-await assert.rejects(
-  updateContentPoolItem(productEnv, productPool.id, {
-    productId: "product-workspace-b",
-  }),
-  (error) => error?.code === "content_pool_product_workspace_mismatch"
-);
-
-const clearedProduct = await updateContentPoolItem(productEnv, productPool.id, {
-  productId: null,
-});
-assert.equal(clearedProduct.productId, null);
-
-const updatedLegacyProduct = await updateContentPoolItem(productEnv, legacyProductItem.id, {
-  topics: ["legacy update"],
-});
-assert.equal(updatedLegacyProduct.productId, "legacy-product-id");
-assert.equal(
-  (await rawItems(productKv)).find((item) => item.id === legacyProductItem.id).productId,
-  "legacy-product-id"
-);
-assert.deepEqual(
-  (await rawItems(productKv)).find((item) => item.id === productWorkspaceBItem.id),
-  productWorkspaceBItem
-);
-
-const productBatch = await createContentPoolBatch(productEnv, [
-  {
-    type: "product",
-    mediaIds: [productMedia.id],
-    productId: "product-default",
-  },
-  {
-    type: "product",
-    mediaIds: [productMedia.id],
-    productId: "product-workspace-b",
-  },
-]);
-assert.equal(productBatch.created.length, 1);
-assert.equal(productBatch.failures.length, 1);
-assert.equal(productBatch.failures[0].code, "content_pool_product_workspace_mismatch");
+assert.deepEqual(await listContentPool(legacyProductEnv.env), []);
 
 console.log("workspace-aware content pool fixtures passed");

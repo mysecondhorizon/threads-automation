@@ -12,6 +12,9 @@ class MemoryKv {
   }
 
   async get(key, type) {
+    if (key === "content_products") {
+      throw new Error("ThreadContext must not read the legacy Product store");
+    }
     const value = this.values.get(key);
     if (value === undefined) return null;
     return type === "json" ? JSON.parse(value) : value;
@@ -23,27 +26,16 @@ class MemoryKv {
 }
 
 const env = {
-  THREADS_KV: new MemoryKv({
-    content_products: {
-      version: 1,
-      products: [
-        { id: "default-product", active: true, name: "Default Product" },
-        { id: "workspace-a-product", workspaceId: "workspace-a", active: true, name: "Workspace A Product" },
-      ],
-    },
-  }),
+  THREADS_KV: new MemoryKv(),
 };
 
 const defaultContext = await buildThreadContext(env);
 const workspaceContext = await buildThreadContext(env, "workspace-a");
 
-assert.deepEqual(
-  defaultContext.products.productDetails.map((product) => product.productId),
-  ["default-product"]
-);
-assert.deepEqual(
-  workspaceContext.products.productDetails.map((product) => product.productId),
-  ["workspace-a-product"]
-);
+assert.equal("products" in defaultContext, false);
+assert.equal("recentProducts" in defaultContext.history, false);
+assert.equal(defaultContext.publishing.linkAvailable, false);
+assert.equal(defaultContext.publishing.questionAvailable, true);
+assert.equal(workspaceContext.analytics.performancePostCount, 0);
 
 console.log("workspace-aware thread context fixtures passed");

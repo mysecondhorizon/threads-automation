@@ -9,11 +9,6 @@ import {
   buildAnalyticsObservations,
 } from "./analytics.js";
 
-import {
-  getActiveProducts,
-  buildProductContext,
-} from "./products.js";
-
 const SEOUL_TIME_ZONE =
   "Asia/Seoul";
 
@@ -134,88 +129,6 @@ function getWeekday(
         "long",
     }
   );
-}
-
-function buildRecentProducts(
-  recentPosts,
-  products
-) {
-  const normalizedPosts =
-    Array.isArray(
-      recentPosts
-    )
-      ? recentPosts
-      : [];
-
-  const normalizedProducts =
-    Array.isArray(
-      products
-    )
-      ? products
-      : [];
-
-  const recentProductIds =
-    new Set();
-
-  for (
-    const post of
-    normalizedPosts
-  ) {
-    const text =
-      String(
-        post?.text || ""
-      ).toLowerCase();
-
-    if (!text) {
-      continue;
-    }
-
-    for (
-      const product of
-      normalizedProducts
-    ) {
-      const productName =
-        String(
-          product?.name ||
-          ""
-        ).trim();
-
-      if (
-        productName &&
-        text.includes(
-          productName
-            .toLowerCase()
-        )
-      ) {
-        recentProductIds.add(
-          product.id
-        );
-      }
-    }
-  }
-
-  return normalizedProducts
-    .filter(
-      (product) =>
-        recentProductIds.has(
-          product.id
-        )
-    )
-    .map(
-      (product) => ({
-        id:
-          product.id,
-
-        name:
-          product.name,
-
-        category:
-          product.category,
-
-        updatedAt:
-          product.updatedAt,
-      })
-    );
 }
 
 function uniqueValues(
@@ -371,20 +284,11 @@ export async function buildThreadContext(
   const now =
     new Date();
 
-  const [
-    postingHistory,
-    activeProducts,
-  ] = await Promise.all([
-    getPostingHistory(
+  const postingHistory =
+    await getPostingHistory(
       env,
       workspaceId
-    ),
-
-    getActiveProducts(
-      env,
-      workspaceId
-    ),
-  ]);
+    );
 
   const recentPerformance =
     await buildRecentPerformance(
@@ -409,18 +313,6 @@ export async function buildThreadContext(
       recommendations
     );
 
-  const productContext =
-    buildProductContext(
-      activeProducts
-    );
-
-  const recentProducts =
-    buildRecentProducts(
-      postingHistory
-        .recentSevenDayPosts,
-      activeProducts
-    );
-
   const historySignals =
     buildHistorySignals(
       postingHistory
@@ -429,15 +321,6 @@ export async function buildThreadContext(
   const todayLinkCount =
     historySignals
       .todayAffiliateLinkCount;
-
-  const linkAvailable =
-    todayLinkCount < 1 &&
-    productContext
-      .productDetails
-      .some(
-        (product) =>
-          product.linkEnabled
-      );
 
   return {
     meta: {
@@ -484,7 +367,8 @@ export async function buildThreadContext(
 
       todayLinkCount,
 
-      linkAvailable,
+      linkAvailable:
+        false,
 
       goal:
         null,
@@ -497,12 +381,10 @@ export async function buildThreadContext(
           .todayQuestionCount < 1,
 
       productConnectedAvailable:
-        historySignals
-          .todayProductConnectedCount < 1,
+        false,
 
       affiliateLinkAvailable:
-        historySignals
-          .todayAffiliateLinkCount < 1,
+        false,
     },
 
     history: {
@@ -529,8 +411,6 @@ export async function buildThreadContext(
       historyGeneratedAt:
         postingHistory
           .generatedAt,
-
-      recentProducts,
 
       recentPerformance,
 
@@ -578,9 +458,6 @@ export async function buildThreadContext(
         historySignals
           .recentFormatSignatures,
     },
-
-    products:
-      productContext,
 
     analytics: {
       performancePostCount:
