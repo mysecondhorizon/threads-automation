@@ -43,6 +43,11 @@ function createEnv(initial = {}) {
 
 const defaults = getDefaultPromptProfile();
 assert.equal(composeEffectiveThreadsPrompt(defaults), THREADS_SYSTEM_PROMPT);
+assert.match(THREADS_IDENTITY_PROMPT, /realistic mid\/late-30s office worker/u);
+assert.match(THREADS_IDENTITY_PROMPT, /small discoveries, ordinary enjoyment, useful improvements/u);
+assert.match(THREADS_IDENTITY_PROMPT, /must not become the default identity or repeated material/u);
+assert.match(THREADS_POLICY_PROMPT, /Positive realistic material direction/u);
+assert.match(THREADS_POLICY_PROMPT, /Do not repeatedly choose Monday\/work dread, exhaustion, burnout/u);
 for (const part of [
   THREADS_IDENTITY_PROMPT,
   THREADS_POLICY_PROMPT,

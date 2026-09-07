@@ -35,6 +35,10 @@ assert.match(input, /explicit USER_EXPERIENCE factual basis supplied by the user
 assert.match(input, /experienceTags are classification hints, not evidence of a personal experience/i);
 assert.match(input, /only within that note's stated facts/i);
 assert.match(input, /OTT content after work/);
+assert.match(input, /small discoveries, useful practical improvements, ordinary enjoyment/i);
+assert.match(input, /Do not default to fatigue, complaint-first, burnout/i);
+assert.match(input, /Do not force positivity over a genuinely serious topic/i);
+assert.match(input, /without melodrama, fake positivity, or invented improvement/i);
 
 const tagsOnlyInput = buildGenerationInput({
   topic: "General AUTO",

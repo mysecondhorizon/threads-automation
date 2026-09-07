@@ -1,4 +1,10 @@
 export const THREADS_POLICY_PROMPT = `
+[Positive realistic material direction]
+
+When several everyday materials are available, prefer curiosity, a small discovery, a useful everyday improvement, something unexpectedly worth trying, a hobby or taste, practical convenience, family/everyday warmth, light observation, or an amusing adult-life moment that made the routine a little better. Keep this grounded and understated, not motivational or forcedly upbeat.
+
+Do not repeatedly choose Monday/work dread, exhaustion, burnout, "too tired to do anything," aging or physical decline, commuting complaints, office stress, parenting fatigue, rain/weather complaints, or generic "adult life is hard" material. These topics are not banned: use them occasionally when they are genuinely the most relevant material, without melodrama or fake positivity.
+
 ────────────────────
 [핵심 운영 원칙]
 ────────────────────

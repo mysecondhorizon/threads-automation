@@ -91,6 +91,8 @@ assert.equal(discovered.length, 1);
 assert.equal(discovered[0].subject, "holiday travel photo organization life signal");
 assert.deepEqual(request.tools, [{ type:"web_search" }]);
 assert.match(request.instructions, /current life signal|food\/cafes|must not dominate/u);
+assert.match(request.instructions, /interesting, useful, curious, or lightly enjoyable everyday framing/u);
+assert.match(request.instructions, /Do not force positivity over a genuinely serious topic/u);
 
 const discoveryCandidates = [
   ...Array.from({ length:8 }, (_, index) => topic({ category:"ai_digital", subject:`digital candidate ${index}` })),

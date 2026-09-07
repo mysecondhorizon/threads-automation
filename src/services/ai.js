@@ -1018,6 +1018,7 @@ export function buildGenerationInput(
     "advisory";
 
   const lines = [
+    "For everyday material, prefer curiosity, small discoveries, useful practical improvements, ordinary enjoyment, hobbies or tastes, family/everyday warmth, and light self-aware humor. Do not default to fatigue, complaint-first, burnout, aging, commuting stress, or gloomy adult-life themes.",
     `작성 목표: ${topic}`,
     `기본 톤: ${tone}`,
     targetFormatIsAdvisory
@@ -1075,7 +1076,8 @@ export function buildGenerationInput(
             ? "Do not claim direct use, attendance, or personal experience from currentTopic alone. A direct first-person expression is allowed only within the explicit factual scope of dailyMediaContext.experienceNote; do not combine it with currentTopic to invent a new fact."
             : "Do not claim direct use, attendance, or personal experience. Do not start as a news report or say you saw it in the news."
         ),
-        "Use personaRelevance as everyday context and selectedAngle as the main angle. Follow forbiddenClaims and keep facts, curiosity, and preference clearly distinct."
+        "Use personaRelevance as everyday context and selectedAngle as the main angle. Follow forbiddenClaims and keep facts, curiosity, and preference clearly distinct.",
+        "When several factual framings are valid, prefer an interesting, useful, curious, or lightly enjoyable everyday angle over a cynical or complaint-first angle. Do not force positivity over a genuinely serious topic."
       );
     }
 
@@ -1090,7 +1092,8 @@ export function buildGenerationInput(
       if (contextData.dailyMediaContext.experienceProvenance === "USER_EXPERIENCE") {
         lines.push(
           "dailyMediaContext.experienceNote is explicit USER_EXPERIENCE factual basis supplied by the user. You may use a natural first-person expression only within that note's stated facts; do not copy the note verbatim or extend it with unsupported details.",
-          "dailyMediaContext.experienceTags are classification hints, not evidence of a personal experience. dailyMediaContext.semanticCues provide visual or semantic context, not additional personal facts."
+          "dailyMediaContext.experienceTags are classification hints, not evidence of a personal experience. dailyMediaContext.semanticCues provide visual or semantic context, not additional personal facts.",
+          "If the explicit experience is negative, keep its facts without melodrama, fake positivity, or invented improvement; use balanced framing only when the stated facts support it."
         );
       }
     }
@@ -1106,7 +1109,7 @@ export async function generateThreadsDrafts(
   {
     topic,
     tone =
-      "30대 중후반 직장인의 담백하고 현실적인 말투",
+      "30대 중후반 직장인의 담백하고 현실적이면서, 일상의 작은 발견을 즐기는 따뜻하고 가벼운 말투",
     context = null,
     systemPrompt = THREADS_SYSTEM_PROMPT,
   }
@@ -1393,7 +1396,7 @@ export async function generateThreadPost(
   const tone =
     context?.publishing
       ?.requestedTone ||
-    "30대 중후반 직장인의 담백하고 현실적인 말투";
+    "30대 중후반 직장인의 담백하고 현실적이면서, 일상의 작은 발견을 즐기는 따뜻하고 가벼운 말투";
 
   const drafts =
     await generateThreadsDrafts(

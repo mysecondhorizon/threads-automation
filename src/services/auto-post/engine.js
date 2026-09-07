@@ -77,7 +77,7 @@ const AUTO_POST_GOAL =
   "현재 시간과 최근 게시 성과를 반영한 Threads 게시글 1개를 작성한다.";
 
 const AUTO_POST_TONE =
-  "30대 중후반 직장인의 담백하고 현실적인 말투";
+  "30대 중후반 직장인의 담백하고 현실적이면서, 일상의 작은 발견을 즐기는 따뜻하고 가벼운 말투";
 
 const SIMILARITY_THRESHOLD =
   0.62;
