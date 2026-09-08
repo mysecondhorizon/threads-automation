@@ -95,8 +95,13 @@ import {
   handleAppDailyPage,
   handleAppMediaPage,
 } from "./routes/app-media-page.js";
+import { handleAppProductsPage } from "./routes/app-products-page.js";
 
 import { handleOperatorProductMedia } from "./routes/api-product-media.js";
+import {
+  handleProductOpportunityById,
+  handleProductOpportunitiesCollection,
+} from "./routes/api-product-opportunities.js";
 
 import {
   handlePostById,
@@ -289,6 +294,7 @@ export default {
         isUnscopedAppAccessBlocked(appContext) &&
         pathname !== "/app/daily" &&
         pathname !== "/app/media" &&
+        pathname !== "/app/products" &&
         pathname !== "/app/prompts" &&
         pathname !== "/app/write" &&
         pathname !== "/app/activity" &&
@@ -308,6 +314,10 @@ export default {
 
     if (pathname === "/app/media" && method === "GET") {
       return handleAppMediaPage(request, env);
+    }
+
+    if (pathname === "/app/products" && method === "GET") {
+      return handleAppProductsPage(request, env);
     }
 
     if (pathname === "/app/prompts" && method === "GET") return handleAppPromptsPage(request, env);
@@ -382,6 +392,22 @@ export default {
 
     if (pathname === "/api/products/media") {
       return handleOperatorProductMedia(request, env);
+    }
+
+    if (pathname === "/api/product-opportunities") {
+      return handleProductOpportunitiesCollection(request, env);
+    }
+
+    if (pathname.startsWith("/api/product-opportunities/")) {
+      const opportunityId = pathname.slice("/api/product-opportunities/".length);
+      if (!opportunityId || opportunityId.includes("/")) {
+        return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      }
+      try {
+        return handleProductOpportunityById(request, env, decodeURIComponent(opportunityId));
+      } catch {
+        return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      }
     }
 
 

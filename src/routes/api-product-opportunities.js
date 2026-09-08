@@ -1,0 +1,114 @@
+import { requireAdminApiSession } from "../middleware/auth.js";
+import {
+  ProductOpportunityError,
+  getProductOpportunityById,
+  listProductOpportunities,
+  removeProductOpportunity,
+  saveProductOpportunity,
+} from "../services/product-opportunities.js";
+import { fail, ok } from "../utils/response.js";
+
+const EDITABLE_FIELDS = new Set([
+  "productName",
+  "category",
+  "status",
+  "brand",
+  "sourceUrl",
+  "affiliateLink",
+  "problem",
+  "audience",
+  "situation",
+  "angle",
+  "discoveryReason",
+  "signalSources",
+  "trendScore",
+  "personaFitScore",
+  "purchaseIntentScore",
+  "contentPotentialScore",
+  "experiencePotentialScore",
+  "affiliatePotentialScore",
+  "opportunityScore",
+  "useCount",
+  "lastUsedAt",
+]);
+
+async function authorize(request, env) {
+  return requireAdminApiSession(request, env, { allowSelectedWorkspace: true });
+}
+
+async function readInput(request) {
+  try {
+    const input = await request.json();
+    if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+    if (!Object.keys(input).length || Object.keys(input).some((key) => !EDITABLE_FIELDS.has(key))) {
+      return null;
+    }
+    return input;
+  } catch {
+    return null;
+  }
+}
+
+function errorResponse(error) {
+  if (error instanceof ProductOpportunityError) {
+    if (error.code === "product_opportunity_not_found") {
+      return fail("Product Opportunity not found", 404, { code: error.code });
+    }
+    return fail("Invalid Product Opportunity", 400, { code: error.code });
+  }
+  return fail("Product Opportunity request failed", 400, { code: "product_opportunity_request_failed" });
+}
+
+export async function handleProductOpportunitiesCollection(request, env, {
+  list = listProductOpportunities,
+  save = saveProductOpportunity,
+} = {}) {
+  const authorization = await authorize(request, env);
+  if (!authorization.ok) return authorization.response;
+
+  try {
+    if (request.method === "GET") {
+      return ok({ opportunities: await list(env, authorization.workspaceId) });
+    }
+    if (request.method !== "POST") return fail("Method Not Allowed", 405);
+    const input = await readInput(request);
+    if (!input) return fail("Invalid Product Opportunity", 400, { code: "product_opportunity_input_invalid" });
+    return ok({ opportunity: await save(env, input, authorization.workspaceId) }, 201);
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+export async function handleProductOpportunityById(request, env, opportunityId, {
+  get = getProductOpportunityById,
+  save = saveProductOpportunity,
+  remove = removeProductOpportunity,
+} = {}) {
+  const authorization = await authorize(request, env);
+  if (!authorization.ok) return authorization.response;
+
+  try {
+    if (request.method === "GET") {
+      const opportunity = await get(env, opportunityId, authorization.workspaceId);
+      return opportunity
+        ? ok({ opportunity })
+        : fail("Product Opportunity not found", 404, { code: "product_opportunity_not_found" });
+    }
+    if (request.method === "PATCH") {
+      const input = await readInput(request);
+      if (!input) return fail("Invalid Product Opportunity", 400, { code: "product_opportunity_input_invalid" });
+      const existing = await get(env, opportunityId, authorization.workspaceId);
+      if (!existing) return fail("Product Opportunity not found", 404, { code: "product_opportunity_not_found" });
+      return ok({ opportunity: await save(env, { ...input, id: opportunityId }, authorization.workspaceId) });
+    }
+    if (request.method === "DELETE") {
+      const removed = await remove(env, opportunityId, authorization.workspaceId);
+      return removed
+        ? ok({ removed: true })
+        : fail("Product Opportunity not found", 404, { code: "product_opportunity_not_found" });
+    }
+    return fail("Method Not Allowed", 405);
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
