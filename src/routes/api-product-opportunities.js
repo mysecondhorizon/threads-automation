@@ -6,6 +6,7 @@ import {
   removeProductOpportunity,
   saveProductOpportunity,
 } from "../services/product-opportunities.js";
+import { discoverProductOpportunities } from "../services/product-opportunity-discovery.js";
 import { fail, ok } from "../utils/response.js";
 
 const EDITABLE_FIELDS = new Set([
@@ -57,6 +58,30 @@ function errorResponse(error) {
     return fail("Invalid Product Opportunity", 400, { code: error.code });
   }
   return fail("Product Opportunity request failed", 400, { code: "product_opportunity_request_failed" });
+}
+
+async function hasEmptyBody(request) {
+  try {
+    return !(await request.text()).trim();
+  } catch {
+    return false;
+  }
+}
+
+export async function handleProductOpportunityDiscovery(request, env, {
+  discover = discoverProductOpportunities,
+} = {}) {
+  const authorization = await authorize(request, env);
+  if (!authorization.ok) return authorization.response;
+  if (request.method !== "POST") return fail("Method Not Allowed", 405);
+  if (!await hasEmptyBody(request)) {
+    return fail("Invalid Product Opportunity discovery request", 400, { code: "product_opportunity_discovery_input_invalid" });
+  }
+  try {
+    return ok({ discovery: await discover(env, { workspaceId: authorization.workspaceId }) });
+  } catch {
+    return fail("Product Opportunity discovery failed", 502, { code: "product_opportunity_discovery_failed" });
+  }
 }
 
 export async function handleProductOpportunitiesCollection(request, env, {

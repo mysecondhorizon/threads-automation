@@ -100,6 +100,7 @@ import { handleAppProductsPage } from "./routes/app-products-page.js";
 import { handleOperatorProductMedia } from "./routes/api-product-media.js";
 import {
   handleProductOpportunityById,
+  handleProductOpportunityDiscovery,
   handleProductOpportunitiesCollection,
 } from "./routes/api-product-opportunities.js";
 
@@ -396,6 +397,10 @@ export default {
 
     if (pathname === "/api/product-opportunities") {
       return handleProductOpportunitiesCollection(request, env);
+    }
+
+    if (pathname === "/api/product-opportunities/discover") {
+      return handleProductOpportunityDiscovery(request, env);
     }
 
     if (pathname.startsWith("/api/product-opportunities/")) {

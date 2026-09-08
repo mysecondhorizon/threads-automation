@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   handleProductOpportunityById,
+  handleProductOpportunityDiscovery,
   handleProductOpportunitiesCollection,
 } from "./api-product-opportunities.js";
 import {
@@ -72,6 +73,25 @@ const scopeOverride = await handleProductOpportunitiesCollection(request("/api/p
 assert.equal(scopeOverride.status, 400);
 const unsupported = await handleProductOpportunitiesCollection(request("/api/product-opportunities", "PUT", create), env);
 assert.equal(unsupported.status, 405);
+
+let discoveryWorkspaceId = null;
+const discovered = await handleProductOpportunityDiscovery(request("/api/product-opportunities/discover", "POST"), env, {
+  discover: async (_env, options) => {
+    discoveryWorkspaceId = options.workspaceId;
+    return { savedCount: 2, recommendedCount: 1, discoveredCount: 1, skippedDuplicateCount: 1, skippedInvalidCount: 1, opportunities: [] };
+  },
+});
+assert.equal(discovered.status, 200);
+assert.equal(discoveryWorkspaceId, "workspace-next");
+assert.equal((await discovered.json()).discovery.savedCount, 2);
+assert.equal((await handleProductOpportunityDiscovery(request("/api/product-opportunities/discover", "GET"), env)).status, 405);
+assert.equal((await handleProductOpportunityDiscovery(request("/api/product-opportunities/discover", "POST", { workspaceId: "workspace-other" }), env)).status, 400);
+assert.equal((await handleProductOpportunityDiscovery(request("/api/product-opportunities/discover", "POST", undefined, "missing"), env)).status, 401);
+const discoveryFailure = await handleProductOpportunityDiscovery(request("/api/product-opportunities/discover", "POST"), env, {
+  discover: async () => { throw new Error("OpenAI detail"); },
+});
+assert.equal(discoveryFailure.status, 502);
+assert.equal((await discoveryFailure.json()).error, "Product Opportunity discovery failed");
 
 let scopedWorkspace = null;
 const foreign = await handleProductOpportunityById(request("/api/product-opportunities/foreign"), env, "foreign", {
