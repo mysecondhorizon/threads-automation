@@ -22,10 +22,6 @@ import {
 } from "../threads-sync.js";
 
 import {
-  generateProductReviewCandidate,
-} from "../product-review.js";
-
-import {
   PostFormatError,
 } from "../post-format.js";
 
@@ -151,13 +147,16 @@ export async function runCronAiSelectionShadow(
   }
 }
 
-export const PRODUCT_REVIEW_CRON =
-  "30 11 * * *";
-
 export function getScheduledOperation(cron) {
-  return String(cron || "").trim() === PRODUCT_REVIEW_CRON
-    ? "product_review"
-    : "auto_general";
+  const value = String(cron || "").trim();
+  return new Set([
+    "10 23 * * *",
+    "30 2 * * *",
+    "30 5 * * *",
+    "40 9 * * *",
+  ]).has(value)
+    ? "auto_general"
+    : null;
 }
 
 function formatErrorDetails(details) {
@@ -347,10 +346,6 @@ export async function runScheduledAutoPost(
     requestedOperation ||
     getScheduledOperation(cron);
 
-  const generateProductReview =
-    services.generateProductReviewCandidate ||
-    generateProductReviewCandidate;
-
   const executeScheduledAutoPost =
     services.executeAutoPost ||
     executeAutoPost;
@@ -375,54 +370,12 @@ export async function runScheduledAutoPost(
   );
 
   try {
-    if (operation === "product_review") {
-      const candidate =
-        await generateProductReview(
-          env,
-          {
-            source: "cron_product_review",
-            cron,
-            scheduledTime,
-          },
-          workspaceId || undefined
-        );
-
-      const completedAt =
-        new Date().toISOString();
-
-      await safeSaveScheduleRun(
-        env,
-        {
-          operation,
-          source,
-          scheduleId,
-          workspaceId,
-          cron,
-          scheduledTime,
-          startedAt,
-          completedAt,
-          status: "review_ready",
-          skipped: false,
-          published: false,
-          candidateId: candidate.id,
-          postId: null,
-          generation: candidate.generation,
-          error: null,
-        }
-      );
-
-      return {
-        ok: true,
-        skipped: false,
-        published: false,
-        operation,
-        source: "cron_product_review",
-        cron,
-        scheduledTime,
-        startedAt,
-        completedAt,
-        candidate,
-      };
+    if (operation !== "auto_general") {
+      throw new AutoPostEngineError("Unsupported scheduled operation", {
+        code: "scheduled_operation_unsupported",
+        status: 400,
+        step: "schedule_operation",
+      });
     }
 
     // Sync is a legacy Default-account operation. A workspace scheduler must

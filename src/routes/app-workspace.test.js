@@ -145,7 +145,7 @@ test("selected non-default Workspace blocks other unscoped app views and APIs wh
   const home = await handleAppHome(request("/app"), env);
   const context = await resolveCurrentAppContext(request("/app"), env);
   const unavailable = renderAppWorkspaceUnavailable(context, "/app/write");
-  const api = await requireAdminApiSession(request("/api/products"), env);
+  const api = await requireAdminApiSession(request("/api/products/media"), env);
 
   assert.equal(home.status, 200);
   assert.equal(unavailable.status, 409);
@@ -153,16 +153,16 @@ test("selected non-default Workspace blocks other unscoped app views and APIs wh
   assert.equal(api.ok, false);
   assert.equal(api.response.status, 409);
 
-  const products = await requireAdminApiSession(request("/api/products"), env, { allowSelectedWorkspace: true });
-  assert.equal(products.ok, true);
-  assert.equal(products.workspaceId, "workspace-a");
+  const productMedia = await requireAdminApiSession(request("/api/products/media"), env, { allowSelectedWorkspace: true });
+  assert.equal(productMedia.ok, true);
+  assert.equal(productMedia.workspaceId, "workspace-a");
 });
 
 test("selected Workspace API opt-in rejects missing, foreign, and inactive Workspaces", async () => {
   for (const selectedWorkspaceId of [null, "workspace-foreign", "workspace-inactive"]) {
     const { env } = createEnv(selectedWorkspaceId);
     const result = await requireAdminApiSession(
-      request("/api/products"),
+      request("/api/products/media"),
       env,
       { allowSelectedWorkspace: true },
     );
@@ -173,12 +173,12 @@ test("selected Workspace API opt-in rejects missing, foreign, and inactive Works
 
 test("legacy and registered Default Workspace API behavior remains available", async () => {
   const legacy = createEnv("workspace-a");
-  assert.equal((await requireAdminApiSession(request("/api/products", "legacy"), legacy.env)).ok, true);
+  assert.equal((await requireAdminApiSession(request("/api/products/media", "legacy"), legacy.env)).ok, true);
 
   const registeredDefault = createEnv("default-workspace");
-  assert.equal((await requireAdminApiSession(request("/api/products"), registeredDefault.env)).ok, true);
+  assert.equal((await requireAdminApiSession(request("/api/products/media"), registeredDefault.env)).ok, true);
   const productScope = await requireAdminApiSession(
-    request("/api/products"),
+    request("/api/products/media"),
     registeredDefault.env,
     { allowSelectedWorkspace: true },
   );

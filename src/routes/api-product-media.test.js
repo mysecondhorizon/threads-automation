@@ -50,7 +50,7 @@ assert.deepEqual(uploadInput.defaults, {
   experienceTags: "",
   experienceNote: "",
 });
-assert.equal(uploadInput.createPoolItems, true);
+assert.equal(uploadInput.createPoolItems, false);
 assert.deepEqual((await uploaded.json()).media[0], {
   id: "product-image-1", kind: "image", description: "제품 이미지", tags: ["제품"], experienceTags: ["주말"], experienceNote: "제품 사용 메모", active: true,
   createdAt: "2026-08-01", updatedAt: "2026-08-02", previewUrl: "/media/product-image-1",

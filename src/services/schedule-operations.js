@@ -8,7 +8,6 @@ const EXPECTED_PRODUCTION_SCHEDULES = [
   { id: "general-auto-1130", type: "GENERAL_AUTO", time: "11:30", cron: "30 2 * * *" },
   { id: "general-auto-1430", type: "GENERAL_AUTO", time: "14:30", cron: "30 5 * * *" },
   { id: "general-auto-1840", type: "GENERAL_AUTO", time: "18:40", cron: "40 9 * * *" },
-  { id: "product-review-2030", type: "PRODUCT_REVIEW", time: "20:30", cron: "30 11 * * *" },
 ];
 
 function seoulDateParts(value) {
@@ -28,7 +27,7 @@ function asIso(value) {
 }
 
 function validRuntimeSchedule(schedule) {
-  if (!schedule || (schedule.type !== "GENERAL_AUTO" && schedule.type !== "PRODUCT_REVIEW") || !/^\d{2}:\d{2}$/u.test(schedule?.cadence?.time || "")) return false;
+  if (!schedule || schedule.type !== "GENERAL_AUTO" || !/^\d{2}:\d{2}$/u.test(schedule?.cadence?.time || "")) return false;
   const [hour, minute] = schedule.cadence.time.split(":").map(Number);
   return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
 }

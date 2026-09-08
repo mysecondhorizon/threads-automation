@@ -31,7 +31,7 @@ assert.equal(getMostRecentScheduledFor(enabled0810, fixedNow), Date.parse("2026-
 const storage = new Storage();
 const coordinator = new ScheduleCoordinator({ storage }, {});
 const seeded = await coordinator.listSchedules();
-assert.equal(seeded.schedules.length, 5);
+assert.equal(seeded.schedules.length, 4);
 assert.equal(seeded.schedules.every((schedule) => schedule.enabled === false), true);
 assert.equal(RUNTIME_SCHEDULER_EXECUTION_ENABLED, false);
 

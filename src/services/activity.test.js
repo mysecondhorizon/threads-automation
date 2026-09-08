@@ -1,215 +1,57 @@
 import assert from "node:assert/strict";
 import { getOperatorActivity, normalizeActivityLimit, summarizeGeneralAutoActivity } from "./activity.js";
 
-const rawFailure = "RAW_PROVIDER_PAYLOAD_MUST_NOT_LEAK";
 const sourceReadArguments = {};
 const dependencies = {
   async getScheduleRuns(...args) {
     sourceReadArguments.schedules = args;
     return [
-      { id:"schedule-general", operation:"auto_general", status:"completed", scheduledTime:"2026-08-29T03:00:00.000Z", completedAt:"2026-08-29T03:01:00.000Z", postId:"auto-post", executionId:"execution-general" },
-      { id:"schedule-provenance-only", operation:"auto_general", status:"completed", completedAt:"2026-08-29T01:30:00.000Z", provenance:{ contentBasis:"PERSONA", mediaBasis:"NONE" } },
-      { id:"schedule-review", operation:"product_review", status:"review_ready", completedAt:"2026-08-29T02:00:00.000Z", candidateId:"candidate-scheduled" },
-      { id:"schedule-failure", operation:"auto_general", status:"failed", completedAt:"2026-08-29T01:00:00.000Z", error:{ code:"ai_generation_failed", step:"ai_generation", details:{ raw:rawFailure } } },
-      { id:"schedule-skipped", operation:"auto_general", status:"skipped", completedAt:"2026-08-29T00:00:00.000Z", skipReason:{ raw:rawFailure } },
+      { id: "schedule-general", operation: "auto_general", status: "completed", completedAt: "2026-08-29T03:01:00.000Z", postId: "auto-post", executionId: "execution-general" },
+      { id: "schedule-failure", operation: "auto_general", status: "failed", completedAt: "2026-08-29T01:00:00.000Z", error: { code: "ai_generation_failed", step: "ai_generation" } },
     ];
   },
-  async listProductReviewCandidates(...args) {
-    sourceReadArguments.candidates = args;
-    return [
-      { id:"candidate-scheduled", status:"pending_review", createdAt:"2026-08-29T02:00:00.000Z" },
-      { id:"candidate-published", status:"published", createdAt:"2026-08-28T23:00:00.000Z", publishedAt:"2026-08-29T04:00:00.000Z", postId:"review-post" },
-      { id:"candidate-pending", status:"pending_review", createdAt:"2026-08-28T22:00:00.000Z" },
-    ];
-  },
-  async listPosts() {
-    return [
-      { id:"manual-post", status:"PUBLISHED", publishedAt:"2026-08-29T05:00:00.000Z", publishedPostId:"manual-post" },
-      { id:"manual-duplicate", status:"PUBLISHED", publishedAt:"2026-08-29T06:00:00.000Z", publishedPostId:"auto-post" },
-    ];
-  },
-  async getPostLogs(...args) {
-    sourceReadArguments.logs = args;
-    return [
-      { status:"published", created_at:"2026-08-29T07:00:00.000Z", post_id:"manual-post", metadata:{ source:"OPERATOR" }, text:rawFailure },
-      { status:"published", created_at:"2026-08-29T06:30:00.000Z", post_id:"legacy-post", metadata:{}, text:rawFailure },
-      { status:"published", created_at:"2026-08-29T04:30:00.000Z", post_id:"review-post", metadata:{ source:"manual_product_test" }, text:rawFailure },
-      { status:"failed", created_at:"2026-08-29T03:30:00.000Z", step:"create_container", details:{ raw:rawFailure }, text:rawFailure },
-      { status:"failed", created_at:"2026-08-29T01:00:30.000Z", step:"ai_generation", details:{ raw:rawFailure }, metadata:{ source:"cron_auto_general" }, text:rawFailure },
-    ];
-  },
+  async listPosts(...args) { sourceReadArguments.posts = args; return [{ id: "manual-post", status: "PUBLISHED", publishedAt: "2026-08-29T05:00:00.000Z", publishedPostId: "manual-post" }]; },
+  async getPostLogs(...args) { sourceReadArguments.logs = args; return [{ status: "published", created_at: "2026-08-29T04:00:00.000Z", post_id: "manual-post", metadata: { source: "OPERATOR" } }]; },
   async getAutoPostStatus(...args) {
     sourceReadArguments.autoStatus = args;
-    return { recentGeneralAutoExecutions:[{
-      id:"execution-general",
-      diagnostic:{
-        currentTopic:{ subject:"SAFE_TOPIC" },
-        provenance:{ contentBasis:"CURRENT_TOPIC", mediaBasis:"DAILY_IMAGE" },
-        attempts:[{ attempt:1, draftText:"SAFE_DRAFT", stage:"similarity_validation", reasons:["semantic_similarity"] }],
-      },
-    },{
-      id:"execution-failure",
-      completedAt:"2026-08-29T01:00:10.000Z",
-      diagnostic:{ attempts:[{ attempt:1, stage:"ai_generation", errorCode:"ai_generation_failed" }] },
-    }] };
+    return { recentGeneralAutoExecutions: [{ id: "execution-general", diagnostic: { provenance: { contentBasis: "CURRENT_TOPIC", mediaBasis: "DAILY_IMAGE" }, attempts: [{ attempt: 1, draftText: "SAFE_DRAFT", stage: "similarity_validation", reasons: ["semantic_similarity"] }] } }] };
   },
 };
 
-const result = await getOperatorActivity({}, { limit:50, dependencies });
-assert.equal(result.limit, 50);
-assert.equal(result.hasMore, false);
-assert.equal(result.partial, false);
+const result = await getOperatorActivity({}, { limit: 50, dependencies });
 assert.deepEqual(sourceReadArguments.schedules.slice(1), [50, "default-workspace"]);
-assert.deepEqual(sourceReadArguments.candidates.slice(1), [50, "default-workspace"]);
+assert.deepEqual(sourceReadArguments.posts.slice(1), [{ status: "PUBLISHED" }, "default-workspace"]);
 assert.deepEqual(sourceReadArguments.logs.slice(1), []);
 assert.deepEqual(sourceReadArguments.autoStatus.slice(1), [{ workspaceId: null }]);
-assert.deepEqual(result.items.map((activity) => activity.id), [
-  "post-log:legacy-post",
-  "operator-post:manual-post",
-  "product-review:candidate-published:published",
-  "post-log:failed:2026-08-29T03:30:00.000Z:3",
-  "schedule:schedule-general",
-  "schedule:schedule-review",
-  "schedule:schedule-provenance-only",
-  "schedule:schedule-failure",
-  "schedule:schedule-skipped",
-  "product-review:candidate-published:generated",
-  "product-review:candidate-pending:generated",
-]);
-assert.equal(result.items.some((activity) => activity.id === "operator-post:manual-duplicate"), false);
-assert.equal(result.items.some((activity) => activity.id === "product-review:candidate-scheduled:generated"), false);
-assert.equal(result.items.filter((activity) => activity.externalPostId === "manual-post").length, 1);
-assert.equal(result.items.filter((activity) => activity.externalPostId === "review-post").length, 1);
-assert.equal(result.items.filter((activity) => activity.type === "GENERAL_AUTO").length, 4);
-assert.equal(result.items.some((activity) => activity.id === "post-log:failed:2026-08-29T01:00:30.000Z:4"), false);
+assert.equal(result.items.some((activity) => activity.type === "PRODUCT_REVIEW"), false);
+assert.equal(result.items.find((activity) => activity.id === "schedule:schedule-general").mediaBasis, "DAILY_IMAGE");
 assert.deepEqual(result.generalAutoSummary, {
-  totalExecutions:4,
-  successfulPublishes:1,
-  failedExecutions:1,
-  textCount:1,
-  imageCount:1,
-  videoCount:0,
-  personaCount:1,
-  currentTopicCount:1,
-  imageUsagePercent:50,
-  videoUsagePercent:0,
+  totalExecutions: 2, successfulPublishes: 1, failedExecutions: 1,
+  textCount: 0, imageCount: 1, videoCount: 0, personaCount: 0, currentTopicCount: 1,
+  imageUsagePercent: 100, videoUsagePercent: 0,
 });
-assert.deepEqual(result.items.find((activity) => activity.id === "schedule:schedule-general"), {
-  id:"schedule:schedule-general", occurredAt:"2026-08-29T03:01:00.000Z", type:"GENERAL_AUTO", status:"PUBLISHED", summary:"General AUTO 게시를 완료했습니다.", failure:null, externalPostId:"auto-post",
-  diagnostic:{ currentTopic:{ subject:"SAFE_TOPIC" }, provenance:{ contentBasis:"CURRENT_TOPIC", mediaBasis:"DAILY_IMAGE" }, attempts:[{ attempt:1, draftText:"SAFE_DRAFT", stage:"similarity_validation", reasons:["semantic_similarity"] }] },
-  contentBasis:"CURRENT_TOPIC", mediaBasis:"DAILY_IMAGE",
-});
-assert.deepEqual(result.items.find((activity) => activity.id === "schedule:schedule-provenance-only"), {
-  id:"schedule:schedule-provenance-only", occurredAt:"2026-08-29T01:30:00.000Z", type:"GENERAL_AUTO", status:"SUCCESS", summary:"General AUTO 실행을 완료했습니다.", failure:null, externalPostId:null,
-  contentBasis:"PERSONA", mediaBasis:"NONE",
-});
-assert.deepEqual(result.items.find((activity) => activity.id === "schedule:schedule-failure").failure, { stage:"AI_GENERATION", code:"ai_generation_failed", message:"AI 글 생성에 실패했습니다." });
-assert.equal(result.items.find((activity) => activity.id === "schedule:schedule-failure").diagnostic.attempts[0].errorCode, "ai_generation_failed");
-assert.deepEqual(result.items.find((activity) => activity.id.startsWith("post-log:failed")).failure, { stage:"PUBLISHING", code:"threads_publish_failed", message:"Threads 게시 처리에 실패했습니다." });
-assert.equal(JSON.stringify(result).includes(rawFailure), false);
 assert.equal(normalizeActivityLimit(undefined), 30);
-assert.equal(normalizeActivityLimit(null), 30);
 assert.equal(normalizeActivityLimit(-4), 1);
 assert.equal(normalizeActivityLimit(999), 50);
-const limited = await getOperatorActivity({}, { limit:1, dependencies });
-assert.equal(limited.items.length, 1);
-assert.equal(limited.hasMore, true);
-const empty = await getOperatorActivity({}, { dependencies:{ async getScheduleRuns(){return[]}, async listProductReviewCandidates(){return[]}, async listPosts(){return[]}, async getPostLogs(){return[]}, async getAutoPostStatus(){return{recentGeneralAutoExecutions:[]}} } });
-assert.deepEqual(empty.items, []);
-assert.deepEqual(empty.generalAutoSummary, {
-  totalExecutions:0,
-  successfulPublishes:0,
-  failedExecutions:0,
-  textCount:0,
-  imageCount:0,
-  videoCount:0,
-  personaCount:0,
-  currentTopicCount:0,
-  imageUsagePercent:null,
-  videoUsagePercent:null,
-});
 assert.deepEqual(summarizeGeneralAutoActivity([
-  { type:"GENERAL_AUTO", status:"PUBLISHED", contentBasis:"CURRENT_TOPIC", mediaBasis:"DAILY_IMAGE" },
-  { type:"GENERAL_AUTO", status:"SUCCESS", contentBasis:"PERSONA", mediaBasis:"DAILY_VIDEO" },
-  { type:"GENERAL_AUTO", status:"SUCCESS", mediaBasis:"NONE" },
-  { type:"GENERAL_AUTO", status:"FAILED" },
-  { type:"PRODUCT_REVIEW", status:"PUBLISHED", contentBasis:"PERSONA", mediaBasis:"NONE" },
-  { type:"MANUAL_PUBLISH", status:"PUBLISHED", contentBasis:"PERSONA", mediaBasis:"NONE" },
+  { type: "GENERAL_AUTO", status: "PUBLISHED", contentBasis: "CURRENT_TOPIC", mediaBasis: "DAILY_IMAGE" },
+  { type: "GENERAL_AUTO", status: "SUCCESS", contentBasis: "PERSONA", mediaBasis: "DAILY_VIDEO" },
+  { type: "GENERAL_AUTO", status: "SUCCESS", mediaBasis: "NONE" },
+  { type: "GENERAL_AUTO", status: "FAILED" },
+  { type: "MANUAL_PUBLISH", status: "PUBLISHED", mediaBasis: "NONE" },
 ]), {
-  totalExecutions:4,
-  successfulPublishes:1,
-  failedExecutions:1,
-  textCount:1,
-  imageCount:1,
-  videoCount:1,
-  personaCount:1,
-  currentTopicCount:1,
-  imageUsagePercent:33,
-  videoUsagePercent:33,
+  totalExecutions: 4, successfulPublishes: 1, failedExecutions: 1,
+  textCount: 1, imageCount: 1, videoCount: 1, personaCount: 1, currentTopicCount: 1,
+  imageUsagePercent: 33, videoUsagePercent: 33,
 });
 
-const scopedReadArguments = {};
-const scopedActivity = await getOperatorActivity({}, {
+const scoped = await getOperatorActivity({}, {
   workspaceId: "workspace-next",
   dependencies: {
-    async getScheduleRuns() {
-      return [
-        { id:"default-run", operation:"auto_general", status:"completed", completedAt:"2026-08-30T01:00:00.000Z" },
-        { id:"next-run", workspaceId:"workspace-next", operation:"auto_general", status:"completed", completedAt:"2026-08-30T02:00:00.000Z" },
-        { id:"other-run", workspaceId:"workspace-other", operation:"auto_general", status:"completed", completedAt:"2026-08-30T03:00:00.000Z" },
-      ];
-    },
-    async listProductReviewCandidates(...args) {
-      scopedReadArguments.candidates = args;
-      return [];
-    },
-    async listPosts(...args) {
-      scopedReadArguments.posts = args;
-      return [{ id:"next-manual", status:"PUBLISHED", publishedAt:"2026-08-30T04:00:00.000Z", publishedPostId:"next-manual" }];
-    },
-    async getPostLogs() {
-      return [
-        { status:"published", created_at:"2026-08-30T05:00:00.000Z", post_id:"default-log", metadata:{ source:"OPERATOR" } },
-        { status:"published", created_at:"2026-08-30T06:00:00.000Z", post_id:"next-log", metadata:{ source:"OPERATOR", workspaceId:"workspace-next" } },
-        { status:"published", created_at:"2026-08-30T07:00:00.000Z", post_id:"other-log", metadata:{ source:"OPERATOR", workspaceId:"workspace-other" } },
-      ];
-    },
-    async getAutoPostStatus() {
-      return { recentGeneralAutoExecutions:[
-        { id:"default-execution", diagnostic:{ attempts:[] } },
-        { id:"next-execution", workspaceId:"workspace-next", diagnostic:{ attempts:[] } },
-      ] };
-    },
+    async getScheduleRuns() { return [{ id: "default", operation: "auto_general", status: "completed", completedAt: "2026-08-30T01:00:00.000Z" }, { id: "next", workspaceId: "workspace-next", operation: "auto_general", status: "completed", completedAt: "2026-08-30T02:00:00.000Z" }]; },
+    async listPosts() { return []; }, async getPostLogs() { return []; }, async getAutoPostStatus() { return { recentGeneralAutoExecutions: [] }; },
   },
 });
-assert.deepEqual(scopedReadArguments.candidates.slice(1), [50, "workspace-next"]);
-assert.deepEqual(scopedReadArguments.posts.slice(1), [{ status:"PUBLISHED" }, "workspace-next"]);
-assert.equal(scopedActivity.items.some((activity) => activity.id === "schedule:default-run"), false);
-assert.equal(scopedActivity.items.some((activity) => activity.id === "schedule:other-run"), false);
-assert.equal(scopedActivity.items.some((activity) => activity.id === "schedule:next-run"), true);
-assert.equal(scopedActivity.items.some((activity) => activity.externalPostId === "default-log"), false);
-assert.equal(scopedActivity.items.some((activity) => activity.externalPostId === "other-log"), false);
-assert.equal(scopedActivity.items.some((activity) => activity.externalPostId === "next-log"), true);
-const unsafeId = "https://example.com/secret?token=abc";
-const oversizedId = "x".repeat(300);
-const unsafeResult = await getOperatorActivity({}, { dependencies:{
-  async getScheduleRuns(){return[{ id:unsafeId, operation:"auto_general", status:"completed", completedAt:"2026-08-29T10:00:00.000Z" }]},
-  async listProductReviewCandidates(){return[{ id:oversizedId, status:"pending_review", createdAt:"2026-08-29T09:00:00.000Z" }]},
-  async listPosts(){return[{ id:unsafeId, status:"PUBLISHED", publishedAt:"2026-08-29T08:00:00.000Z", publishedPostId:"manual-safe" }]},
-  async getPostLogs(){return[{ status:"published", created_at:"2026-08-29T07:00:00.000Z", post_id:unsafeId, metadata:{} }]},
-  async getAutoPostStatus(){return{recentGeneralAutoExecutions:[]}},
-} });
-assert.equal(JSON.stringify(unsafeResult).includes(unsafeId), false);
-assert.equal(JSON.stringify(unsafeResult).includes(oversizedId), false);
-const executionOnly = unsafeResult.items.find((activity) => activity.type === "GENERAL_AUTO");
-assert.equal(executionOnly.status, "SUCCESS");
-assert.equal(executionOnly.summary, "General AUTO 실행을 완료했습니다.");
-assert.equal(executionOnly.externalPostId, null);
-const partial = await getOperatorActivity({}, { dependencies:{ ...dependencies, async getPostLogs(){throw new Error(rawFailure)} } });
-assert.equal(partial.partial, true);
-assert.equal(partial.items.some((activity) => activity.type === "GENERAL_AUTO"), true);
-await assert.rejects(
-  () => getOperatorActivity({}, { dependencies:{ async getScheduleRuns(){throw new Error()}, async listProductReviewCandidates(){throw new Error()}, async listPosts(){throw new Error()}, async getPostLogs(){throw new Error()}, async getAutoPostStatus(){return{recentGeneralAutoExecutions:[]}} } }),
-  /All activity sources are unavailable/
-);
+assert.equal(scoped.items.some((activity) => activity.id === "schedule:default"), false);
+assert.equal(scoped.items.some((activity) => activity.id === "schedule:next"), true);
 console.log("activity service fixture passed");

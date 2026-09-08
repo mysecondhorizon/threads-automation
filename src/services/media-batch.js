@@ -191,9 +191,6 @@ function buildInput(file, manifest, defaults, mediaKind) {
   if (sourceType !== "general" && sourceType !== "product") {
     throw new Error("sourceType must be general or product");
   }
-  const productId = sourceType === "product"
-    ? text(manifest?.productId || defaults.productId) || null
-    : null;
   const defaultMaxUses = sourceType === "general"
     ? null
     : 1;
@@ -201,7 +198,6 @@ function buildInput(file, manifest, defaults, mediaKind) {
     file,
     mediaKind,
     sourceType,
-    productId,
     objectKey: createObjectKey(sourceType, file.name, mediaExtension(mediaKind)),
     imageUrl: null,
     altText: text(manifest?.altText || defaults.altText),
@@ -305,7 +301,6 @@ async function videoUploadData(env, file, input, sourceObjectKey, temporaryObjec
 function r2CustomMetadata(input, upload) {
   return {
     sourceType: input.sourceType,
-    productId: input.productId || "",
     originalFileName: input.file.name,
     originalContentType: input.file.type,
     originalBytes: String(upload.originalBytes),
@@ -463,7 +458,6 @@ export async function batchUploadMedia(
     registration = await createMediaBatch(env, uploaded.map(({ input }) => ({
       mediaKind: input.mediaKind,
       sourceType: input.sourceType,
-      productId: input.productId,
       objectKey: input.objectKey,
       imageUrl: input.imageUrl,
       altText: input.altText,
@@ -534,7 +528,7 @@ export async function batchUploadMedia(
   ));
 
   const poolRegistered = registered.filter(
-    ({ input }) => input.mediaKind === "image"
+    ({ input }) => input.mediaKind === "image" && input.sourceType === "general"
   );
   if (createPoolItems && poolRegistered.length) {
     let pool;
@@ -542,7 +536,6 @@ export async function batchUploadMedia(
       pool = await createContentPoolBatch(env, poolRegistered.map(({ input, media }) => ({
         type: input.sourceType,
         mediaIds: [media.id],
-        productId: input.productId,
         topics: input.topics,
         allowedContentTypes: input.allowedContentTypes,
         priority: input.priority,

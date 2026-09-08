@@ -15,14 +15,13 @@ export const RUNTIME_RECEIPT_STALE_MS = 15 * 60 * 1000;
 const SCHEDULE_PREFIX = "schedule:";
 const SLOT_PREFIX = "slot:";
 const SEEDED_KEY = "runtime-schedules:seeded:v1";
-const SCHEDULE_TYPES = new Set(["GENERAL_AUTO", "PRODUCT_REVIEW"]);
+const SCHEDULE_TYPES = new Set(["GENERAL_AUTO"]);
 const RECEIPT_STATUSES = new Set(["SUPPRESSED", "MISSED", "RUNNING", "SUCCESS", "FAILED", "UNCERTAIN"]);
 const DEFAULT_SCHEDULES = [
   ["general-auto-0810", "General AUTO 08:10", "GENERAL_AUTO", "08:10"],
   ["general-auto-1130", "General AUTO 11:30", "GENERAL_AUTO", "11:30"],
   ["general-auto-1430", "General AUTO 14:30", "GENERAL_AUTO", "14:30"],
   ["general-auto-1840", "General AUTO 18:40", "GENERAL_AUTO", "18:40"],
-  ["product-review-2030", "Product Review 후보 생성", "PRODUCT_REVIEW", "20:30"],
 ];
 
 function nowIso() {
@@ -54,8 +53,7 @@ function asEpoch(value) {
 }
 
 function historyType(run) {
-  return run?.operation === "product_review" ? "PRODUCT_REVIEW" :
-    run?.operation === "auto_general" ? "GENERAL_AUTO" : null;
+  return run?.operation === "auto_general" ? "GENERAL_AUTO" : null;
 }
 
 function terminalHistoryOutcome(receipt, schedule, runs) {
@@ -67,7 +65,7 @@ function terminalHistoryOutcome(receipt, schedule, runs) {
     historyType(run) === schedule.type &&
     asEpoch(run?.scheduledTime) === scheduledFor &&
     asEpoch(run?.completedAt) > 0 &&
-    (run?.status === "completed" || run?.status === "review_ready" || run?.status === "failed")
+    (run?.status === "completed" || run?.status === "failed")
   );
   if (!matchingRun) return null;
   return {
@@ -216,7 +214,9 @@ export class ScheduleCoordinator extends DurableObject {
   async readSchedules() {
     await this.ensureSeeded();
     const entries = await this.ctx.storage.list({ prefix: SCHEDULE_PREFIX });
-    return [...entries.values()].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+    return [...entries.values()]
+      .filter((schedule) => SCHEDULE_TYPES.has(schedule?.type))
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   }
 
   async readWorkspaceSchedules() {

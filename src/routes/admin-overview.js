@@ -2,7 +2,7 @@ import { requireAdminSession } from "../middleware/auth.js";
 import { ADMIN_ENDPOINTS, renderAdminNavigation } from "../services/admin-navigation.js";
 import { html } from "../utils/response.js";
 
-const CATEGORY_ORDER = ["Admin Pages", "AUTO / publishing", "Media", "Products", "Diagnostics", "Admin APIs", "Auth/session", "Public endpoints"];
+const CATEGORY_ORDER = ["Admin Pages", "AUTO / publishing", "Media", "Diagnostics", "Admin APIs", "Auth/session", "Public endpoints"];
 const card = (title, description, href) => `<a href="${href}" style="display:block;padding:16px;border:1px solid #ddd;border-radius:12px;background:#fff;color:#111;text-decoration:none;"><strong>${title}</strong><div style="margin-top:7px;color:#555;font-size:14px;line-height:1.5;">${description}</div></a>`;
 const badge = ({ name, tone }) => `<span style="display:inline-block;margin:2px 4px 2px 0;padding:3px 6px;border-radius:999px;font-size:11px;font-weight:700;background:${tone === "danger" ? "#ffe1e1" : "#edf1f5"};color:${tone === "danger" ? "#9b0000" : "#334"};">${name}</span>`;
 
@@ -16,15 +16,13 @@ export async function handleAdminHomePage(request, env) {
   const content = `<header style="margin-bottom:24px;"><h1 style="margin:0 0 8px;">Second Horizon Admin</h1><p style="margin:0;color:#555;">관리 기능과 안전한 진단 경로를 한곳에서 찾습니다.</p></header>
   <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
     ${card("Publishing", "AUTO / Post controls and manual publishing.", "/admin/post")}
-    ${card("AUTO Preview", "Generate a review-only AUTO preview before publishing.", "/admin/auto-post/preview-page")}
     ${card("Current Topic controls", "Current Topic 조회, Refresh, AUTO Preview, and one-shot Cron AUTO controls.", "/admin/post")}
     ${card("Media", "Media Library, batch upload, Content Pool, inventory.", "/admin/media-page")}
-    ${card("Products", "Product Catalog, CSV import, and review workflow.", "/admin/products-page")}
     ${card("AI Selection diagnostic", "Review the diagnostic endpoint and its AI-call effect label.", "/admin/endpoints#Diagnostics")}
     ${card("Next AUTO Mode diagnostic", "Read-only Current Topic cadence diagnostic details.", "/admin/endpoints#Diagnostics")}
     ${card("System", "Endpoint Overview and connected profile/session checks.", "/admin/endpoints#Auth-session")}
   </section>
-  <section style="margin-top:24px;padding:18px;border:1px solid #ddd;border-radius:12px;background:#fff;"><h2 style="margin-top:0;">Quick links</h2><a href="/admin/auto-post/preview-page">AUTO Preview</a> · <a href="/admin/dashboard">Performance dashboard</a> · <a href="/admin/me">Current profile/session check</a></section>`;
+  <section style="margin-top:24px;padding:18px;border:1px solid #ddd;border-radius:12px;background:#fff;"><h2 style="margin-top:0;">Quick links</h2><a href="/admin/dashboard">Performance dashboard</a> · <a href="/admin/me">Current profile/session check</a></section>`;
   return pageShell("Second Horizon Admin", "/admin", content);
 }
 

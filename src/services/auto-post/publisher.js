@@ -34,12 +34,6 @@ import {
   ThreadsPublisherError,
 } from "../publishers/threads-publisher.js";
 
-const PRODUCT_REVIEW_SOURCE =
-  "manual_product_test";
-
-const PRODUCT_REVIEW_FIRST_COMMENT_DELAY_MS =
-  45 * 1000;
-
 function normalizeMediaSelection(
   mediaSelection
 ) {
@@ -99,22 +93,6 @@ function recordTrackingWarning(
       postId,
       category,
     }
-  );
-}
-
-async function waitBeforeFirstComment(
-  delayMs
-) {
-  if (delayMs <= 0) {
-    return;
-  }
-
-  await new Promise(
-    (resolve) =>
-      setTimeout(
-        resolve,
-        delayMs
-      )
   );
 }
 
@@ -329,16 +307,6 @@ export async function publishAutoPost(
       }
     }
   }
-
-  await waitBeforeFirstComment(
-    metadata?.source ===
-      PRODUCT_REVIEW_SOURCE &&
-    String(
-      firstComment || ""
-    ).trim()
-      ? PRODUCT_REVIEW_FIRST_COMMENT_DELAY_MS
-      : 0
-  );
 
   const firstCommentResult =
     await safelyPublishFirstComment({

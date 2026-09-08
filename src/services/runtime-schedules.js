@@ -3,7 +3,7 @@ import { getJson, putJson } from "./kv.js";
 const COORDINATOR_NAME = "application-runtime-schedule-coordinator";
 const WORKSPACE_SCHEDULES_KEY = "workspace_runtime_schedule_configurations:v1";
 const WORKSPACE_SCHEDULES_VERSION = 1;
-const SCHEDULE_TYPES = new Set(["GENERAL_AUTO", "PRODUCT_REVIEW"]);
+const SCHEDULE_TYPES = new Set(["GENERAL_AUTO"]);
 
 export class WorkspaceScheduleError extends Error {
   constructor(message, code = "workspace_schedule_invalid") {

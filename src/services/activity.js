@@ -1,6 +1,5 @@
 import { getPostLogs } from "./logger.js";
 import { listPosts } from "./posts.js";
-import { listProductReviewCandidates } from "./product-review.js";
 import { getScheduleRuns } from "./auto-post/schedule-store.js";
 import { getAutoPostStatus } from "./auto-post/status.js";
 import { normalizeScheduleFailure } from "./schedule-operations.js";
@@ -101,13 +100,6 @@ export function normalizeScheduleActivity(run, index = 0) {
   return null;
 }
 
-export function normalizeProductReviewActivity(candidate, index = 0) {
-  if (!text(candidate?.id)) return [];
-  const generated = item({ id: activityId("product-review", candidate.id, candidate.createdAt, index, ":generated"), occurredAt: candidate.createdAt, type: "PRODUCT_REVIEW", status: "CANDIDATE_GENERATED", summary: "제품 후기 후보를 생성했습니다." });
-  const published = candidate.status === "published" ? item({ id: activityId("product-review", candidate.id, candidate.publishedAt || candidate.updatedAt, index, ":published"), occurredAt: candidate.publishedAt || candidate.updatedAt, type: "PRODUCT_REVIEW", status: "CANDIDATE_PUBLISHED", summary: "제품 후기 후보가 게시되었습니다.", externalPostId: safeExternalPostId(candidate.postId) }) : null;
-  return [generated, published].filter(Boolean);
-}
-
 export function normalizeManualPostActivity(post, index = 0) {
   if (post?.status !== "PUBLISHED" || !text(post?.id)) return null;
   return item({ id: activityId("operator-post", post.id, post.publishedAt, index), occurredAt: post.publishedAt, type: "MANUAL_PUBLISH", status: "PUBLISHED", summary: "직접 작성한 게시물을 게시했습니다.", externalPostId: safeExternalPostId(post.publishedPostId) });
@@ -188,19 +180,17 @@ export async function getOperatorActivity(env, {
   dependencies = {},
 } = {}) {
   const readSchedules = dependencies.getScheduleRuns || getScheduleRuns;
-  const readCandidates = dependencies.listProductReviewCandidates || listProductReviewCandidates;
   const readPosts = dependencies.listPosts || listPosts;
   const readLogs = dependencies.getPostLogs || getPostLogs;
   const readAutoStatus = dependencies.getAutoPostStatus || getAutoPostStatus;
   const reads = await Promise.allSettled([
     readSchedules(env, MAX_LIMIT, workspaceId),
-    readCandidates(env, MAX_LIMIT, workspaceId),
     readPosts(env, { status: "PUBLISHED" }, workspaceId),
     readLogs(env),
     readAutoStatus(env, { workspaceId: workspaceId === DEFAULT_WORKSPACE_ID ? null : workspaceId }),
   ]);
-  if (reads.slice(0, 4).every((result) => result.status === "rejected")) throw new Error("All activity sources are unavailable");
-  const [runs, candidates, posts, logs, autoStatus] = reads.map((result) => result.status === "fulfilled" ? result.value : []);
+  if (reads.slice(0, 3).every((result) => result.status === "rejected")) throw new Error("All activity sources are unavailable");
+  const [runs, posts, logs, autoStatus] = reads.map((result) => result.status === "fulfilled" ? result.value : []);
   const partial = reads.some((result) => result.status === "rejected");
 
   const workspaceRuns = (Array.isArray(runs) ? runs : [])
@@ -233,7 +223,6 @@ export async function getOperatorActivity(env, {
 
   const items = [];
   const externalPostIds = new Set();
-  const generatedCandidateIds = new Set();
   for (const [index, run] of workspaceRuns.entries()) {
     const normalized = normalizeScheduleActivity(run, index);
     if (!normalized) continue;
@@ -251,17 +240,6 @@ export async function getOperatorActivity(env, {
     } : normalized);
     const externalPostId = normalized.externalPostId;
     if (externalPostId) externalPostIds.add(externalPostId);
-    if (run?.status === "review_ready" && text(run?.candidateId)) generatedCandidateIds.add(text(run.candidateId));
-  }
-  for (const [index, candidate] of (Array.isArray(candidates) ? candidates : []).entries()) {
-    const candidateId = text(candidate?.id);
-    for (const normalized of normalizeProductReviewActivity(candidate, index)) {
-      if (normalized.status === "CANDIDATE_GENERATED" && generatedCandidateIds.has(candidateId)) continue;
-      const externalPostId = normalized.externalPostId;
-      if (externalPostId && externalPostIds.has(externalPostId)) continue;
-      items.push(normalized);
-      if (externalPostId) externalPostIds.add(externalPostId);
-    }
   }
   for (const [index, post] of (Array.isArray(posts) ? posts : []).entries()) {
     const normalized = normalizeManualPostActivity(post, index);

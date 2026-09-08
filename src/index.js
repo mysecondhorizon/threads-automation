@@ -11,31 +11,6 @@ import {
 } from "./routes/auto-post-preview.js";
 
 import {
-  handleAutoPostPreviewPage,
-} from "./routes/auto-post-preview-page.js";
-
-import {
-  handlePublishReviewedAutoPost,
-} from "./routes/auto-post-publish-reviewed.js";
-
-import {
-  handleProductsPage,
-} from "./routes/products-page.js";
-
-import {
-  handleProducts,
-  handleProductBatchUpload,
-} from "./routes/products.js";
-
-import {
-  handleProductReviews,
-} from "./routes/product-review.js";
-
-import {
-  handleProductReviewPage,
-} from "./routes/product-review-page.js";
-
-import {
   handleMediaManagementPage,
 } from "./routes/media-management-page.js";
 
@@ -43,7 +18,6 @@ import {
   handleMediaLibrary,
   handleMediaBatchUpload,
   handleContentPool,
-  handleWeeklyInventory,
 } from "./routes/media-management.js";
 
 import {
@@ -122,9 +96,6 @@ import {
   handleAppMediaPage,
 } from "./routes/app-media-page.js";
 
-import { handleAppProductsPage } from "./routes/app-products-page.js";
-import { handleOperatorProductAnalyze } from "./routes/api-product-analyze.js";
-import { handleOperatorProductById, handleOperatorProducts } from "./routes/api-products.js";
 import { handleOperatorProductMedia } from "./routes/api-product-media.js";
 
 import {
@@ -316,7 +287,6 @@ export default {
       const appContext = await resolveCurrentAppContext(request, env);
       if (
         isUnscopedAppAccessBlocked(appContext) &&
-        pathname !== "/app/products" &&
         pathname !== "/app/daily" &&
         pathname !== "/app/media" &&
         pathname !== "/app/prompts" &&
@@ -340,9 +310,6 @@ export default {
       return handleAppMediaPage(request, env);
     }
 
-    if (pathname === "/app/products" && method === "GET") {
-      return handleAppProductsPage(request, env);
-    }
     if (pathname === "/app/prompts" && method === "GET") return handleAppPromptsPage(request, env);
 
     if (pathname === "/app/activity" && method === "GET") {
@@ -409,26 +376,14 @@ export default {
       return handleOperatorMediaCollection(request, env);
     }
 
-    if (pathname === "/api/products") {
-      return handleOperatorProducts(request, env, url);
-    }
     if (pathname === "/api/prompts") return handleOperatorPrompts(request, env);
     if (pathname === "/api/prompts/reset") return handleOperatorPromptReset(request, env);
     if (pathname === "/api/activity") return handleOperatorActivity(request, env, url);
-
-    if (pathname === "/api/products/analyze") {
-      return handleOperatorProductAnalyze(request, env);
-    }
 
     if (pathname === "/api/products/media") {
       return handleOperatorProductMedia(request, env);
     }
 
-    if (pathname.startsWith("/api/products/")) {
-      const productId = pathname.slice("/api/products/".length);
-      if (!productId || productId.includes("/")) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
-      return handleOperatorProductById(request, env, decodeURIComponent(productId));
-    }
 
     if (pathname === "/api/media/upload") {
       return handleOperatorMediaUpload(request, env);
@@ -543,50 +498,6 @@ export default {
       );
     }
 
-    if (
-      pathname === "/admin/auto-post/preview-page" &&
-      method === "GET"
-    ) {
-      return handleAutoPostPreviewPage(
-        request,
-        env
-      );
-    }
-
-    if (
-      pathname === "/admin/auto-post/publish-reviewed" &&
-      method === "POST"
-    ) {
-      return handlePublishReviewedAutoPost(
-        request,
-        env
-      );
-    }
-
-    if (
-      pathname === "/admin/products-page" &&
-      method === "GET"
-    ) {
-      return handleProductsPage(
-        request,
-        env
-      );
-    }
-
-    if (
-      pathname === "/admin/products" &&
-      (
-        method === "GET" ||
-        method === "POST" ||
-        method === "DELETE"
-      )
-    ) {
-      return handleProducts(
-        request,
-        env
-      );
-    }
-
     if (pathname === "/admin" && method === "GET") {
       return handleAdminHomePage(request, env);
     }
@@ -620,39 +531,6 @@ export default {
 
     if (pathname === "/admin/diagnostics/run-cron-auto-general") {
       return handleCronAutoGeneralDiagnostic(request, env);
-    }
-
-    if (
-      pathname === "/admin/products/batch" &&
-      method === "POST"
-    ) {
-      return handleProductBatchUpload(
-        request,
-        env
-      );
-    }
-
-    if (
-      pathname === "/admin/product-review-page" &&
-      method === "GET"
-    ) {
-      return handleProductReviewPage(
-        request,
-        env
-      );
-    }
-
-    if (
-      pathname === "/admin/product-reviews" &&
-      (
-        method === "GET" ||
-        method === "POST"
-      )
-    ) {
-      return handleProductReviews(
-        request,
-        env
-      );
     }
 
     if (
@@ -700,17 +578,6 @@ export default {
       )
     ) {
       return handleContentPool(
-        request,
-        env,
-        url
-      );
-    }
-
-    if (
-      pathname === "/admin/media-inventory" &&
-      method === "GET"
-    ) {
-      return handleWeeklyInventory(
         request,
         env,
         url

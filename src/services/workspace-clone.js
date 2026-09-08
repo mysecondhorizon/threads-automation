@@ -4,13 +4,12 @@ import {
   hasPersistedPromptProfile,
   updatePromptProfile,
 } from "./prompt-profile.js";
-import { getProducts, saveProduct, validateProductInput } from "./products.js";
 import { createMedia, listMedia } from "./media.js";
 import { getMediaObject, putMediaObject } from "./media-storage.js";
 import { createContentPoolItem, listContentPool } from "./content-pool.js";
 import { DEFAULT_WORKSPACE_ID } from "./workspace-foundation.js";
 
-const LIMITS = Object.freeze({ products: 50, media: 500, contentPool: 1000 });
+const LIMITS = Object.freeze({ media: 500, contentPool: 1000 });
 
 export class WorkspaceCloneError extends Error {
   constructor(message, {
@@ -54,7 +53,6 @@ function cloneInput(record, overrides) {
 function copyCreated(created) {
   return {
     promptProfilePersisted: created.promptProfilePersisted,
-    productIds: [...created.productIds],
     mediaIds: [...created.mediaIds],
     contentPoolIds: [...created.contentPoolIds],
     objectKeys: [...created.objectKeys],
@@ -94,7 +92,6 @@ function validateWorkspacePair(source, destination) {
 function validateDestinationEmpty(destinationState) {
   if (
     destinationState.promptProfilePersisted ||
-    destinationState.products.length > 0 ||
     destinationState.media.length > 0 ||
     destinationState.contentPool.length > 0
   ) {
@@ -103,7 +100,6 @@ function validateDestinationEmpty(destinationState) {
 }
 function validateSourceLimits(sourceState) {
   if (
-    sourceState.products.length > LIMITS.products ||
     sourceState.media.length > LIMITS.media ||
     sourceState.contentPool.length > LIMITS.contentPool
   ) {
@@ -111,31 +107,12 @@ function validateSourceLimits(sourceState) {
   }
 }
 
-function prepareProductPlan(products, allocateId) {
-  const usedIds = new Set();
-  const productIdMap = new Map();
-  const plan = products.map((product) => {
-    const id = requireFreshId(allocateId("product", product.id), "product", usedIds, product.id);
-    const input = cloneInput(product, { id });
-    validateProductInput(input);
-    productIdMap.set(product.id, id);
-    return { id, input };
-  });
-  return { plan, productIdMap };
-}
-
-function prepareMediaPlan(mediaRecords, productIdMap, operationId, allocateId, createObjectKey) {
+function prepareMediaPlan(mediaRecords, operationId, allocateId, createObjectKey) {
   const usedIds = new Set();
   const usedObjectKeys = new Set();
   const mediaIdMap = new Map();
   const plan = mediaRecords.map((media) => {
     const id = requireFreshId(allocateId("media", media.id), "media", usedIds, media.id);
-    const productId = media.productId === null || media.productId === undefined
-      ? null
-      : productIdMap.get(media.productId);
-    if (media.productId && !productId) {
-      fail("Media references a Product outside the source Workspace", "workspace_clone_media_product_missing");
-    }
     const objectKey = String(createObjectKey({ operationId, mediaId: id, source: media }) || "").trim();
     if (!objectKey || objectKey === media.objectKey || usedObjectKeys.has(objectKey)) {
       fail("Workspace clone could not allocate a fresh media object key", "workspace_clone_object_key_invalid");
@@ -146,7 +123,7 @@ function prepareMediaPlan(mediaRecords, productIdMap, operationId, allocateId, c
       id,
       objectKey,
       input: cloneInput(media, {
-        productId,
+        productId: null,
         objectKey,
         usedCount: 0,
         lastUsedAt: null,
@@ -158,7 +135,7 @@ function prepareMediaPlan(mediaRecords, productIdMap, operationId, allocateId, c
   return { plan, mediaIdMap };
 }
 
-function prepareContentPoolPlan(items, productIdMap, mediaIdMap, allocateId) {
+function prepareContentPoolPlan(items, mediaIdMap, allocateId) {
   const usedIds = new Set();
   const contentPoolIdMap = new Map();
   const plan = items.map((item) => {
@@ -167,17 +144,10 @@ function prepareContentPoolPlan(items, productIdMap, mediaIdMap, allocateId) {
     if (mediaIds.some((mediaId) => !mediaId)) {
       fail("Content Pool references Media outside the source Workspace", "workspace_clone_pool_media_missing");
     }
-    const productId = item.productId === null || item.productId === undefined
-      ? null
-      : productIdMap.get(item.productId);
-    if (item.productId && !productId) {
-      fail("Content Pool references a Product outside the source Workspace", "workspace_clone_pool_product_missing");
-    }
     contentPoolIdMap.set(item.id, id);
     return {
       id,
       input: cloneInput(item, {
-        productId,
         mediaIds,
         usedCount: 0,
         lastUsedAt: null,
@@ -202,39 +172,33 @@ export async function preflightWorkspaceClone(
     ]);
     validateWorkspacePair(sourceWorkspace, destinationWorkspace);
 
-    const [promptProfilePersisted, destinationProducts, destinationMedia, destinationContentPool] = await Promise.all([
+    const [promptProfilePersisted, destinationMedia, destinationContentPool] = await Promise.all([
       hasPersistedPromptProfile(env, destinationWorkspace.id),
-      getProducts(env, destinationWorkspace.id),
       listMedia(env, {}, destinationWorkspace.id),
       listContentPool(env, {}, destinationWorkspace.id),
     ]);
     validateDestinationEmpty({
       promptProfilePersisted,
-      products: destinationProducts,
       media: destinationMedia,
       contentPool: destinationContentPool,
     });
 
-    const [promptProfile, products, media, contentPool] = await Promise.all([
+    const [promptProfile, media, contentPool] = await Promise.all([
       getEffectivePromptProfile(env, sourceWorkspace.id),
-      getProducts(env, sourceWorkspace.id),
       listMedia(env, {}, sourceWorkspace.id),
       listContentPool(env, {}, sourceWorkspace.id),
     ]);
-    validateSourceLimits({ products, media, contentPool });
+    validateSourceLimits({ media, contentPool });
 
     const operationId = requireFreshId(createId("workspace_clone"), "workspace_clone", new Set(), null);
-    const productsPlan = prepareProductPlan(products, createId);
     const mediaPlan = prepareMediaPlan(
       media,
-      productsPlan.productIdMap,
       operationId,
       createId,
       createObjectKey,
     );
     const contentPoolPlan = prepareContentPoolPlan(
       contentPool,
-      productsPlan.productIdMap,
       mediaPlan.mediaIdMap,
       createId,
     );
@@ -254,10 +218,8 @@ export async function preflightWorkspaceClone(
       sourceWorkspace,
       destinationWorkspace,
       promptProfile: promptProfile.profile,
-      products: productsPlan.plan,
       media: mediaPlan.plan,
       contentPool: contentPoolPlan.plan,
-      productIdMap: productsPlan.productIdMap,
       mediaIdMap: mediaPlan.mediaIdMap,
       contentPoolIdMap: contentPoolPlan.contentPoolIdMap,
     });
@@ -273,7 +235,6 @@ export async function cloneWorkspace(env, input, options = {}) {
   const plan = await preflightWorkspaceClone(env, input, options);
   const created = {
     promptProfilePersisted: false,
-    productIds: [],
     mediaIds: [],
     contentPoolIds: [],
     objectKeys: [],
@@ -296,12 +257,6 @@ export async function cloneWorkspace(env, input, options = {}) {
         customMetadata: mediaItem.customMetadata,
       });
       created.objectKeys.push(mediaItem.objectKey);
-    }
-
-    stage = "products";
-    for (const product of plan.products) {
-      await saveProduct(env, product.input, plan.destinationWorkspace.id);
-      created.productIds.push(product.id);
     }
 
     stage = "media";

@@ -4,7 +4,6 @@ import { getThreadsCredentialForAccount } from "./connected-accounts.js";
 
 const OPERATION_BY_TYPE = {
   GENERAL_AUTO: "auto_general",
-  PRODUCT_REVIEW: "product_review",
 };
 
 export function getRuntimeScheduleOperation(type) {

@@ -7,6 +7,7 @@ const response = await handleAppSchedulesPage(new Request("https://x/app/schedul
 const page = await response.text();
 assert.equal(response.status, 200);
 assert.match(page, /id="schedule-form"/u);
+assert.doesNotMatch(page, /PRODUCT_REVIEW|Product Review/u);
 assert.equal(page.includes("/api/schedules"), true);
 assert.match(page, /Asia\/Seoul/u);
 assert.match(page, /기존 Cloudflare 자동 실행/u);

@@ -10,7 +10,6 @@ import {
   removeContentPoolItem,
   getAvailableContentPoolCandidates,
 } from "../services/content-pool.js";
-import { getWeeklyInventory } from "../services/weekly-inventory.js";
 
 function booleanQuery(value) {
   if (value === null) return undefined;
@@ -36,8 +35,6 @@ export async function handleMediaLibrary(request, env, url) {
     if (request.method === "GET") {
       return ok({ media: await listMedia(env, {
         sourceType: url.searchParams.get("sourceType") || undefined,
-        productId: url.searchParams.has("productId")
-          ? url.searchParams.get("productId") : undefined,
         active: booleanQuery(url.searchParams.get("active")),
       }) });
     }
@@ -67,7 +64,6 @@ export async function handleMediaBatchUpload(request, env) {
         ? await manifest.text() : String(manifest || ""),
       defaults: {
         sourceType: form.get("sourceType"),
-        productId: form.get("productId"),
         altText: form.get("altText"),
         description: form.get("description"),
         tags: form.get("tags"),
@@ -116,17 +112,5 @@ export async function handleContentPool(request, env, url) {
     return fail("Method Not Allowed", 405);
   } catch (error) {
     return apiError(error, "Content Pool API Error");
-  }
-}
-
-export async function handleWeeklyInventory(request, env, url) {
-  const unauthorized = await authorize(request, env);
-  if (unauthorized) return unauthorized;
-  if (request.method !== "GET") return fail("Method Not Allowed", 405);
-  try {
-    const expectedPostCount = Number(url.searchParams.get("expectedPostCount"));
-    return ok({ inventory: await getWeeklyInventory(env, { expectedPostCount }) });
-  } catch (error) {
-    return apiError(error, "Weekly inventory lookup failed");
   }
 }

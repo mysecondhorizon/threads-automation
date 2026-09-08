@@ -61,9 +61,7 @@ export async function handleOperatorProductMedia(request, env, {
         experienceTags,
         experienceNote,
       },
-      // Preserve Product Content Pool behavior. Product type remains isolated
-      // from the GENERAL AUTO media candidate path.
-      createPoolItems: true,
+      createPoolItems: false,
     }, authorization.workspaceId);
     const media = (Array.isArray(result?.results) ? result.results : [])
       .filter((item) => item?.status === "success" && item.media?.sourceType === "product")

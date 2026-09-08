@@ -15,11 +15,6 @@ export const APP_NAVIGATION = [
     description: "일상 사진과 동영상을 업로드하고 관리합니다.",
   },
   {
-    label: "제품",
-    path: "/app/products",
-    description: "제품 정보와 게시 맥락을 관리합니다.",
-  },
-  {
     label: "프롬프트",
     path: "/app/prompts",
     description: "AI가 글을 작성하는 방식을 설정합니다.",
