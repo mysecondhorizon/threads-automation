@@ -15,6 +15,7 @@ import {
 } from "../services/product-opportunity-assets.js";
 import { getProductOpportunityAssetCandidates } from "../services/product-opportunity-asset-matcher.js";
 import { getMedia } from "../services/media.js";
+import { CoupangPartnersError, searchCoupangProducts } from "../services/coupang-partners.js";
 import { fail, ok } from "../utils/response.js";
 
 const EDITABLE_FIELDS = new Set([
@@ -83,6 +84,51 @@ function assetErrorResponse(error) {
   if (error instanceof ProductOpportunityAssetError && /_not_found$/u.test(error.code)) return fail("Product Opportunity or media not found", 404, { code: error.code });
   if (error instanceof ProductOpportunityAssetError) return fail("Invalid Product Opportunity asset", 400, { code: error.code });
   return fail("Product Opportunity asset request failed", 400, { code: "product_opportunity_asset_request_failed" });
+}
+
+function coupangErrorResponse(error) {
+  if (!(error instanceof CoupangPartnersError)) {
+    return fail("Coupang product search failed", 502, { code: "coupang_upstream_failed" });
+  }
+  if (error.code === "coupang_search_invalid") {
+    return fail("Invalid Coupang product search", 400, { code: error.code });
+  }
+  if (error.code === "coupang_rate_limited") {
+    return fail("Coupang product search is temporarily unavailable", 429, { code: error.code });
+  }
+  if (error.code === "coupang_credentials_unavailable") {
+    return fail("Coupang product search is unavailable", 503, { code: error.code });
+  }
+  return fail("Coupang product search failed", 502, { code: error.code === "coupang_auth_failed" ? error.code : "coupang_upstream_failed" });
+}
+
+function searchQuery(request) {
+  try {
+    return new URL(request.url).searchParams.get("q") || "";
+  } catch {
+    return "";
+  }
+}
+
+export async function handleProductOpportunityProductCandidates(request, env, opportunityId, {
+  get = getProductOpportunityById,
+  search = searchCoupangProducts,
+} = {}) {
+  const authorization = await authorize(request, env);
+  if (!authorization.ok) return authorization.response;
+  if (request.method !== "GET") return fail("Method Not Allowed", 405);
+  const query = searchQuery(request).trim();
+  if (!query || query.length > 120) {
+    return fail("Invalid Coupang product search", 400, { code: "coupang_search_invalid" });
+  }
+  const opportunity = await get(env, opportunityId, authorization.workspaceId);
+  if (!opportunity) return fail("Product Opportunity not found", 404, { code: "product_opportunity_not_found" });
+  try {
+    const candidates = await search(env, { query, limit: 5 });
+    return ok({ query, candidates: Array.isArray(candidates) ? candidates.slice(0, 10) : [] });
+  } catch (error) {
+    return coupangErrorResponse(error);
+  }
 }
 
 export async function handleProductOpportunityAssets(request, env, opportunityId, assetPath = null, {

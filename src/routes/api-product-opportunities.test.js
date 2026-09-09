@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 
 import {
   handleProductOpportunityById,
+  handleProductOpportunityProductCandidates,
   handleProductOpportunityDiscovery,
   handleProductOpportunityAssets,
   handleProductOpportunitiesCollection,
 } from "./api-product-opportunities.js";
+import { CoupangPartnersError } from "../services/coupang-partners.js";
 import {
   ADMIN_SESSION_KEY_PREFIX,
   USERS_KEY,
@@ -100,6 +102,27 @@ const foreign = await handleProductOpportunityById(request("/api/product-opportu
 });
 assert.equal(foreign.status, 404);
 assert.equal(scopedWorkspace, "workspace-next");
+
+let candidateWorkspaceId = null;
+let candidateSearchCalls = 0;
+const candidateOpportunity = { id: "coupang-opportunity", workspaceId: "workspace-next", productName: "Coffee" };
+const productCandidates = await handleProductOpportunityProductCandidates(request("/api/product-opportunities/coupang-opportunity/product-candidates?q=coffee"), env, "coupang-opportunity", {
+  get: async (_env, id, workspaceId) => { candidateWorkspaceId = workspaceId; return id === "coupang-opportunity" ? candidateOpportunity : null; },
+  search: async (_env, options) => { candidateSearchCalls += 1; assert.deepEqual(options, { query: "coffee", limit: 5 }); return [{ productName: "Coffee maker", productUrl: "https://link.coupang.com/a/one", affiliateUrl: "https://link.coupang.com/a/one" }]; },
+});
+assert.equal(productCandidates.status, 200);
+assert.equal(candidateWorkspaceId, "workspace-next");
+assert.equal((await productCandidates.json()).candidates[0].productName, "Coffee maker");
+assert.equal(candidateSearchCalls, 1);
+assert.equal((await handleProductOpportunityProductCandidates(request("/api/product-opportunities/coupang-opportunity/product-candidates?q=%20%20"), env, "coupang-opportunity", { get: async () => candidateOpportunity, search: async () => { throw new Error("must not run"); } })).status, 400);
+assert.equal((await handleProductOpportunityProductCandidates(request("/api/product-opportunities/coupang-opportunity/product-candidates?q=coffee", "POST"), env, "coupang-opportunity", { get: async () => candidateOpportunity })).status, 405);
+assert.equal((await handleProductOpportunityProductCandidates(request("/api/product-opportunities/foreign/product-candidates?q=coffee"), env, "foreign", { get: async () => null, search: async () => { throw new Error("must not run"); } })).status, 404);
+const candidateFailure = await handleProductOpportunityProductCandidates(request("/api/product-opportunities/coupang-opportunity/product-candidates?q=coffee"), env, "coupang-opportunity", {
+  get: async () => candidateOpportunity,
+  search: async () => { throw new CoupangPartnersError("upstream raw detail", "coupang_auth_failed"); },
+});
+assert.equal(candidateFailure.status, 502);
+assert.deepEqual(await candidateFailure.json(), { ok: false, error: "Coupang product search failed", code: "coupang_auth_failed" });
 
 const removed = await handleProductOpportunityById(request(`/api/product-opportunities/${opportunity.id}`, "DELETE"), env, opportunity.id);
 assert.deepEqual(await removed.json(), { ok: true, removed: true });

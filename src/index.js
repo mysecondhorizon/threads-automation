@@ -100,6 +100,7 @@ import { handleAppProductsPage } from "./routes/app-products-page.js";
 import { handleOperatorProductMedia } from "./routes/api-product-media.js";
 import {
   handleProductOpportunityById,
+  handleProductOpportunityProductCandidates,
   handleProductOpportunityDiscovery,
   handleProductOpportunitiesCollection,
 } from "./routes/api-product-opportunities.js";
@@ -401,6 +402,12 @@ export default {
 
     if (pathname === "/api/product-opportunities/discover") {
       return handleProductOpportunityDiscovery(request, env);
+    }
+
+    if (pathname.startsWith("/api/product-opportunities/") && pathname.endsWith("/product-candidates")) {
+      const opportunityId = pathname.slice("/api/product-opportunities/".length, -"/product-candidates".length);
+      if (!opportunityId || opportunityId.includes("/")) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      return handleProductOpportunityProductCandidates(request, env, decodeURIComponent(opportunityId));
     }
 
     if (pathname.startsWith("/api/product-opportunities/") && pathname.endsWith("/assets/candidates")) {
