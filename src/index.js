@@ -403,6 +403,24 @@ export default {
       return handleProductOpportunityDiscovery(request, env);
     }
 
+    if (pathname.startsWith("/api/product-opportunities/") && pathname.endsWith("/assets/candidates")) {
+      const opportunityId = pathname.slice("/api/product-opportunities/".length, -"/assets/candidates".length);
+      if (!opportunityId || opportunityId.includes("/")) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      return handleProductOpportunityAssets(request, env, decodeURIComponent(opportunityId), "candidates");
+    }
+
+    if (pathname.startsWith("/api/product-opportunities/") && pathname.endsWith("/assets")) {
+      const opportunityId = pathname.slice("/api/product-opportunities/".length, -"/assets".length);
+      if (!opportunityId || opportunityId.includes("/")) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      return handleProductOpportunityAssets(request, env, decodeURIComponent(opportunityId));
+    }
+
+    if (pathname.startsWith("/api/product-opportunities/") && pathname.includes("/assets/")) {
+      const parts = pathname.slice("/api/product-opportunities/".length).split("/assets/");
+      if (parts.length !== 2 || !parts[0] || !parts[1] || parts[0].includes("/") || parts[1].includes("/")) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      return handleProductOpportunityAssets(request, env, decodeURIComponent(parts[0]), decodeURIComponent(parts[1]));
+    }
+
     if (pathname.startsWith("/api/product-opportunities/")) {
       const opportunityId = pathname.slice("/api/product-opportunities/".length);
       if (!opportunityId || opportunityId.includes("/")) {

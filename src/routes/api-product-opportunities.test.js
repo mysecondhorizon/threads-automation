@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   handleProductOpportunityById,
   handleProductOpportunityDiscovery,
+  handleProductOpportunityAssets,
   handleProductOpportunitiesCollection,
 } from "./api-product-opportunities.js";
 import {
@@ -104,5 +105,26 @@ const removed = await handleProductOpportunityById(request(`/api/product-opportu
 assert.deepEqual(await removed.json(), { ok: true, removed: true });
 const missing = await handleProductOpportunityById(request(`/api/product-opportunities/${opportunity.id}`), env, opportunity.id);
 assert.equal(missing.status, 404);
+
+const opportunityForAssets = { id: "opportunity-assets", workspaceId: "workspace-next", productName: "Coffee" };
+const productMedia = { id: "media-assets", mediaKind: "image", sourceType: "product", active: true, description: "Coffee tool", tags: ["coffee"], experienceTags: ["morning"], experienceNote: "Used during a morning routine.", sceneType: "kitchen", usableAngles: ["small tool"] };
+const assetDependencies = {
+  getOpportunity: async (_env, id, workspaceId) => { assert.equal(workspaceId, "workspace-next"); return id === "opportunity-assets" ? opportunityForAssets : null; },
+  candidates: async (_env, value, workspaceId) => { assert.equal(value.id, "opportunity-assets"); assert.equal(workspaceId, "workspace-next"); return [{ ...productMedia, mediaId: productMedia.id, matchScore: 80, reasons: ["제품/카테고리와 미디어 태그 일치"], hasUserExperience: true, previewUrl: "/media/media-assets" }]; },
+  listLinks: async () => [{ mediaId: "media-assets" }],
+  link: async (_env, _opportunityId, mediaId, workspaceId) => { assert.equal(workspaceId, "workspace-next"); assert.equal(mediaId, "media-assets"); return { mediaId, created: true }; },
+  unlink: async () => true,
+  get: async (_env, mediaId, workspaceId) => { assert.equal(workspaceId, "workspace-next"); return mediaId === "media-assets" ? productMedia : null; },
+};
+const candidateResponse = await handleProductOpportunityAssets(request("/api/product-opportunities/opportunity-assets/assets/candidates"), env, "opportunity-assets", "candidates", assetDependencies);
+assert.equal((await candidateResponse.json()).candidates[0].matchScore, 80);
+const linkedResponse = await handleProductOpportunityAssets(request("/api/product-opportunities/opportunity-assets/assets"), env, "opportunity-assets", null, assetDependencies);
+assert.equal((await linkedResponse.json()).assets[0].hasUserExperience, true);
+const linkedCreate = await handleProductOpportunityAssets(request("/api/product-opportunities/opportunity-assets/assets", "POST", { mediaId: "media-assets" }), env, "opportunity-assets", null, assetDependencies);
+assert.equal(linkedCreate.status, 201);
+assert.equal((await handleProductOpportunityAssets(request("/api/product-opportunities/opportunity-assets/assets/media-assets", "DELETE"), env, "opportunity-assets", "media-assets", assetDependencies)).status, 200);
+assert.equal((await handleProductOpportunityAssets(request("/api/product-opportunities/opportunity-assets/assets", "POST", { mediaId: "media-assets", workspaceId: "workspace-other" }), env, "opportunity-assets", null, assetDependencies)).status, 400);
+assert.equal((await handleProductOpportunityAssets(request("/api/product-opportunities/missing/assets/candidates"), env, "missing", "candidates", assetDependencies)).status, 404);
+assert.equal((await handleProductOpportunityAssets(request("/api/product-opportunities/opportunity-assets/assets/candidates", "POST"), env, "opportunity-assets", "candidates", assetDependencies)).status, 405);
 
 console.log("product opportunities API fixture passed");

@@ -18,5 +18,7 @@ assert.equal(source.includes('pathname === "/api/product-opportunities"'), true)
 assert.equal(source.includes('pathname === "/api/product-opportunities/discover"'), true);
 assert.equal(source.includes('pathname.startsWith("/api/product-opportunities/")'), true);
 assert.equal(source.indexOf('pathname === "/api/product-opportunities/discover"') < source.indexOf('pathname.startsWith("/api/product-opportunities/")'), true);
+assert.equal(source.indexOf('pathname.endsWith("/assets/candidates")') < source.lastIndexOf('pathname.startsWith("/api/product-opportunities/")'), true);
+assert.equal(source.includes('pathname === "/api/products/media"'), true);
 assert.equal(source.includes('pathname === "/api/products/media"'), true);
 console.log("index legacy product route fixture passed");

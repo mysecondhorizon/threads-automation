@@ -7,6 +7,14 @@ import {
   saveProductOpportunity,
 } from "../services/product-opportunities.js";
 import { discoverProductOpportunities } from "../services/product-opportunity-discovery.js";
+import {
+  ProductOpportunityAssetError,
+  linkProductOpportunityAsset,
+  listProductOpportunityAssets,
+  unlinkProductOpportunityAsset,
+} from "../services/product-opportunity-assets.js";
+import { getProductOpportunityAssetCandidates } from "../services/product-opportunity-asset-matcher.js";
+import { getMedia } from "../services/media.js";
 import { fail, ok } from "../utils/response.js";
 
 const EDITABLE_FIELDS = new Set([
@@ -58,6 +66,59 @@ function errorResponse(error) {
     return fail("Invalid Product Opportunity", 400, { code: error.code });
   }
   return fail("Product Opportunity request failed", 400, { code: "product_opportunity_request_failed" });
+}
+
+function safeAsset(media) {
+  return { id: media.id, kind: media.mediaKind === "video" ? "video" : "image", description: media.description || "", tags: Array.isArray(media.tags) ? [...media.tags] : [], experienceTags: Array.isArray(media.experienceTags) ? [...media.experienceTags] : [], experienceNote: media.experienceNote || null, hasUserExperience: Boolean(media.experienceNote), active: media.active === true, sceneType: media.sceneType || null, usableAngles: Array.isArray(media.usableAngles) ? [...media.usableAngles] : [], previewUrl: `/media/${encodeURIComponent(media.id)}` };
+}
+
+async function readMediaId(request) {
+  try {
+    const input = await request.json();
+    return input && typeof input === "object" && !Array.isArray(input) && Object.keys(input).length === 1 && typeof input.mediaId === "string" && input.mediaId.trim() ? input.mediaId.trim() : null;
+  } catch { return null; }
+}
+
+function assetErrorResponse(error) {
+  if (error instanceof ProductOpportunityAssetError && /_not_found$/u.test(error.code)) return fail("Product Opportunity or media not found", 404, { code: error.code });
+  if (error instanceof ProductOpportunityAssetError) return fail("Invalid Product Opportunity asset", 400, { code: error.code });
+  return fail("Product Opportunity asset request failed", 400, { code: "product_opportunity_asset_request_failed" });
+}
+
+export async function handleProductOpportunityAssets(request, env, opportunityId, assetPath = null, {
+  getOpportunity = getProductOpportunityById,
+  candidates = getProductOpportunityAssetCandidates,
+  listLinks = listProductOpportunityAssets,
+  link = linkProductOpportunityAsset,
+  unlink = unlinkProductOpportunityAsset,
+  get = getMedia,
+} = {}) {
+  const authorization = await authorize(request, env);
+  if (!authorization.ok) return authorization.response;
+  const opportunity = await getOpportunity(env, opportunityId, authorization.workspaceId);
+  if (!opportunity) return fail("Product Opportunity not found", 404, { code: "product_opportunity_not_found" });
+  try {
+    if (assetPath === "candidates") {
+      if (request.method !== "GET") return fail("Method Not Allowed", 405);
+      return ok({ candidates: await candidates(env, opportunity, authorization.workspaceId) });
+    }
+    if (assetPath === null) {
+      if (request.method === "GET") {
+        const links = await listLinks(env, opportunityId, authorization.workspaceId);
+        const media = await Promise.all(links.map((record) => get(env, record.mediaId, authorization.workspaceId)));
+        return ok({ assets: media.filter(Boolean).map(safeAsset) });
+      }
+      if (request.method !== "POST") return fail("Method Not Allowed", 405);
+      const mediaId = await readMediaId(request);
+      if (!mediaId) return fail("Invalid Product Opportunity asset", 400, { code: "product_opportunity_asset_input_invalid" });
+      const relation = await link(env, opportunityId, mediaId, authorization.workspaceId);
+      const media = await get(env, mediaId, authorization.workspaceId);
+      return ok({ relation, asset: safeAsset(media) }, relation.created ? 201 : 200);
+    }
+    if (request.method !== "DELETE") return fail("Method Not Allowed", 405);
+    const removed = await unlink(env, opportunityId, assetPath, authorization.workspaceId);
+    return removed ? ok({ removed: true }) : fail("Product Opportunity asset not found", 404, { code: "product_opportunity_asset_not_found" });
+  } catch (error) { return assetErrorResponse(error); }
 }
 
 async function hasEmptyBody(request) {

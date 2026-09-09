@@ -14,6 +14,12 @@ assert.equal(legacyPage.status, 200);
 assert.match(legacyText, /제품 기회/u);
 assert.match(legacyText, /새 기회 추가/u);
 assert.match(legacyText, /AI 기회 탐색/u);
+assert.match(legacyText, /경험\/미디어 연결/u);
+assert.match(legacyText, /base\+'\/candidates'/u);
+assert.match(legacyText, /matchScore/u);
+assert.match(legacyText, /실사용 경험 있음/u);
+assert.match(legacyText, /미디어만 있음/u);
+assert.match(legacyText, /addLine\(details,asset\.hasUserExperience/u);
 assert.match(legacyText, /api\/product-opportunities\/discover/u);
 assert.match(legacyText, /discover\.disabled=true/u);
 assert.match(legacyText, /savedCount/u);
@@ -23,7 +29,7 @@ assert.match(legacyText, /textContent=opportunity\.productName/u);
 assert.match(legacyText, /replaceChildren\(\)/u);
 assert.doesNotMatch(legacyText, /innerHTML/u);
 assert.equal(legacyText.includes("mediaIds"), false);
-assert.equal(legacyText.includes("experienceNote"), false);
+assert.equal(legacyText.includes('name="experienceNote"'), false);
 
 const values = new Map([
   [USERS_KEY, JSON.stringify({ version: 1, users: [{ id: "user-next", loginId: "next", displayName: "Next", active: true, createdAt: "2026-01-01", updatedAt: "2026-01-01" }] })],
