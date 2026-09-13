@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { APP_NAVIGATION } from "../services/app-navigation.js";
-import { handleAppProductsPage } from "./app-products-page.js";
+import { buildProductOpportunitiesClientScript, handleAppProductsPage } from "./app-products-page.js";
 import { ADMIN_SESSION_KEY_PREFIX, USERS_KEY, WORKSPACES_KEY } from "../services/login-foundation.js";
 
 const legacyEnv = { THREADS_KV: { async get(key) { return key === "admin_session:legacy" ? "valid" : null; } } };
@@ -42,6 +42,7 @@ assert.match(legacyText, /replaceChildren\(\)/u);
 assert.doesNotMatch(legacyText, /innerHTML/u);
 assert.equal(legacyText.includes("mediaIds"), false);
 assert.equal(legacyText.includes('name="experienceNote"'), false);
+assert.doesNotThrow(() => new Function(buildProductOpportunitiesClientScript()));
 
 const values = new Map([
   [USERS_KEY, JSON.stringify({ version: 1, users: [{ id: "user-next", loginId: "next", displayName: "Next", active: true, createdAt: "2026-01-01", updatedAt: "2026-01-01" }] })],
