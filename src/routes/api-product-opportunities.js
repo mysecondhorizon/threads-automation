@@ -16,6 +16,7 @@ import {
 import { getProductOpportunityAssetCandidates } from "../services/product-opportunity-asset-matcher.js";
 import { getMedia } from "../services/media.js";
 import { CoupangPartnersError, searchCoupangProducts } from "../services/coupang-partners.js";
+import { CommerceContentError, generateCommerceContent } from "../services/commerce-content.js";
 import { fail, ok } from "../utils/response.js";
 
 const EDITABLE_FIELDS = new Set([
@@ -102,6 +103,19 @@ function coupangErrorResponse(error) {
   return fail("Coupang product search failed", 502, { code: error.code === "coupang_auth_failed" ? error.code : "coupang_upstream_failed" });
 }
 
+function commerceContentErrorResponse(error) {
+  if (error instanceof CommerceContentError) {
+    if (error.code === "commerce_content_opportunity_not_found") {
+      return fail("Product Opportunity not found", 404, { code: error.code });
+    }
+    if (error.code === "commerce_content_product_name_required") {
+      return fail("Product Opportunity productName is required", 400, { code: error.code });
+    }
+    return fail("Commerce content generation failed", 502, { code: "commerce_content_generation_failed" });
+  }
+  return fail("Commerce content generation failed", 502, { code: "commerce_content_generation_failed" });
+}
+
 function searchQuery(request) {
   try {
     return new URL(request.url).searchParams.get("q") || "";
@@ -128,6 +142,25 @@ export async function handleProductOpportunityProductCandidates(request, env, op
     return ok({ query, candidates: Array.isArray(candidates) ? candidates.slice(0, 10) : [] });
   } catch (error) {
     return coupangErrorResponse(error);
+  }
+}
+
+export async function handleProductOpportunityContentGeneration(request, env, opportunityId, {
+  get = getProductOpportunityById,
+  generate = generateCommerceContent,
+} = {}) {
+  const authorization = await authorize(request, env);
+  if (!authorization.ok) return authorization.response;
+  if (request.method !== "POST") return fail("Method Not Allowed", 405);
+  if (!await hasEmptyBody(request)) {
+    return fail("Invalid commerce content request", 400, { code: "commerce_content_input_invalid" });
+  }
+  const opportunity = await get(env, opportunityId, authorization.workspaceId);
+  if (!opportunity) return fail("Product Opportunity not found", 404, { code: "product_opportunity_not_found" });
+  try {
+    return ok({ draft: await generate(env, { workspaceId: authorization.workspaceId, opportunity }) });
+  } catch (error) {
+    return commerceContentErrorResponse(error);
   }
 }
 

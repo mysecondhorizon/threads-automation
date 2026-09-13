@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 
 import {
   handleProductOpportunityById,
+  handleProductOpportunityContentGeneration,
   handleProductOpportunityProductCandidates,
   handleProductOpportunityDiscovery,
   handleProductOpportunityAssets,
   handleProductOpportunitiesCollection,
 } from "./api-product-opportunities.js";
 import { CoupangPartnersError } from "../services/coupang-partners.js";
+import { CommerceContentError } from "../services/commerce-content.js";
 import {
   ADMIN_SESSION_KEY_PREFIX,
   USERS_KEY,
@@ -102,6 +104,27 @@ const foreign = await handleProductOpportunityById(request("/api/product-opportu
 });
 assert.equal(foreign.status, 404);
 assert.equal(scopedWorkspace, "workspace-next");
+
+let commerceWorkspaceId = null;
+const commerceOpportunity = { id: "commerce-opportunity", workspaceId: "workspace-next", productName: "Car vacuum", category: "car" };
+const commerceDraft = await handleProductOpportunityContentGeneration(request("/api/product-opportunities/commerce-opportunity/generate-content", "POST"), env, "commerce-opportunity", {
+  get: async (_env, id, workspaceId) => { commerceWorkspaceId = workspaceId; return id === "commerce-opportunity" ? commerceOpportunity : null; },
+  generate: async (_env, value) => {
+    assert.equal(value.workspaceId, "workspace-next");
+    return { text: "차 안 정리를 조금 더 가볍게 시작할 수 있겠어요.", contentBasis: "PRODUCT_OPPORTUNITY", opportunityId: value.opportunity.id, mediaId: "media-assets", mediaKind: "image", usedUserExperience: true, affiliateLink: null };
+  },
+});
+assert.equal(commerceDraft.status, 200);
+assert.equal(commerceWorkspaceId, "workspace-next");
+assert.equal((await commerceDraft.json()).draft.contentBasis, "PRODUCT_OPPORTUNITY");
+assert.equal((await handleProductOpportunityContentGeneration(request("/api/product-opportunities/missing/generate-content", "POST"), env, "missing", { get: async () => null })).status, 404);
+assert.equal((await handleProductOpportunityContentGeneration(request("/api/product-opportunities/commerce-opportunity/generate-content", "GET"), env, "commerce-opportunity")).status, 405);
+assert.equal((await handleProductOpportunityContentGeneration(request("/api/product-opportunities/commerce-opportunity/generate-content", "POST", { workspaceId: "workspace-other" }), env, "commerce-opportunity")).status, 400);
+const missingProductName = await handleProductOpportunityContentGeneration(request("/api/product-opportunities/commerce-opportunity/generate-content", "POST"), env, "commerce-opportunity", {
+  get: async () => ({ ...commerceOpportunity, productName: "" }),
+  generate: async () => { throw new CommerceContentError("missing", "commerce_content_product_name_required"); },
+});
+assert.equal(missingProductName.status, 400);
 
 let candidateWorkspaceId = null;
 let candidateSearchCalls = 0;
