@@ -100,6 +100,7 @@ import { handleAppProductsPage } from "./routes/app-products-page.js";
 import { handleOperatorProductMedia } from "./routes/api-product-media.js";
 import {
   handleProductOpportunityById,
+  handleProductOpportunityAssets,
   handleProductOpportunityContentGeneration,
   handleProductOpportunityProductCandidates,
   handleProductOpportunityDiscovery,

@@ -15,6 +15,7 @@ for (const pathname of [
 }
 assert.equal(source.includes('pathname === "/app/products"'), true);
 assert.equal(source.includes('pathname === "/api/product-opportunities"'), true);
+assert.equal(source.includes('handleProductOpportunityAssets,'), true);
 assert.equal(source.includes('pathname === "/api/product-opportunities/discover"'), true);
 assert.equal(source.includes('pathname.endsWith("/generate-content")'), true);
 assert.equal(source.includes('pathname.startsWith("/api/product-opportunities/")'), true);
