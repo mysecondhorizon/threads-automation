@@ -102,6 +102,7 @@ import {
   handleProductOpportunityById,
   handleProductOpportunityAssets,
   handleProductOpportunityContentPublish,
+  handleProductOpportunityPerformance,
   handleProductOpportunityContentGeneration,
   handleProductOpportunityProductCandidates,
   handleProductOpportunityDiscovery,
@@ -417,6 +418,12 @@ export default {
       const opportunityId = pathname.slice("/api/product-opportunities/".length, -"/publish-content".length);
       if (!opportunityId || opportunityId.includes("/")) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
       return handleProductOpportunityContentPublish(request, env, decodeURIComponent(opportunityId));
+    }
+
+    if (pathname.startsWith("/api/product-opportunities/") && pathname.endsWith("/performance")) {
+      const opportunityId = pathname.slice("/api/product-opportunities/".length, -"/performance".length);
+      if (!opportunityId || opportunityId.includes("/")) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      return handleProductOpportunityPerformance(request, env, decodeURIComponent(opportunityId));
     }
 
     if (pathname.startsWith("/api/product-opportunities/") && pathname.endsWith("/product-candidates")) {

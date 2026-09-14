@@ -18,6 +18,8 @@ import { getMedia } from "../services/media.js";
 import { CoupangPartnersError, searchCoupangProducts } from "../services/coupang-partners.js";
 import { CommerceContentError, generateCommerceContent } from "../services/commerce-content.js";
 import { CommercePublishError, publishCommerceContent } from "../services/commerce-publish.js";
+import { getPublishedCommercePostsForOpportunity } from "../services/history.js";
+import { buildProductOpportunityPerformanceSummary } from "../services/analytics.js";
 import { resolveWorkspaceThreadsConnectedAccount } from "../services/connected-accounts.js";
 import { resolveExecutionContext } from "../services/execution-context.js";
 import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
@@ -255,6 +257,32 @@ export async function handleProductOpportunityContentPublish(request, env, oppor
     return ok({ published });
   } catch (error) {
     return commercePublishErrorResponse(error);
+  }
+}
+
+export async function handleProductOpportunityPerformance(request, env, opportunityId, {
+  get = getProductOpportunityById,
+  getPublishedPosts = getPublishedCommercePostsForOpportunity,
+  buildPerformance = buildProductOpportunityPerformanceSummary,
+} = {}) {
+  const authorization = await authorize(request, env);
+  if (!authorization.ok) return authorization.response;
+  if (request.method !== "GET") return fail("Method Not Allowed", 405);
+
+  const opportunity = await get(env, opportunityId, authorization.workspaceId);
+  if (!opportunity) return fail("Product Opportunity not found", 404, { code: "product_opportunity_not_found" });
+
+  try {
+    const posts = await getPublishedPosts(env, {
+      workspaceId: authorization.workspaceId,
+      opportunityId: opportunity.id,
+    });
+    return ok({
+      opportunityId: opportunity.id,
+      performance: await buildPerformance(env, posts),
+    });
+  } catch {
+    return fail("Product Opportunity performance is unavailable", 502, { code: "product_opportunity_performance_unavailable" });
   }
 }
 

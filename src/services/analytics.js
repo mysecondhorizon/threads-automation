@@ -181,7 +181,8 @@ async function getPostPerformance(
 
 export async function buildRecentPerformance(
   env,
-  recentPosts
+  recentPosts,
+  { limit = MAX_PERFORMANCE_POSTS } = {}
 ) {
   if (!Array.isArray(recentPosts)) {
     return [];
@@ -191,7 +192,7 @@ export async function buildRecentPerformance(
     .filter((post) =>
       Boolean(post?.postId)
     )
-    .slice(0, MAX_PERFORMANCE_POSTS);
+    .slice(0, Number.isInteger(limit) && limit >= 0 ? limit : MAX_PERFORMANCE_POSTS);
 
   const results = await Promise.all(
     targetPosts.map((post) =>
@@ -200,6 +201,50 @@ export async function buildRecentPerformance(
   );
 
   return results.filter(Boolean);
+}
+
+const PERFORMANCE_METRICS = [
+  "views",
+  "likes",
+  "replies",
+  "reposts",
+  "quotes",
+  "shares",
+  "interactions",
+];
+
+function buildPerformanceTotals(items) {
+  const totals = {};
+
+  for (const metric of PERFORMANCE_METRICS) {
+    const values = items
+      .map((item) => Number(item?.[metric]))
+      .filter(Number.isFinite);
+
+    if (values.length) {
+      totals[metric] = values.reduce((sum, value) => sum + value, 0);
+    }
+  }
+
+  return totals;
+}
+
+export async function buildProductOpportunityPerformanceSummary(
+  env,
+  publishedPosts
+) {
+  const posts = Array.isArray(publishedPosts)
+    ? publishedPosts.filter((post) => post && typeof post === "object")
+    : [];
+  const performance = await buildRecentPerformance(env, posts, { limit: posts.length });
+  const available = performance.filter((item) => item.available === true);
+
+  return {
+    publishedPostCount: posts.length,
+    postsWithPerformanceCount: available.length,
+    performancePendingCount: posts.length - available.length,
+    totals: available.length ? buildPerformanceTotals(available) : null,
+  };
 }
 
 function groupPerformanceBy(

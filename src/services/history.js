@@ -291,6 +291,37 @@ function sortPostsNewestFirst(
   );
 }
 
+export async function getPublishedCommercePostsForOpportunity(
+  env,
+  {
+    workspaceId = DEFAULT_WORKSPACE_ID,
+    opportunityId,
+  } = {}
+) {
+  if (
+    typeof workspaceId !== "string" ||
+    !workspaceId.trim() ||
+    typeof opportunityId !== "string" ||
+    !opportunityId.trim()
+  ) {
+    return [];
+  }
+
+  const logs = await getRecentPostLogs(env, 100);
+
+  return sortPostsNewestFirst(
+    logs
+      .filter(isUsablePublishedLog)
+      .map(normalizePublishedPost)
+      .filter((post) =>
+        post.workspaceId === workspaceId &&
+        post.source === "COMMERCE_MANUAL" &&
+        post.contentBasis === "PRODUCT_OPPORTUNITY" &&
+        post.opportunityId === opportunityId
+      )
+  );
+}
+
 function getMinutesSince(
   date,
   now

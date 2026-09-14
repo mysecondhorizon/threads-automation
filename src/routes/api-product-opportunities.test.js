@@ -4,6 +4,7 @@ import {
   handleProductOpportunityById,
   handleProductOpportunityContentGeneration,
   handleProductOpportunityContentPublish,
+  handleProductOpportunityPerformance,
   handleProductOpportunityProductCandidates,
   handleProductOpportunityDiscovery,
   handleProductOpportunityAssets,
@@ -127,6 +128,31 @@ const missingProductName = await handleProductOpportunityContentGeneration(reque
   generate: async () => { throw new CommerceContentError("missing", "commerce_content_product_name_required"); },
 });
 assert.equal(missingProductName.status, 400);
+
+let performanceOptions = null;
+const performanceResponse = await handleProductOpportunityPerformance(request("/api/product-opportunities/commerce-opportunity/performance"), env, "commerce-opportunity", {
+  get: async (_env, id, workspaceId) => id === "commerce-opportunity" && workspaceId === "workspace-next" ? commerceOpportunity : null,
+  getPublishedPosts: async (_env, options) => {
+    performanceOptions = options;
+    return [{ postId: "commerce-post" }];
+  },
+  buildPerformance: async (_env, posts) => {
+    assert.equal(posts[0].postId, "commerce-post");
+    return { publishedPostCount: 1, postsWithPerformanceCount: 0, performancePendingCount: 1, totals: null };
+  },
+});
+assert.equal(performanceResponse.status, 200);
+assert.deepEqual(performanceOptions, { workspaceId: "workspace-next", opportunityId: "commerce-opportunity" });
+assert.deepEqual(await performanceResponse.json(), {
+  ok: true,
+  opportunityId: "commerce-opportunity",
+  performance: { publishedPostCount: 1, postsWithPerformanceCount: 0, performancePendingCount: 1, totals: null },
+});
+assert.equal((await handleProductOpportunityPerformance(request("/api/product-opportunities/commerce-opportunity/performance", "POST"), env, "commerce-opportunity")).status, 405);
+assert.equal((await handleProductOpportunityPerformance(request("/api/product-opportunities/foreign/performance"), env, "foreign", {
+  get: async () => null,
+  getPublishedPosts: async () => { throw new Error("must not run"); },
+})).status, 404);
 
 const publishOpportunity = { id: "publish-opportunity", workspaceId: "workspace-next", productName: "Car vacuum", category: "car", status: "READY", useCount: 0 };
 const publishImage = { id: "publish-image", workspaceId: "workspace-next", sourceType: "product", active: true, mediaKind: "image" };
