@@ -16,6 +16,7 @@ assert.equal(result.postId, "post-a");
 assert.equal(calls[0].content, "  Reviewed text stays exact.  ");
 assert.deepEqual(calls[0].context.mediaSelection, { mode: "IMAGE", mediaId: "media-a" });
 assert.equal(calls[1].metadata.contentBasis, "PRODUCT_OPPORTUNITY");
+assert.equal(calls[1].metadata.opportunityId, "opportunity-a");
 assert.equal(calls[1].metadata.affiliateLinkUsed, false);
 assert.equal(calls.some((value) => value?.generate || value?.requestOpenAiJson), false);
 

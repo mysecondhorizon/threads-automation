@@ -76,6 +76,7 @@ export async function publishCommerceContent(env, {
       source: "COMMERCE_MANUAL",
       contentMode: "commerce_manual",
       contentBasis: "PRODUCT_OPPORTUNITY",
+      opportunityId: opportunity.id,
       publishMode: mediaSelection.mode,
       mediaId: mediaSelection.mediaId,
       affiliateLinkUsed: false,

@@ -63,7 +63,7 @@ const commerceKey = await logPostSuccess(
   "operator",
   "post-commerce",
   "A reviewed Commerce post.",
-  { source:"COMMERCE_MANUAL", contentBasis:"PRODUCT_OPPORTUNITY" }
+  { source:"COMMERCE_MANUAL", contentBasis:"PRODUCT_OPPORTUNITY", opportunityId:"opportunity-commerce" }
 );
 const invalidKey = await logPostSuccess(
   env,
@@ -84,7 +84,9 @@ assert.equal((await kv.get(userExperienceKey, "json")).metadata.contentBasis, "U
 assert.equal((await kv.get(currentTopicKey, "json")).metadata.contentBasis, "CURRENT_TOPIC");
 assert.equal((await kv.get(personaKey, "json")).metadata.contentBasis, "PERSONA");
 assert.equal((await kv.get(commerceKey, "json")).metadata.contentBasis, "PRODUCT_OPPORTUNITY");
+assert.equal((await kv.get(commerceKey, "json")).metadata.opportunityId, "opportunity-commerce");
 assert.equal((await kv.get(invalidKey, "json")).metadata.contentBasis, null);
+assert.equal((await kv.get(missingKey, "json")).metadata.opportunityId, null);
 assert.equal((await kv.get(missingKey, "json")).metadata.contentBasis, null);
 
 await updatePostLogFirstComment(env, userExperienceKey, { topicApplied:true });
@@ -100,6 +102,10 @@ assert.equal(
   "PRODUCT_OPPORTUNITY"
 );
 assert.equal(
+  history.recentSevenDayPosts.find((post) => post.postId === "post-commerce").opportunityId,
+  "opportunity-commerce"
+);
+assert.equal(
   history.recentSevenDayPosts.find((post) => post.postId === "post-missing").contentBasis,
   null
 );
@@ -111,7 +117,12 @@ assert.equal(
 await kv.put("post_insight:post-current-topic", JSON.stringify({ views:100, interactions:10 }));
 await kv.put("post_insight:post-user-experience", JSON.stringify({ views:200, interactions:30 }));
 await kv.put("post_insight:post-persona", JSON.stringify({ views:300, interactions:50 }));
+await kv.put("post_insight:post-commerce", JSON.stringify({ views:125, interactions:15 }));
 await kv.put("post_insight:post-legacy", JSON.stringify({ views:400, interactions:60 }));
+const commerceHistoryPost = history.recentSevenDayPosts.find((post) => post.postId === "post-commerce");
+const commercePerformance = await buildRecentPerformance(env, [commerceHistoryPost]);
+assert.equal(commerceHistoryPost.opportunityId, "opportunity-commerce");
+assert.equal(commercePerformance[0].postId, commerceHistoryPost.postId);
 const performance = await buildRecentPerformance(env, [
   { postId:"post-current-topic", createdAt:"2026-09-07T00:00:00.000Z", text:"Current", contentBasis:"CURRENT_TOPIC" },
   { postId:"post-user-experience", createdAt:"2026-09-07T00:00:00.000Z", text:"Experience one", contentBasis:"USER_EXPERIENCE" },

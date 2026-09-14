@@ -171,6 +171,11 @@ function normalizePublishedPost(
 
     contentBasis,
 
+    opportunityId:
+      typeof metadata.opportunityId === "string" && metadata.opportunityId.trim()
+        ? metadata.opportunityId.trim()
+        : null,
+
     currentTopicId:
       metadata.currentTopicId ||
       null,
