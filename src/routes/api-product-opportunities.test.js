@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   handleProductOpportunityById,
   handleProductOpportunityContentGeneration,
+  handleProductOpportunityContentPublish,
   handleProductOpportunityProductCandidates,
   handleProductOpportunityDiscovery,
   handleProductOpportunityAssets,
@@ -10,6 +11,7 @@ import {
 } from "./api-product-opportunities.js";
 import { CoupangPartnersError } from "../services/coupang-partners.js";
 import { CommerceContentError } from "../services/commerce-content.js";
+import { CommercePublishError } from "../services/commerce-publish.js";
 import {
   ADMIN_SESSION_KEY_PREFIX,
   USERS_KEY,
@@ -125,6 +127,38 @@ const missingProductName = await handleProductOpportunityContentGeneration(reque
   generate: async () => { throw new CommerceContentError("missing", "commerce_content_product_name_required"); },
 });
 assert.equal(missingProductName.status, 400);
+
+const publishOpportunity = { id: "publish-opportunity", workspaceId: "workspace-next", productName: "Car vacuum", category: "car", status: "READY", useCount: 0 };
+const publishImage = { id: "publish-image", workspaceId: "workspace-next", sourceType: "product", active: true, mediaKind: "image" };
+let publishInput = null;
+const publishDependencies = {
+  get: async (_env, id, workspaceId) => id === "publish-opportunity" && workspaceId === "workspace-next" ? publishOpportunity : null,
+  listLinks: async () => [{ workspaceId: "workspace-next", opportunityId: "publish-opportunity", mediaId: "publish-image" }],
+  getMediaById: async (_env, id, workspaceId) => id === "publish-image" && workspaceId === "workspace-next" ? publishImage : null,
+  resolveThreadsAccount: async () => ({ id: "threads-next" }),
+  resolveContext: async (_env, input) => ({ ...input }),
+  publish: async (_env, input) => { publishInput = input; return { app: "THREADS", postId: "published-1", mediaId: input.media?.id || null }; },
+};
+const published = await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "  Edited review text.  ", mediaId: "publish-image" }), env, "publish-opportunity", publishDependencies);
+assert.equal(published.status, 200);
+assert.equal(publishInput.text, "  Edited review text.  ");
+assert.equal(publishInput.workspaceId, "workspace-next");
+assert.equal(publishInput.media.id, "publish-image");
+assert.equal(publishInput.executionContext.connectedAccountId, "threads-next");
+assert.equal(publishOpportunity.useCount, 0);
+const textPublished = await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "Text-only review" }), env, "publish-opportunity", publishDependencies);
+assert.equal(textPublished.status, 200);
+assert.equal(publishInput.media, null);
+assert.equal((await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "x" }, "missing"), env, "publish-opportunity", publishDependencies)).status, 401);
+assert.equal((await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "x" }), env, "publish-opportunity", { ...publishDependencies, get: async () => null })).status, 404);
+assert.equal((await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "   " }), env, "publish-opportunity", publishDependencies)).status, 400);
+assert.equal((await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "x", mediaId: "unlinked" }), env, "publish-opportunity", publishDependencies)).status, 400);
+assert.equal((await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "x", mediaId: "publish-image" }), env, "publish-opportunity", { ...publishDependencies, getMediaById: async () => ({ ...publishImage, active: false }) })).status, 400);
+assert.equal((await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "x", mediaId: "publish-image" }), env, "publish-opportunity", { ...publishDependencies, getMediaById: async () => ({ ...publishImage, workspaceId: "workspace-other" }) })).status, 400);
+assert.equal((await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "x", mediaId: "publish-image" }), env, "publish-opportunity", { ...publishDependencies, getMediaById: async () => ({ ...publishImage, mediaKind: "video" }) })).status, 400);
+assert.equal((await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "x", mediaId: "publish-image", workspaceId: "workspace-other" }), env, "publish-opportunity", publishDependencies)).status, 400);
+const publishFailure = await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "x" }), env, "publish-opportunity", { ...publishDependencies, publish: async () => { throw new CommercePublishError("raw", { code: "commerce_threads_publish_failed", status: 502 }); } });
+assert.equal(publishFailure.status, 502);
 
 let candidateWorkspaceId = null;
 let candidateSearchCalls = 0;

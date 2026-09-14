@@ -101,6 +101,7 @@ import { handleOperatorProductMedia } from "./routes/api-product-media.js";
 import {
   handleProductOpportunityById,
   handleProductOpportunityAssets,
+  handleProductOpportunityContentPublish,
   handleProductOpportunityContentGeneration,
   handleProductOpportunityProductCandidates,
   handleProductOpportunityDiscovery,
@@ -410,6 +411,12 @@ export default {
       const opportunityId = pathname.slice("/api/product-opportunities/".length, -"/generate-content".length);
       if (!opportunityId || opportunityId.includes("/")) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
       return handleProductOpportunityContentGeneration(request, env, decodeURIComponent(opportunityId));
+    }
+
+    if (pathname.startsWith("/api/product-opportunities/") && pathname.endsWith("/publish-content")) {
+      const opportunityId = pathname.slice("/api/product-opportunities/".length, -"/publish-content".length);
+      if (!opportunityId || opportunityId.includes("/")) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+      return handleProductOpportunityContentPublish(request, env, decodeURIComponent(opportunityId));
     }
 
     if (pathname.startsWith("/api/product-opportunities/") && pathname.endsWith("/product-candidates")) {

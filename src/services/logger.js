@@ -9,6 +9,7 @@ const CONTENT_BASIS_VALUES = new Set([
   "USER_EXPERIENCE",
   "PERSONA",
   "CONTENT_POOL",
+  "PRODUCT_OPPORTUNITY",
 ]);
 
 function normalizeContentBasis(value) {

@@ -125,6 +125,7 @@ function normalizePublishedPost(
     "USER_EXPERIENCE",
     "PERSONA",
     "CONTENT_POOL",
+    "PRODUCT_OPPORTUNITY",
   ].includes(metadata.contentBasis)
     ? metadata.contentBasis
     : null;

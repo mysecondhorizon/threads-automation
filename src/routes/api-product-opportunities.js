@@ -17,6 +17,10 @@ import { getProductOpportunityAssetCandidates } from "../services/product-opport
 import { getMedia } from "../services/media.js";
 import { CoupangPartnersError, searchCoupangProducts } from "../services/coupang-partners.js";
 import { CommerceContentError, generateCommerceContent } from "../services/commerce-content.js";
+import { CommercePublishError, publishCommerceContent } from "../services/commerce-publish.js";
+import { resolveWorkspaceThreadsConnectedAccount } from "../services/connected-accounts.js";
+import { resolveExecutionContext } from "../services/execution-context.js";
+import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
 import { fail, ok } from "../utils/response.js";
 
 const EDITABLE_FIELDS = new Set([
@@ -116,6 +120,56 @@ function commerceContentErrorResponse(error) {
   return fail("Commerce content generation failed", 502, { code: "commerce_content_generation_failed" });
 }
 
+function commercePublishErrorResponse(error) {
+  if (error instanceof CommercePublishError) {
+    if (error.code === "commerce_publish_opportunity_not_found") {
+      return fail("Product Opportunity not found", 404, { code: error.code });
+    }
+    if (["commerce_publish_text_required", "commerce_publish_media_unsupported", "commerce_publish_media_not_linked", "commerce_publish_media_invalid"].includes(error.code)) {
+      return fail(error.message, 400, { code: error.code });
+    }
+    return fail("Commerce publishing failed", error.status || 502, { code: error.code });
+  }
+  return fail("Commerce publishing failed", 502, { code: "commerce_publish_failed" });
+}
+
+async function readPublishInput(request) {
+  try {
+    const input = await request.json();
+    if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+    const keys = Object.keys(input);
+    if (!keys.length || keys.some((key) => key !== "text" && key !== "mediaId")) return null;
+    if (typeof input.text !== "string") return null;
+    if (input.mediaId !== undefined && input.mediaId !== null && (typeof input.mediaId !== "string" || !input.mediaId.trim())) return null;
+    return { text: input.text, mediaId: typeof input.mediaId === "string" ? input.mediaId.trim() : null };
+  } catch { return null; }
+}
+
+async function resolvePublishMedia(env, opportunityId, workspaceId, mediaId, {
+  listLinks = listProductOpportunityAssets,
+  get = getMedia,
+} = {}) {
+  if (!mediaId) return null;
+  const linked = await listLinks(env, opportunityId, workspaceId);
+  if (!linked.some((record) => record.workspaceId === workspaceId && record.opportunityId === opportunityId && record.mediaId === mediaId)) {
+    throw new CommercePublishError("Selected media is not linked to this Product Opportunity", {
+      code: "commerce_publish_media_not_linked",
+    });
+  }
+  const media = await get(env, mediaId, workspaceId);
+  if (!media || media.workspaceId !== workspaceId || media.sourceType !== "product" || media.active !== true) {
+    throw new CommercePublishError("Selected Commerce media is not available", {
+      code: "commerce_publish_media_invalid",
+    });
+  }
+  if (media.mediaKind !== "image") {
+    throw new CommercePublishError("Only linked images can be published with Commerce content", {
+      code: "commerce_publish_media_unsupported",
+    });
+  }
+  return media;
+}
+
 function searchQuery(request) {
   try {
     return new URL(request.url).searchParams.get("q") || "";
@@ -161,6 +215,46 @@ export async function handleProductOpportunityContentGeneration(request, env, op
     return ok({ draft: await generate(env, { workspaceId: authorization.workspaceId, opportunity }) });
   } catch (error) {
     return commerceContentErrorResponse(error);
+  }
+}
+
+export async function handleProductOpportunityContentPublish(request, env, opportunityId, {
+  get = getProductOpportunityById,
+  listLinks = listProductOpportunityAssets,
+  getMediaById = getMedia,
+  publish = publishCommerceContent,
+  resolveThreadsAccount = resolveWorkspaceThreadsConnectedAccount,
+  resolveContext = resolveExecutionContext,
+} = {}) {
+  const authorization = await authorize(request, env);
+  if (!authorization.ok) return authorization.response;
+  if (request.method !== "POST") return fail("Method Not Allowed", 405);
+  const input = await readPublishInput(request);
+  if (!input) return fail("Invalid commerce publish request", 400, { code: "commerce_publish_input_invalid" });
+  if (!input.text.trim()) return fail("Reviewed text is required", 400, { code: "commerce_publish_text_required" });
+  const opportunity = await get(env, opportunityId, authorization.workspaceId);
+  if (!opportunity) return fail("Product Opportunity not found", 404, { code: "commerce_publish_opportunity_not_found" });
+  try {
+    const media = await resolvePublishMedia(env, opportunityId, authorization.workspaceId, input.mediaId, {
+      listLinks,
+      get: getMediaById,
+    });
+    const executionContext = !authorization.session.legacy && authorization.workspaceId !== DEFAULT_WORKSPACE_ID
+      ? await resolveContext(env, {
+        workspaceId: authorization.workspaceId,
+        connectedAccountId: (await resolveThreadsAccount(env, { workspaceId: authorization.workspaceId })).id,
+      })
+      : null;
+    const published = await publish(env, {
+      workspaceId: authorization.workspaceId,
+      opportunity,
+      text: input.text,
+      media,
+      executionContext,
+    });
+    return ok({ published });
+  } catch (error) {
+    return commercePublishErrorResponse(error);
   }
 }
 

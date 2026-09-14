@@ -58,6 +58,13 @@ const personaKey = await logPostSuccess(
   "A persona post.",
   { source:"cron_auto_general", contentBasis:"PERSONA" }
 );
+const commerceKey = await logPostSuccess(
+  env,
+  "operator",
+  "post-commerce",
+  "A reviewed Commerce post.",
+  { source:"COMMERCE_MANUAL", contentBasis:"PRODUCT_OPPORTUNITY" }
+);
 const invalidKey = await logPostSuccess(
   env,
   "auto",
@@ -76,6 +83,7 @@ const missingKey = await logPostSuccess(
 assert.equal((await kv.get(userExperienceKey, "json")).metadata.contentBasis, "USER_EXPERIENCE");
 assert.equal((await kv.get(currentTopicKey, "json")).metadata.contentBasis, "CURRENT_TOPIC");
 assert.equal((await kv.get(personaKey, "json")).metadata.contentBasis, "PERSONA");
+assert.equal((await kv.get(commerceKey, "json")).metadata.contentBasis, "PRODUCT_OPPORTUNITY");
 assert.equal((await kv.get(invalidKey, "json")).metadata.contentBasis, null);
 assert.equal((await kv.get(missingKey, "json")).metadata.contentBasis, null);
 
@@ -86,6 +94,10 @@ const history = await getPostingHistory(env);
 assert.equal(
   history.recentSevenDayPosts.find((post) => post.postId === "post-user-experience").contentBasis,
   "USER_EXPERIENCE"
+);
+assert.equal(
+  history.recentSevenDayPosts.find((post) => post.postId === "post-commerce").contentBasis,
+  "PRODUCT_OPPORTUNITY"
 );
 assert.equal(
   history.recentSevenDayPosts.find((post) => post.postId === "post-missing").contentBasis,
