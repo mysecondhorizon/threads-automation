@@ -38,6 +38,16 @@ assert.match(generatedInput.input, /strictly within userExperienceNote/);
 assert.match(generatedInput.input, /interesting human observation/);
 assert.match(generatedInput.input, /mandatory primary subject/);
 assert.match(generatedInput.input, /never use it as the main story/);
+assert.match(generatedInput.input, /ONE POST = ONE IDEA/);
+assert.match(generatedInput.input, /Most supplied information may be omitted/);
+assert.match(generatedInput.input, /omission is preferred over summary-like completeness/);
+assert.match(generatedInput.input, /Do not summarize every opportunity field/);
+assert.match(generatedInput.input, /one representative detail over an enumeration/);
+assert.match(generatedInput.input, /compressed buying guides/);
+assert.match(generatedInput.input, /report-like hedging/);
+assert.match(generatedInput.input, /product name need not appear in the opening or at all/);
+assert.match(generatedInput.input, /observant, curious, practical, warm, conversational/);
+assert.match(generatedInput.input, /never preachy, expert-like, review-article-like/);
 
 const noExperience = await generateCommerceContent({}, { workspaceId: "workspace-a", opportunity }, {
   listLinks: async () => [{ ...links[0], mediaId: "media-tags" }], getMedia: async () => tagsOnlyMedia,
