@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { CommerceContentError, buildCommerceContentInput, generateCommerceContent, selectCommerceContentAsset, selectRelevantCommerceCurrentTopic } from "./commerce-content.js";
+import { composeEffectiveThreadsPrompt } from "./prompt-profile.js";
 
 const opportunity = { id: "opportunity-1", workspaceId: "workspace-a", productName: "Compact car vacuum", category: "car cleanup", brand: "Example", sourceUrl: "https://example.test/product", affiliateLink: "https://example.test/affiliate", problem: "Dust builds up in the car", audience: "Drivers", situation: "Weekend car cleanup", angle: "Small cleanup routine", discoveryReason: "Frequently requested", trendScore: 80 };
 const experienceMedia = { id: "media-experience", workspaceId: "workspace-a", sourceType: "product", mediaKind: "image", active: true, experienceTags: ["car"], experienceNote: "I used it for a short car cleanup after a weekend drive.", description: "Car interior" };
@@ -23,7 +24,7 @@ let generatedInput = null;
 const generated = await generateCommerceContent({}, { workspaceId: "workspace-a", opportunity }, {
   listLinks: async () => links,
   getMedia: async (_env, id) => id === "media-experience" ? experienceMedia : tagsOnlyMedia,
-  getProfile: async () => ({ profile: {} }), composePrompt: () => "persona prompt",
+  getProfile: async () => ({ profile: {} }), composePrompt: composeEffectiveThreadsPrompt,
   generate: async (_env, value) => { generatedInput = value; return { text: "A small cleanup tool can make a weekend routine feel much lighter.", contentAngle: "DISCOVERY", hookType: "SPECIFIC_MOMENT" }; },
 });
 assert.equal(generated.contentBasis, "PRODUCT_OPPORTUNITY");
@@ -33,21 +34,16 @@ assert.equal(generated.contentAngle, "DISCOVERY");
 assert.equal(generated.hookType, "SPECIFIC_MOMENT");
 assert.equal(generated.usedCurrentTopic, false);
 assert.equal(generated.affiliateLink, opportunity.affiliateLink);
+assert.match(generatedInput.instructions, /ONE POST = ONE IDEA/);
+assert.match(generatedInput.instructions, /prefer omission over completeness/);
+assert.match(generatedInput.instructions, /generic balanced explanations/);
 assert.match(generatedInput.input, /userExperienceNote/);
 assert.match(generatedInput.input, /strictly within userExperienceNote/);
-assert.match(generatedInput.input, /interesting human observation/);
 assert.match(generatedInput.input, /mandatory primary subject/);
 assert.match(generatedInput.input, /never use it as the main story/);
-assert.match(generatedInput.input, /ONE POST = ONE IDEA/);
-assert.match(generatedInput.input, /Most supplied information may be omitted/);
-assert.match(generatedInput.input, /omission is preferred over summary-like completeness/);
-assert.match(generatedInput.input, /Do not summarize every opportunity field/);
-assert.match(generatedInput.input, /one representative detail over an enumeration/);
-assert.match(generatedInput.input, /compressed buying guides/);
-assert.match(generatedInput.input, /report-like hedging/);
 assert.match(generatedInput.input, /product name need not appear in the opening or at all/);
-assert.match(generatedInput.input, /observant, curious, practical, warm, conversational/);
-assert.match(generatedInput.input, /never preachy, expert-like, review-article-like/);
+assert.doesNotMatch(generatedInput.input, /ONE POST = ONE IDEA/);
+assert.doesNotMatch(generatedInput.input, /compressed buying guides/);
 
 const noExperience = await generateCommerceContent({}, { workspaceId: "workspace-a", opportunity }, {
   listLinks: async () => [{ ...links[0], mediaId: "media-tags" }], getMedia: async () => tagsOnlyMedia,

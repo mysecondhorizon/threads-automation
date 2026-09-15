@@ -8,6 +8,7 @@ import {
 import {
   THREADS_OUTPUT_PROMPT,
   THREADS_VALIDATION_PROMPT,
+  THREADS_WRITING_DNA_PROMPT,
 } from "../prompts/threads/index.js";
 
 import {
@@ -120,6 +121,7 @@ assert.equal(
 );
 assert.equal(systemPrompts.length, 1);
 assert.ok(systemPrompts[0].includes("CUSTOM_OPERATOR_WRITING_GUIDANCE"));
+assert.ok(systemPrompts[0].includes(THREADS_WRITING_DNA_PROMPT));
 assert.ok(systemPrompts[0].includes(THREADS_VALIDATION_PROMPT));
 assert.ok(systemPrompts[0].includes(THREADS_OUTPUT_PROMPT));
 

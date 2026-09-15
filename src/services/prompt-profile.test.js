@@ -8,6 +8,7 @@ import {
   THREADS_PRODUCT_PROMPT,
   THREADS_SYSTEM_PROMPT,
   THREADS_VALIDATION_PROMPT,
+  THREADS_WRITING_DNA_PROMPT,
 } from "../prompts/threads/index.js";
 import { DEFAULT_WORKSPACE_ID } from "./workspace-foundation.js";
 import {
@@ -48,12 +49,18 @@ assert.match(THREADS_IDENTITY_PROMPT, /small discoveries, ordinary enjoyment, us
 assert.match(THREADS_IDENTITY_PROMPT, /must not become the default identity or repeated material/u);
 assert.match(THREADS_POLICY_PROMPT, /Positive realistic material direction/u);
 assert.match(THREADS_POLICY_PROMPT, /Do not repeatedly choose Monday\/work dread, exhaustion, burnout/u);
+assert.match(THREADS_WRITING_DNA_PROMPT, /ONE POST = ONE IDEA/u);
+assert.match(THREADS_WRITING_DNA_PROMPT, /prefer omission over completeness/u);
+assert.match(THREADS_WRITING_DNA_PROMPT, /observation, situation or tension, reaction or interpretation/u);
+assert.match(THREADS_WRITING_DNA_PROMPT, /generic balanced explanations/u);
+assert.match(THREADS_WRITING_DNA_PROMPT, /does not need a conclusion, universal lesson, recommendation, summary, CTA, or engagement question/u);
 for (const part of [
   THREADS_IDENTITY_PROMPT,
   THREADS_POLICY_PROMPT,
   THREADS_CONTENT_PROMPT,
   THREADS_PRODUCT_PROMPT,
   THREADS_ANALYTICS_PROMPT,
+  THREADS_WRITING_DNA_PROMPT,
   THREADS_VALIDATION_PROMPT,
   THREADS_OUTPUT_PROMPT,
 ]) {
