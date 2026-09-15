@@ -176,6 +176,22 @@ function normalizePublishedPost(
         ? metadata.opportunityId.trim()
         : null,
 
+    contentAngle:
+      ["FAILURE", "OBSERVATION", "REVERSAL", "DISCOVERY", "COMPARISON", "RELATABLE_MOMENT", "QUESTION", "PRACTICAL_TIP"].includes(metadata.contentAngle)
+        ? metadata.contentAngle
+        : null,
+
+    hookType:
+      ["CONTRARIAN", "CURIOSITY", "CONFESSION", "SPECIFIC_MOMENT", "UNEXPECTED_RESULT", "DIRECT_QUESTION", "OBSERVATION"].includes(metadata.hookType)
+        ? metadata.hookType
+        : null,
+
+    usedCurrentTopic:
+      metadata.usedCurrentTopic === true,
+
+    usedUserExperience:
+      metadata.usedUserExperience === true,
+
     currentTopicId:
       metadata.currentTopicId ||
       null,

@@ -11,6 +11,8 @@ const CONTENT_BASIS_VALUES = new Set([
   "CONTENT_POOL",
   "PRODUCT_OPPORTUNITY",
 ]);
+const COMMERCE_CONTENT_ANGLES = new Set(["FAILURE", "OBSERVATION", "REVERSAL", "DISCOVERY", "COMPARISON", "RELATABLE_MOMENT", "QUESTION", "PRACTICAL_TIP"]);
+const COMMERCE_HOOK_TYPES = new Set(["CONTRARIAN", "CURIOSITY", "CONFESSION", "SPECIFIC_MOMENT", "UNEXPECTED_RESULT", "DIRECT_QUESTION", "OBSERVATION"]);
 
 function normalizeContentBasis(value) {
   return CONTENT_BASIS_VALUES.has(value)
@@ -77,6 +79,22 @@ function normalizePostMetadata(
       typeof metadata?.opportunityId === "string" && metadata.opportunityId.trim()
         ? metadata.opportunityId.trim()
         : null,
+
+    contentAngle:
+      COMMERCE_CONTENT_ANGLES.has(metadata?.contentAngle)
+        ? metadata.contentAngle
+        : null,
+
+    hookType:
+      COMMERCE_HOOK_TYPES.has(metadata?.hookType)
+        ? metadata.hookType
+        : null,
+
+    usedCurrentTopic:
+      metadata?.usedCurrentTopic === true,
+
+    usedUserExperience:
+      metadata?.usedUserExperience === true,
 
     currentTopicId:
       metadata?.currentTopicId ||

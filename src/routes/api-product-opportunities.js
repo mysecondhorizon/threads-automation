@@ -16,7 +16,7 @@ import {
 import { getProductOpportunityAssetCandidates } from "../services/product-opportunity-asset-matcher.js";
 import { getMedia } from "../services/media.js";
 import { CoupangPartnersError, searchCoupangProducts } from "../services/coupang-partners.js";
-import { CommerceContentError, generateCommerceContent } from "../services/commerce-content.js";
+import { CommerceContentError, generateCommerceContent, normalizeCommerceStoryMetadata } from "../services/commerce-content.js";
 import { CommercePublishError, publishCommerceContent } from "../services/commerce-publish.js";
 import { getPublishedCommercePostsForOpportunity } from "../services/history.js";
 import { buildProductOpportunityPerformanceSummary } from "../services/analytics.js";
@@ -127,7 +127,7 @@ function commercePublishErrorResponse(error) {
     if (error.code === "commerce_publish_opportunity_not_found") {
       return fail("Product Opportunity not found", 404, { code: error.code });
     }
-    if (["commerce_publish_text_required", "commerce_publish_media_unsupported", "commerce_publish_media_not_linked", "commerce_publish_media_invalid"].includes(error.code)) {
+    if (["commerce_publish_text_required", "commerce_publish_media_unsupported", "commerce_publish_media_not_linked", "commerce_publish_media_invalid", "commerce_publish_story_metadata_invalid"].includes(error.code)) {
       return fail(error.message, 400, { code: error.code });
     }
     return fail("Commerce publishing failed", error.status || 502, { code: error.code });
@@ -140,10 +140,15 @@ async function readPublishInput(request) {
     const input = await request.json();
     if (!input || typeof input !== "object" || Array.isArray(input)) return null;
     const keys = Object.keys(input);
-    if (!keys.length || keys.some((key) => key !== "text" && key !== "mediaId")) return null;
+    if (!keys.length || keys.some((key) => key !== "text" && key !== "mediaId" && key !== "storyMetadata")) return null;
     if (typeof input.text !== "string") return null;
     if (input.mediaId !== undefined && input.mediaId !== null && (typeof input.mediaId !== "string" || !input.mediaId.trim())) return null;
-    return { text: input.text, mediaId: typeof input.mediaId === "string" ? input.mediaId.trim() : null };
+    if (input.storyMetadata !== undefined && input.storyMetadata !== null && !normalizeCommerceStoryMetadata(input.storyMetadata)) return null;
+    return {
+      text: input.text,
+      mediaId: typeof input.mediaId === "string" ? input.mediaId.trim() : null,
+      storyMetadata: input.storyMetadata === undefined || input.storyMetadata === null ? null : normalizeCommerceStoryMetadata(input.storyMetadata),
+    };
   } catch { return null; }
 }
 
@@ -253,6 +258,7 @@ export async function handleProductOpportunityContentPublish(request, env, oppor
       text: input.text,
       media,
       executionContext,
+      storyMetadata: input.storyMetadata,
     });
     return ok({ published });
   } catch (error) {

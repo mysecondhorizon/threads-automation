@@ -3,8 +3,11 @@ import { listProductOpportunityAssets } from "./product-opportunity-assets.js";
 import { getMedia } from "./media.js";
 import { getEffectivePromptProfile, composeEffectiveThreadsPrompt } from "./prompt-profile.js";
 import { DEFAULT_WORKSPACE_ID } from "./workspace-foundation.js";
+import { buildCurrentTopicGenerationContext, readCurrentTopicInventory } from "./current-topic-inventory.js";
 
 export const COMMERCE_CONTENT_BASIS = "PRODUCT_OPPORTUNITY";
+export const COMMERCE_CONTENT_ANGLES = ["FAILURE", "OBSERVATION", "REVERSAL", "DISCOVERY", "COMPARISON", "RELATABLE_MOMENT", "QUESTION", "PRACTICAL_TIP"];
+export const COMMERCE_HOOK_TYPES = ["CONTRARIAN", "CURIOSITY", "CONFESSION", "SPECIFIC_MOMENT", "UNEXPECTED_RESULT", "DIRECT_QUESTION", "OBSERVATION"];
 
 export class CommerceContentError extends Error {
   constructor(message, code = "commerce_content_failed") {
@@ -40,6 +43,52 @@ function experienceNote(media) {
   return text(media?.experienceNote) || null;
 }
 
+function normalizedWords(value) {
+  return text(value).toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) || [];
+}
+
+function topicWords(topic) {
+  return normalizedWords([
+    topic?.subject,
+    topic?.personaRelevance,
+    ...(Array.isArray(topic?.talkingPoints) ? topic.talkingPoints : []),
+    ...(Array.isArray(topic?.allowedAngles) ? topic.allowedAngles : []),
+  ].join(" "));
+}
+
+export function selectRelevantCommerceCurrentTopic(opportunity, topics) {
+  const opportunityWords = new Set(normalizedWords([
+    opportunity?.productName,
+    opportunity?.category,
+    opportunity?.problem,
+    opportunity?.audience,
+    opportunity?.situation,
+    opportunity?.angle,
+    opportunity?.discoveryReason,
+  ].join(" ")));
+  if (!opportunityWords.size || !Array.isArray(topics)) return null;
+
+  for (const topic of topics.slice(0, 8)) {
+    const context = buildCurrentTopicGenerationContext(topic);
+    if (context && topicWords(context).some((word) => opportunityWords.has(word))) return context;
+  }
+  return null;
+}
+
+export function normalizeCommerceStoryMetadata(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const expectedKeys = ["contentAngle", "hookType", "usedCurrentTopic", "currentTopicId", "usedUserExperience"];
+  if (Object.keys(value).length !== expectedKeys.length || Object.keys(value).some((key) => !expectedKeys.includes(key))) return null;
+  const contentAngle = text(value.contentAngle);
+  const hookType = text(value.hookType);
+  const usedCurrentTopic = value.usedCurrentTopic === true;
+  const currentTopicId = text(value.currentTopicId) || null;
+  const usedUserExperience = value.usedUserExperience === true;
+  if (!COMMERCE_CONTENT_ANGLES.includes(contentAngle) || !COMMERCE_HOOK_TYPES.includes(hookType)) return null;
+  if ((usedCurrentTopic && !currentTopicId) || (!usedCurrentTopic && currentTopicId)) return null;
+  return { contentAngle, hookType, usedCurrentTopic, currentTopicId, usedUserExperience };
+}
+
 export function selectCommerceContentAsset(links, mediaRecords, workspaceId) {
   const scope = workspace(workspaceId);
   if (!scope || !Array.isArray(links) || !Array.isArray(mediaRecords)) return null;
@@ -56,7 +105,7 @@ export function selectCommerceContentAsset(links, mediaRecords, workspaceId) {
   return candidates[0]?.media || null;
 }
 
-export function buildCommerceContentInput({ opportunity, media }) {
+export function buildCommerceContentInput({ opportunity, media, currentTopic = null }) {
   const note = experienceNote(media);
   const productFacts = {
     productName: text(opportunity?.productName),
@@ -88,19 +137,31 @@ export function buildCommerceContentInput({ opportunity, media }) {
     productFacts,
     aiInference,
     mediaContext,
+    currentTopic: currentTopic ? {
+      topicId: currentTopic.topicId,
+      subject: currentTopic.subject,
+      verifiedFacts: currentTopic.verifiedFacts,
+      talkingPoints: currentTopic.talkingPoints,
+      personaRelevance: currentTopic.personaRelevance,
+      allowedAngles: currentTopic.allowedAngles,
+      forbiddenClaims: currentTopic.forbiddenClaims,
+    } : null,
     instructions: {
       language: "Korean",
-      format: "A concise, natural Threads post for a realistic mid/late-30s office worker. Practical, observant, warm and forward-looking; lightly humorous only when natural.",
+      format: "Write a concise, conversational Threads-native story for a realistic late-30s office worker: curious, observant, practical, warm, and lightly self-deprecating only when natural. Age is context, never a writing style.",
+      story: "Prioritize an interesting human observation, tension, or useful realization before a natural product/problem connection. The post must stand on its own even without a purchase. Do not lead with product name, catalog benefits, recommendation, CTA, SEO, listicle, feature dump, fake quote, fake dialogue, fake number, or hard-sell language. Avoid routine openings about fatigue, aging, office complaints, parenting exhaustion, or financial anxiety unless the supplied material genuinely requires them.",
+      angleSelection: `Choose exactly one contentAngle from ${COMMERCE_CONTENT_ANGLES.join(", ")} and one hookType from ${COMMERCE_HOOK_TYPES.join(", ")}. The opening one or two lines must create factual curiosity or tension, never fake clickbait. A FAILURE or CONFESSION first-person claim is allowed only when userExperienceNote explicitly supports it. A QUESTION must be specific and genuinely debatable, never generic engagement bait.`,
       provenance: {
         PRODUCT_FACT: "Only productFacts are objective product facts.",
         USER_EXPERIENCE: note ? "Only mediaContext.userExperienceNote is factual first-person experience evidence." : "No USER_EXPERIENCE evidence is available.",
         AI_INFERENCE: "aiInference is framing only, never personal experience or product fact.",
+        CURRENT_TOPIC: currentTopic ? "currentTopic is optional contextual signal only. Do not claim personal participation or experience from it, and use it only when it meaningfully connects to the opportunity." : "No Current Topic is being used.",
       },
       safety: note
         ? "Any first-person claim must stay strictly within userExperienceNote. Do not add purchase, ownership, duration, comparison, location, price, specification, satisfaction, or use facts not explicitly in that note. experienceTags, visual tags, description, and altText are context only, never personal experience evidence."
         : "Do not use first-person product-use, purchase, ownership, satisfaction, comparison-from-use, or long-term-experience claims. Write non-first-person commerce copy only. experienceTags, visual tags, description, and altText are context only, never personal experience evidence.",
       urlPolicy: "Do not copy, rewrite, shorten, fabricate, or embed sourceUrl or affiliateLink in the prose. They remain metadata outside the draft.",
-      avoid: ["hard-sell language", "fake urgency", "fabricated discounts or prices", "unsupported specifications", "fake testimonials", "fabricated comparison claims"],
+      avoid: ["hard-sell language", "fake urgency", "fabricated discounts or prices", "unsupported specifications", "fake testimonials", "fabricated comparison claims", "generic engagement bait", "fake personal history"],
     },
   });
 }
@@ -127,21 +188,40 @@ export async function generateCommerceContent(env, { workspaceId, opportunity } 
   const getProfile = dependencies.getProfile || getEffectivePromptProfile;
   const composePrompt = dependencies.composePrompt || composeEffectiveThreadsPrompt;
   const generate = dependencies.generate || requestOpenAiJson;
-  const links = await listLinks(env, opportunity.id, scope);
+  const readTopics = dependencies.readTopics || readCurrentTopicInventory;
+  const selectTopic = dependencies.selectTopic || selectRelevantCommerceCurrentTopic;
+  const [links, inventory] = await Promise.all([
+    listLinks(env, opportunity.id, scope),
+    readTopics(env).catch(() => ({ topics: [] })),
+  ]);
   const mediaRecords = await Promise.all((Array.isArray(links) ? links : []).map((link) => get(env, text(link?.mediaId), scope)));
   const media = selectCommerceContentAsset(links, mediaRecords, scope);
+  const currentTopic = selectTopic(opportunity, inventory?.topics);
   const profileResult = await getProfile(env, scope);
   const generated = await generate(env, {
     instructions: commerceInstructions(composePrompt(profileResult?.profile || {})),
-    input: buildCommerceContentInput({ opportunity, media }),
+    input: buildCommerceContentInput({ opportunity, media, currentTopic }),
     name: "commerce_threads_draft",
     schema: {
       type: "object",
       additionalProperties: false,
-      properties: { text: { type: "string" } },
-      required: ["text"],
+      properties: {
+        text: { type: "string" },
+        contentAngle: { type: "string", enum: COMMERCE_CONTENT_ANGLES },
+        hookType: { type: "string", enum: COMMERCE_HOOK_TYPES },
+      },
+      required: ["text", "contentAngle", "hookType"],
     },
   });
+
+  const storyMetadata = normalizeCommerceStoryMetadata({
+    contentAngle: generated?.contentAngle,
+    hookType: generated?.hookType,
+    usedCurrentTopic: Boolean(currentTopic),
+    currentTopicId: currentTopic?.topicId || null,
+    usedUserExperience: Boolean(experienceNote(media)),
+  });
+  if (!storyMetadata) fail("Commerce story metadata is invalid", "commerce_content_generation_invalid");
 
   return {
     text: normalizeDraftText(generated?.text),
@@ -149,7 +229,7 @@ export async function generateCommerceContent(env, { workspaceId, opportunity } 
     opportunityId: opportunity.id,
     mediaId: media?.id || null,
     mediaKind: media ? (media.mediaKind === "video" ? "video" : "image") : null,
-    usedUserExperience: Boolean(experienceNote(media)),
+    ...storyMetadata,
     affiliateLink: text(opportunity.affiliateLink) || null,
   };
 }

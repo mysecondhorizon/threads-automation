@@ -2,6 +2,7 @@ import { logPostSuccess } from "./logger.js";
 import { PublisherResolutionError } from "./publisher-resolver.js";
 import { publishWithResolvedApp } from "./publish-service.js";
 import { ThreadsPublisherError } from "./publishers/threads-publisher.js";
+import { normalizeCommerceStoryMetadata } from "./commerce-content.js";
 
 export class CommercePublishError extends Error {
   constructor(message, { code = "commerce_publish_failed", status = 400 } = {}) {
@@ -39,6 +40,7 @@ export async function publishCommerceContent(env, {
   text,
   media = null,
   executionContext = null,
+  storyMetadata = null,
 }, dependencies = {}) {
   assertInput({ opportunity, text, media });
   const publish = dependencies.publishWithResolvedApp || publishWithResolvedApp;
@@ -46,6 +48,12 @@ export async function publishCommerceContent(env, {
   const mediaSelection = media
     ? { mode: "IMAGE", mediaId: media.id }
     : { mode: "TEXT", mediaId: null };
+  const story = storyMetadata === null ? null : normalizeCommerceStoryMetadata(storyMetadata);
+  if (storyMetadata !== null && !story) {
+    throw new CommercePublishError("Commerce story metadata is invalid", {
+      code: "commerce_publish_story_metadata_invalid",
+    });
+  }
   let published;
 
   try {
@@ -77,6 +85,11 @@ export async function publishCommerceContent(env, {
       contentMode: "commerce_manual",
       contentBasis: "PRODUCT_OPPORTUNITY",
       opportunityId: opportunity.id,
+      contentAngle: story?.contentAngle || null,
+      hookType: story?.hookType || null,
+      usedCurrentTopic: story?.usedCurrentTopic === true,
+      currentTopicId: story?.currentTopicId || null,
+      usedUserExperience: story?.usedUserExperience === true,
       publishMode: mediaSelection.mode,
       mediaId: mediaSelection.mediaId,
       affiliateLinkUsed: false,

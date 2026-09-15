@@ -165,12 +165,14 @@ const publishDependencies = {
   resolveContext: async (_env, input) => ({ ...input }),
   publish: async (_env, input) => { publishInput = input; return { app: "THREADS", postId: "published-1", mediaId: input.media?.id || null }; },
 };
-const published = await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "  Edited review text.  ", mediaId: "publish-image" }), env, "publish-opportunity", publishDependencies);
+const storyMetadata = { contentAngle: "DISCOVERY", hookType: "CURIOSITY", usedCurrentTopic: true, currentTopicId: "topic-a", usedUserExperience: false };
+const published = await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "  Edited review text.  ", mediaId: "publish-image", storyMetadata }), env, "publish-opportunity", publishDependencies);
 assert.equal(published.status, 200);
 assert.equal(publishInput.text, "  Edited review text.  ");
 assert.equal(publishInput.workspaceId, "workspace-next");
 assert.equal(publishInput.media.id, "publish-image");
 assert.equal(publishInput.executionContext.connectedAccountId, "threads-next");
+assert.deepEqual(publishInput.storyMetadata, storyMetadata);
 assert.equal(publishOpportunity.useCount, 0);
 const textPublished = await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "Text-only review" }), env, "publish-opportunity", publishDependencies);
 assert.equal(textPublished.status, 200);
@@ -184,6 +186,7 @@ assert.equal((await handleProductOpportunityContentPublish(request("/api/product
 assert.equal((await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "x", mediaId: "publish-image" }), env, "publish-opportunity", { ...publishDependencies, getMediaById: async () => ({ ...publishImage, mediaKind: "video" }) })).status, 400);
 assert.equal((await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "x", mediaId: "publish-image", workspaceId: "workspace-other" }), env, "publish-opportunity", publishDependencies)).status, 400);
 assert.equal((await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "x", opportunityId: "spoofed-opportunity" }), env, "publish-opportunity", publishDependencies)).status, 400);
+assert.equal((await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "x", storyMetadata: { ...storyMetadata, contentAngle: "PROMOTION" } }), env, "publish-opportunity", publishDependencies)).status, 400);
 const publishFailure = await handleProductOpportunityContentPublish(request("/api/product-opportunities/publish-opportunity/publish-content", "POST", { text: "x" }), env, "publish-opportunity", { ...publishDependencies, publish: async () => { throw new CommercePublishError("raw", { code: "commerce_threads_publish_failed", status: 502 }); } });
 assert.equal(publishFailure.status, 502);
 

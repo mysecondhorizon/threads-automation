@@ -63,7 +63,7 @@ const commerceKey = await logPostSuccess(
   "operator",
   "post-commerce",
   "A reviewed Commerce post.",
-  { source:"COMMERCE_MANUAL", contentBasis:"PRODUCT_OPPORTUNITY", opportunityId:"opportunity-commerce" }
+  { source:"COMMERCE_MANUAL", contentBasis:"PRODUCT_OPPORTUNITY", opportunityId:"opportunity-commerce", contentAngle:"DISCOVERY", hookType:"CURIOSITY", usedCurrentTopic:true, currentTopicId:"topic-commerce", usedUserExperience:true }
 );
 const invalidKey = await logPostSuccess(
   env,
@@ -85,6 +85,8 @@ assert.equal((await kv.get(currentTopicKey, "json")).metadata.contentBasis, "CUR
 assert.equal((await kv.get(personaKey, "json")).metadata.contentBasis, "PERSONA");
 assert.equal((await kv.get(commerceKey, "json")).metadata.contentBasis, "PRODUCT_OPPORTUNITY");
 assert.equal((await kv.get(commerceKey, "json")).metadata.opportunityId, "opportunity-commerce");
+assert.equal((await kv.get(commerceKey, "json")).metadata.contentAngle, "DISCOVERY");
+assert.equal((await kv.get(commerceKey, "json")).metadata.hookType, "CURIOSITY");
 assert.equal((await kv.get(invalidKey, "json")).metadata.contentBasis, null);
 assert.equal((await kv.get(missingKey, "json")).metadata.opportunityId, null);
 assert.equal((await kv.get(missingKey, "json")).metadata.contentBasis, null);
@@ -105,6 +107,11 @@ assert.equal(
   history.recentSevenDayPosts.find((post) => post.postId === "post-commerce").opportunityId,
   "opportunity-commerce"
 );
+assert.equal(history.recentSevenDayPosts.find((post) => post.postId === "post-commerce").contentAngle, "DISCOVERY");
+assert.equal(history.recentSevenDayPosts.find((post) => post.postId === "post-commerce").hookType, "CURIOSITY");
+assert.equal(history.recentSevenDayPosts.find((post) => post.postId === "post-commerce").usedCurrentTopic, true);
+assert.equal(history.recentSevenDayPosts.find((post) => post.postId === "post-commerce").currentTopicId, "topic-commerce");
+assert.equal(history.recentSevenDayPosts.find((post) => post.postId === "post-commerce").usedUserExperience, true);
 assert.equal(
   history.recentSevenDayPosts.find((post) => post.postId === "post-missing").contentBasis,
   null
