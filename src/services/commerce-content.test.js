@@ -1,13 +1,23 @@
 import assert from "node:assert/strict";
-import { CommerceContentError, buildCommerceContentInput, generateCommerceContent, selectCommerceContentAsset } from "./commerce-content.js";
+import { CommerceContentError, buildCommerceContentInput, generateCommerceContent, selectCommerceContentAsset, selectRelevantCommerceCurrentTopic } from "./commerce-content.js";
 
 const opportunity = { id: "opportunity-1", workspaceId: "workspace-a", productName: "Compact car vacuum", category: "car cleanup", brand: "Example", sourceUrl: "https://example.test/product", affiliateLink: "https://example.test/affiliate", problem: "Dust builds up in the car", audience: "Drivers", situation: "Weekend car cleanup", angle: "Small cleanup routine", discoveryReason: "Frequently requested", trendScore: 80 };
 const experienceMedia = { id: "media-experience", workspaceId: "workspace-a", sourceType: "product", mediaKind: "image", active: true, experienceTags: ["car"], experienceNote: "I used it for a short car cleanup after a weekend drive.", description: "Car interior" };
 const tagsOnlyMedia = { id: "media-tags", workspaceId: "workspace-a", sourceType: "product", mediaKind: "video", active: true, experienceTags: ["car"], description: "Car interior" };
 const links = [{ workspaceId: "workspace-a", opportunityId: "opportunity-1", mediaId: "media-tags" }, { workspaceId: "workspace-a", opportunityId: "opportunity-1", mediaId: "media-experience" }];
+const topic = (subject, extras = {}) => ({ category: "consumer_lifestyle", subject, capturedAt: "2026-09-14T00:00:00.000Z", expiresAt: "2099-01-01T00:00:00.000Z", verifiedFacts: [subject], talkingPoints: [subject], personaRelevance: subject, allowedAngles: [subject], forbiddenClaims: [], sourceReferences: [{ url: "https://example.test/topic", title: "Topic" }], ...extras });
 
 assert.equal(selectCommerceContentAsset(links, [tagsOnlyMedia, experienceMedia], "workspace-a").id, "media-experience");
 assert.equal(selectCommerceContentAsset([{ ...links[0], mediaId: "media-experience" }], [{ ...experienceMedia, active: false }], "workspace-a"), null);
+
+const refrigeratorOpportunity = { ...opportunity, productName: "명절 후 냉장고 정리·식재료 관리 키트", category: "주방 정리용품", problem: "명절 후 남은 식재료와 반찬이 냉장고 안에서 섞인다.", situation: "추석 음식과 평소 식재료가 한꺼번에 들어와 냉장고가 포화되는 시기" };
+assert.equal(selectRelevantCommerceCurrentTopic(refrigeratorOpportunity, [topic("추석 온라인 세일과 오프라인 장보기 비교")]), null);
+
+const petOpportunity = { ...opportunity, productName: "가을 반려동물 털·냄새 관리 소모품 묶음", category: "반려동물 생활용품", problem: "반려동물 털과 냄새 관리가 필요하다." };
+assert.match(selectRelevantCommerceCurrentTopic(petOpportunity, [topic("환절기 반려동물 털빠짐과 집안 냄새 관리")]).subject, /반려동물/u);
+assert.equal(selectRelevantCommerceCurrentTopic(petOpportunity, [topic("가을 온라인 세일과 쇼핑 추천")]), null);
+const strongestTopic = selectRelevantCommerceCurrentTopic(petOpportunity, [topic("반려동물 장난감 추천"), topic("반려동물 털 냄새 관리")]);
+assert.match(strongestTopic.subject, /털 냄새 관리/u);
 
 let generatedInput = null;
 const generated = await generateCommerceContent({}, { workspaceId: "workspace-a", opportunity }, {
@@ -26,6 +36,8 @@ assert.equal(generated.affiliateLink, opportunity.affiliateLink);
 assert.match(generatedInput.input, /userExperienceNote/);
 assert.match(generatedInput.input, /strictly within userExperienceNote/);
 assert.match(generatedInput.input, /interesting human observation/);
+assert.match(generatedInput.input, /mandatory primary subject/);
+assert.match(generatedInput.input, /never use it as the main story/);
 
 const noExperience = await generateCommerceContent({}, { workspaceId: "workspace-a", opportunity }, {
   listLinks: async () => [{ ...links[0], mediaId: "media-tags" }], getMedia: async () => tagsOnlyMedia,
@@ -38,7 +50,7 @@ assert.equal(JSON.parse(generatedInput.input).mediaContext.userExperienceNote, u
 
 const relevantTopic = await generateCommerceContent({}, { workspaceId: "workspace-a", opportunity }, {
   listLinks: async () => [], getMedia: async () => null, getProfile: async () => ({ profile: {} }), composePrompt: () => "persona prompt",
-  readTopics: async () => ({ topics: [{ id: "topic-car", category: "consumer_lifestyle", subject: "car cleanup routine", capturedAt: "2026-09-14T00:00:00.000Z", verifiedFacts: ["Weekend cleanup interest"], talkingPoints: ["car cleanup"], personaRelevance: "car cleanup", allowedAngles: ["routine"], forbiddenClaims: [], sourceReferences: [{ url: "https://example.test/topic", title: "Topic" }], expiresAt: "2099-01-01T00:00:00.000Z" }] }),
+  readTopics: async () => ({ topics: [topic("car cleanup routine", { id: "topic-car", talkingPoints: ["car cleanup"], personaRelevance: "car cleanup", allowedAngles: ["routine"] })] }),
   generate: async (_env, value) => { generatedInput = value; return { text: "Cleaning a car is easier when the next step is obvious.", contentAngle: "RELATABLE_MOMENT", hookType: "OBSERVATION" }; },
 });
 assert.equal(relevantTopic.usedCurrentTopic, true);

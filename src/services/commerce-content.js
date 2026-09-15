@@ -47,6 +47,16 @@ function normalizedWords(value) {
   return text(value).toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) || [];
 }
 
+const WEAK_COMMERCE_TOPIC_TOKENS = new Set([
+  "추석", "명절", "가을", "겨울", "봄", "여름", "계절", "선물", "할인", "세일", "상품", "제품", "구매", "온라인", "오프라인", "추천", "생활", "관리",
+]);
+
+function isWeakCommerceTopicToken(value) {
+  const token = text(value).toLowerCase();
+  return WEAK_COMMERCE_TOPIC_TOKENS.has(token) ||
+    ["추석", "명절", "가을", "겨울", "봄", "여름", "선물", "할인", "세일", "상품", "제품", "구매", "온라인", "오프라인", "추천", "생활", "관리"].some((prefix) => token.startsWith(prefix));
+}
+
 function topicWords(topic) {
   return normalizedWords([
     topic?.subject,
@@ -65,14 +75,24 @@ export function selectRelevantCommerceCurrentTopic(opportunity, topics) {
     opportunity?.situation,
     opportunity?.angle,
     opportunity?.discoveryReason,
-  ].join(" ")));
+  ].join(" ")).filter((word) => !isWeakCommerceTopicToken(word)));
   if (!opportunityWords.size || !Array.isArray(topics)) return null;
 
+  const candidates = [];
   for (const topic of topics.slice(0, 8)) {
     const context = buildCurrentTopicGenerationContext(topic);
-    if (context && topicWords(context).some((word) => opportunityWords.has(word))) return context;
+    if (!context) continue;
+    const overlap = [...new Set(topicWords(context)
+      .filter((word) => !isWeakCommerceTopicToken(word))
+      .filter((word) => opportunityWords.has(word)))];
+    if (!overlap.length) continue;
+    candidates.push({
+      context,
+      score: overlap.reduce((total, word) => total + (word.length >= 5 ? 3 : 2), 0),
+    });
   }
-  return null;
+  candidates.sort((left, right) => right.score - left.score || left.context.topicId.localeCompare(right.context.topicId));
+  return candidates[0]?.context || null;
 }
 
 export function normalizeCommerceStoryMetadata(value) {
@@ -149,8 +169,8 @@ export function buildCommerceContentInput({ opportunity, media, currentTopic = n
     instructions: {
       language: "Korean",
       format: "Write a concise, conversational Threads-native story for a realistic late-30s office worker: curious, observant, practical, warm, and lightly self-deprecating only when natural. Age is context, never a writing style.",
-      story: "Prioritize an interesting human observation, tension, or useful realization before a natural product/problem connection. The post must stand on its own even without a purchase. Do not lead with product name, catalog benefits, recommendation, CTA, SEO, listicle, feature dump, fake quote, fake dialogue, fake number, or hard-sell language. Avoid routine openings about fatigue, aging, office complaints, parenting exhaustion, or financial anxiety unless the supplied material genuinely requires them.",
-      angleSelection: `Choose exactly one contentAngle from ${COMMERCE_CONTENT_ANGLES.join(", ")} and one hookType from ${COMMERCE_HOOK_TYPES.join(", ")}. The opening one or two lines must create factual curiosity or tension, never fake clickbait. A FAILURE or CONFESSION first-person claim is allowed only when userExperienceNote explicitly supports it. A QUESTION must be specific and genuinely debatable, never generic engagement bait.`,
+      story: "ProductOpportunity is the mandatory primary subject of the post. The story must materially remain about its problem, category/use case, situation, or directly relevant product decision. Prioritize an interesting human observation, tension, or useful realization before a natural product/problem connection. The post must stand on its own even without a purchase. Do not lead with product name, catalog benefits, recommendation, CTA, SEO, listicle, feature dump, fake quote, fake dialogue, fake number, or hard-sell language. Avoid routine openings about fatigue, aging, office complaints, parenting exhaustion, or financial anxiety unless the supplied material genuinely requires them. Current Topic is optional supporting flavor only: never use it as the main story, replace the ProductOpportunity subject with it, or make the ProductOpportunity incidental merely because the topic is timely.",
+      angleSelection: `Choose exactly one contentAngle from ${COMMERCE_CONTENT_ANGLES.join(", ")} and one hookType from ${COMMERCE_HOOK_TYPES.join(", ")}. Build the story seed in this priority order: valid userExperienceNote when relevant and interesting, then ProductOpportunity problem/situation/angle, then product facts, then Current Topic only as supporting context. The opening one or two lines must create factual curiosity or tension, never fake clickbait. A FAILURE or CONFESSION first-person claim is allowed only when userExperienceNote explicitly supports it. A QUESTION must be specific and genuinely debatable, never generic engagement bait.`,
       provenance: {
         PRODUCT_FACT: "Only productFacts are objective product facts.",
         USER_EXPERIENCE: note ? "Only mediaContext.userExperienceNote is factual first-person experience evidence." : "No USER_EXPERIENCE evidence is available.",
