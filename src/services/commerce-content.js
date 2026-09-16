@@ -125,62 +125,75 @@ export function selectCommerceContentAsset(links, mediaRecords, workspaceId) {
   return candidates[0]?.media || null;
 }
 
+export function selectCommerceNarrativeSeed(opportunity, media) {
+  const note = experienceNote(media);
+  if (note) return { source: "USER_EXPERIENCE", field: "experienceNote", value: note };
+  for (const field of ["angle", "situation", "problem"]) {
+    const value = text(opportunity?.[field]);
+    if (value) return { source: "PRODUCT_OPPORTUNITY", field, value };
+  }
+  const productName = text(opportunity?.productName);
+  return productName ? { source: "PRODUCT_FACT", field: "productName", value: productName } : null;
+}
+
 export function buildCommerceContentInput({ opportunity, media, currentTopic = null }) {
   const note = experienceNote(media);
-  const productFacts = {
-    productName: text(opportunity?.productName),
-    brand: text(opportunity?.brand) || null,
-    category: text(opportunity?.category) || null,
-    sourceUrl: text(opportunity?.sourceUrl) || null,
-    affiliateLink: text(opportunity?.affiliateLink) || null,
-  };
-  const aiInference = {
-    problem: text(opportunity?.problem) || null,
-    audience: text(opportunity?.audience) || null,
-    situation: text(opportunity?.situation) || null,
-    angle: text(opportunity?.angle) || null,
-    discoveryReason: text(opportunity?.discoveryReason) || null,
-    scores: Object.fromEntries([
-      "trendScore", "personaFitScore", "purchaseIntentScore", "contentPotentialScore", "experiencePotentialScore", "affiliatePotentialScore", "opportunityScore",
-    ].map((field) => [field, Number.isFinite(opportunity?.[field]) ? opportunity[field] : null])),
-  };
-  const mediaContext = media ? {
+  const primaryStorySeed = selectCommerceNarrativeSeed(opportunity, media);
+  const narrativeFields = Object.fromEntries(
+    ["angle", "situation", "problem"]
+      .filter((field) => field !== primaryStorySeed?.field)
+      .map((field) => [field, text(opportunity?.[field]) || null]),
+  );
+  const mediaEvidence = media ? {
     mediaKind: media.mediaKind === "video" ? "video" : "image",
     description: text(media.description) || null,
     altText: text(media.altText) || null,
     tags: Array.isArray(media.tags) ? media.tags.map(text).filter(Boolean) : [],
     experienceTags: Array.isArray(media.experienceTags) ? media.experienceTags.map(text).filter(Boolean) : [],
-    ...(note ? { userExperienceNote: note } : {}),
   } : null;
 
   return JSON.stringify({
-    productFacts,
-    aiInference,
-    mediaContext,
-    currentTopic: currentTopic ? {
-      topicId: currentTopic.topicId,
-      subject: currentTopic.subject,
-      verifiedFacts: currentTopic.verifiedFacts,
-      talkingPoints: currentTopic.talkingPoints,
-      personaRelevance: currentTopic.personaRelevance,
-      allowedAngles: currentTopic.allowedAngles,
-      forbiddenClaims: currentTopic.forbiddenClaims,
-    } : null,
-    instructions: {
+    subject: {
+      source: "PRODUCT_OPPORTUNITY",
+      productName: text(opportunity?.productName),
+      category: text(opportunity?.category) || null,
+    },
+    primaryStorySeed,
+    evidenceOnly: {
+      productOpportunity: {
+        brand: text(opportunity?.brand) || null,
+        category: text(opportunity?.category) || null,
+        narrativeFields,
+        audience: text(opportunity?.audience) || null,
+        discoveryReason: text(opportunity?.discoveryReason) || null,
+      },
+      ...(mediaEvidence ? { media: mediaEvidence } : {}),
+      ...(currentTopic ? {
+        currentTopic: {
+          subject: currentTopic.subject,
+          verifiedFacts: currentTopic.verifiedFacts,
+          talkingPoints: currentTopic.talkingPoints,
+          personaRelevance: currentTopic.personaRelevance,
+          allowedAngles: currentTopic.allowedAngles,
+        },
+      } : {}),
+    },
+    provenanceSafety: {
+      PRODUCT_FACT: "ProductOpportunity subject and evidenceOnly fields are factual reference only, not personal experience evidence.",
+      USER_EXPERIENCE: note ? "Only primaryStorySeed.value is factual first-person experience evidence." : "No USER_EXPERIENCE evidence is available.",
+      AI_INFERENCE: "Narrative field labels are framing only, never personal experience or objective product fact.",
+      CURRENT_TOPIC: currentTopic ? { forbiddenClaims: currentTopic.forbiddenClaims } : null,
+    },
+    outputControl: {
       language: "Korean",
       format: "Write a concise Korean Threads-native Commerce story.",
-      story: "ProductOpportunity is the mandatory primary subject of the post. The story must materially remain about its problem, category/use case, situation, or directly relevant product decision. Let the human idea earn attention before a natural product/problem connection; the product name need not appear in the opening or at all when the connection remains material. The post must stand on its own even without a purchase. Do not lead with catalog benefits, recommendation, CTA, SEO, listicle, feature dump, fake quote, fake dialogue, fake number, or hard-sell language. Avoid routine openings about fatigue, aging, office complaints, parenting exhaustion, or financial anxiety unless the supplied material genuinely requires them. Current Topic is optional supporting flavor only: never use it as the main story, replace the ProductOpportunity subject with it, or make the ProductOpportunity incidental merely because the topic is timely.",
-      angleSelection: `Choose exactly one contentAngle from ${COMMERCE_CONTENT_ANGLES.join(", ")} and one hookType from ${COMMERCE_HOOK_TYPES.join(", ")}. The labels describe a useful generated strategy, never a rigid writing template. Build the story seed in this priority order: valid userExperienceNote when relevant and interesting, then ProductOpportunity problem/situation/angle, then product facts, then Current Topic only as supporting context. The opening one or two lines must create factual curiosity or tension, never fake clickbait. A FAILURE or CONFESSION first-person claim is allowed only when userExperienceNote explicitly supports it. A QUESTION must be specific and genuinely debatable, never generic engagement bait.`,
-      provenance: {
-        PRODUCT_FACT: "Only productFacts are objective product facts.",
-        USER_EXPERIENCE: note ? "Only mediaContext.userExperienceNote is factual first-person experience evidence." : "No USER_EXPERIENCE evidence is available.",
-        AI_INFERENCE: "aiInference is framing only, never personal experience or product fact.",
-        CURRENT_TOPIC: currentTopic ? "currentTopic is optional contextual signal only. Do not claim personal participation or experience from it, and use it only when it meaningfully connects to the opportunity." : "No Current Topic is being used.",
-      },
+      roles: "SUBJECT defines what the post must materially remain about. PRIMARY_STORY_SEED is the one narrative thought to develop. EVIDENCE_ONLY is optional reference material for factual accuracy only: it is not a checklist, outline, or set of facts that must appear in the post, and most or all of it may be omitted. PROVENANCE_SAFETY defines what may be claimed. EVIDENCE_ONLY must never override PRIMARY_STORY_SEED or SUBJECT.",
+      story: "ProductOpportunity is the mandatory SUBJECT. Let PRIMARY_STORY_SEED earn attention before a natural product/problem connection; the product name need not appear in the opening or at all when the connection remains material. The post must stand on its own even without a purchase. Do not lead with catalog benefits, recommendation, CTA, SEO, listicle, feature dump, fake quote, fake dialogue, fake number, or hard-sell language. Avoid routine openings about fatigue, aging, office complaints, parenting exhaustion, or financial anxiety unless the supplied material genuinely requires them. Current Topic is EVIDENCE_ONLY supporting flavor: never use it as the main story, replace the ProductOpportunity subject with it, or make the ProductOpportunity incidental merely because the topic is timely.",
+      angleSelection: `Choose exactly one contentAngle from ${COMMERCE_CONTENT_ANGLES.join(", ")} and one hookType from ${COMMERCE_HOOK_TYPES.join(", ")}. The labels describe a useful generated strategy, never a rigid writing template. The opening one or two lines must create factual curiosity or tension, never fake clickbait. A FAILURE or CONFESSION first-person claim is allowed only when PRIMARY_STORY_SEED is USER_EXPERIENCE and explicitly supports it. A QUESTION must be specific and genuinely debatable, never generic engagement bait.`,
       safety: note
-        ? "Any first-person claim must stay strictly within userExperienceNote. Do not add purchase, ownership, duration, comparison, location, price, specification, satisfaction, or use facts not explicitly in that note. experienceTags, visual tags, description, and altText are context only, never personal experience evidence."
+        ? "Any first-person claim must stay strictly within PRIMARY_STORY_SEED.value. Do not add purchase, ownership, duration, comparison, location, price, specification, satisfaction, or use facts not explicitly in that note. experienceTags, visual tags, description, and altText are context only, never personal experience evidence."
         : "Do not use first-person product-use, purchase, ownership, satisfaction, comparison-from-use, or long-term-experience claims. Write non-first-person commerce copy only. experienceTags, visual tags, description, and altText are context only, never personal experience evidence.",
-      urlPolicy: "Do not copy, rewrite, shorten, fabricate, or embed sourceUrl or affiliateLink in the prose. They remain metadata outside the draft.",
+      urlPolicy: "Do not fabricate, embed, or imply a source URL or affiliate link in the prose. They remain metadata outside the draft.",
       avoid: ["hard-sell language", "affiliate language", "fake urgency", "fabricated discounts or prices", "unsupported specifications", "fake testimonials", "fabricated comparison claims", "generic engagement bait", "fake personal history"],
     },
   });

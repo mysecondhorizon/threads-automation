@@ -1005,6 +1005,53 @@ function buildAiContextData(
   };
 }
 
+function buildNarrativeGenerationContext(contextData) {
+  const currentTopic = contextData?.currentTopic || null;
+  const dailyMediaContext = contextData?.dailyMediaContext || null;
+  const experienceNote = dailyMediaContext?.experienceProvenance === "USER_EXPERIENCE"
+    ? dailyMediaContext.experienceNote
+    : null;
+  const { currentTopic: _currentTopic, dailyMediaContext: _dailyMediaContext, ...outputControl } = contextData || {};
+  const primaryStorySeed = currentTopic
+    ? {
+      source: "CURRENT_TOPIC",
+      ...(currentTopic.hookDirection ? { hookDirection: currentTopic.hookDirection } : {}),
+      selectedAngle: currentTopic.selectedAngle,
+    }
+    : experienceNote
+      ? { source: "USER_EXPERIENCE", experienceNote }
+      : null;
+
+  return {
+    subject: currentTopic
+      ? { source: "CURRENT_TOPIC", subject: currentTopic.subject }
+      : { source: "PERSONA", generationGoal: contextData?.publishing?.goal || null },
+    primaryStorySeed,
+    evidenceOnly: {
+      ...(currentTopic ? {
+        currentTopic: {
+          category: currentTopic.category,
+          verifiedFacts: currentTopic.verifiedFacts,
+          talkingPoints: currentTopic.talkingPoints,
+          personaRelevance: currentTopic.personaRelevance,
+          allowedAngles: currentTopic.allowedAngles,
+        },
+      } : {}),
+      ...(dailyMediaContext ? {
+        dailyMedia: {
+          semanticCues: dailyMediaContext.semanticCues || [],
+          experienceTags: dailyMediaContext.experienceTags || [],
+        },
+      } : {}),
+    },
+    provenanceSafety: {
+      ...(currentTopic ? { currentTopic: { forbiddenClaims: currentTopic.forbiddenClaims } } : {}),
+      ...(experienceNote ? { userExperience: { experienceNote } } : {}),
+    },
+    outputControl,
+  };
+}
+
 export function buildGenerationInput(
   {
     topic,
@@ -1033,11 +1080,16 @@ export function buildGenerationInput(
     buildAiContextData(
       context
     );
+  const narrativeContext =
+    buildNarrativeGenerationContext(
+      contextData
+    );
 
   if (contextData) {
     lines.push(
       "",
-      "아래는 이번 게시글 작성에 사용해야 하는 실제 컨텍스트입니다.",
+      "The context is role-separated: SUBJECT defines topical alignment; PRIMARY_STORY_SEED is the one thought to develop; EVIDENCE_ONLY is optional factual reference, not a checklist or outline, and most or all of it may be omitted; PROVENANCE_SAFETY defines what may be claimed; OUTPUT_CONTROL preserves repetition, format, and publishing constraints without becoming story material.",
+      "아래 역할을 따라 작성하고, 제공된 모든 필드를 본문에 반드시 사용해야 하는 정보로 취급하지 마세요.",
       "입력되지 않은 사실은 만들지 마세요.",
       "history의 구조화된 메타데이터를 사용해 최근 contentType, topic, emotion, hookStyle, endingStyle의 반복을 피하세요.",
       "todayQuestionCount를 참고해 질문형 마무리가 과도하게 반복되지 않게 하세요.",
@@ -1058,7 +1110,7 @@ export function buildGenerationInput(
       "",
       "[THREAD_CONTEXT_JSON]",
       JSON.stringify(
-        contextData,
+        narrativeContext,
         null,
         2
       ),
@@ -1068,15 +1120,15 @@ export function buildGenerationInput(
     if (contextData.currentTopic) {
       lines.push(
         "",
-        "currentTopic is a factual basis for a natural persona observation, not a news summary.",
-        "Keep the currentTopic subject's core anchor clear enough that readers can understand what the post is about. Use a natural equivalent when appropriate; do not reduce a specific subject to a vague generic word.",
-        "verifiedFacts are the factual boundary, not source sentences to copy. Prefer one talkingPoint when available as the everyday factual wording; otherwise use only the smallest needed verifiedFacts fragment. Use at most one fact naturally, and do not invent numbers, dates, launch details, product features, or certainty.",
+        "SUBJECT is a Current Topic factual basis for a natural persona observation, not a news summary. PRIMARY_STORY_SEED is the one narrative direction to develop.",
+        "Keep the SUBJECT core anchor clear enough that readers can understand what the post is about. Use a natural equivalent when appropriate; do not reduce a specific subject to a vague generic word.",
+        "EVIDENCE_ONLY.currentTopic.verifiedFacts are the factual boundary, not source sentences to copy. Prefer one EVIDENCE_ONLY.currentTopic.talkingPoint when available as the everyday factual wording; otherwise use only the smallest needed verifiedFacts fragment. Use at most one fact naturally, and do not invent numbers, dates, launch details, product features, or certainty.",
         (
           contextData.dailyMediaContext?.experienceProvenance === "USER_EXPERIENCE"
-            ? "Do not claim direct use, attendance, or personal experience from currentTopic alone. A direct first-person expression is allowed only within the explicit factual scope of dailyMediaContext.experienceNote; do not combine it with currentTopic to invent a new fact."
+            ? "Do not claim direct use, attendance, or personal experience from Current Topic alone. A direct first-person expression is allowed only within the explicit factual scope of PROVENANCE_SAFETY.userExperience.experienceNote; do not combine it with Current Topic to invent a new fact."
             : "Do not claim direct use, attendance, or personal experience. Do not start as a news report or say you saw it in the news."
         ),
-        "Use personaRelevance as everyday context and selectedAngle as the main angle. Follow forbiddenClaims and keep facts, curiosity, and preference clearly distinct.",
+        "EVIDENCE_ONLY.currentTopic.personaRelevance is optional everyday context; PRIMARY_STORY_SEED.selectedAngle is the main angle. Follow PROVENANCE_SAFETY.currentTopic.forbiddenClaims and keep facts, curiosity, and preference clearly distinct.",
         "When several factual framings are valid, prefer an interesting, useful, curious, or lightly enjoyable everyday angle over a cynical or complaint-first angle. Do not force positivity over a genuinely serious topic."
       );
     }
@@ -1084,15 +1136,15 @@ export function buildGenerationInput(
     if (contextData.dailyMediaContext) {
       lines.push(
         "",
-        "dailyMediaContext describes the Daily media selected for this post. Keep the body compatible with these grounded visual-context cues when using them.",
-        "The post's core subject must remain meaningfully compatible with dailyMediaContext.semanticCues; never attach Daily media as decoration for an unrelated subject.",
-        "Do not invent a visit, purchase, meal, office connection, time of day, menu, taste, ownership, or any other fact that dailyMediaContext does not support."
+        "EVIDENCE_ONLY.dailyMedia describes the Daily media selected for this post. Keep the body compatible with these grounded visual-context cues when using them.",
+        "The post's core subject must remain meaningfully compatible with EVIDENCE_ONLY.dailyMedia.semanticCues; never attach Daily media as decoration for an unrelated subject.",
+        "Do not invent a visit, purchase, meal, office connection, time of day, menu, taste, ownership, or any other fact that EVIDENCE_ONLY.dailyMedia does not support."
       );
 
       if (contextData.dailyMediaContext.experienceProvenance === "USER_EXPERIENCE") {
         lines.push(
-          "dailyMediaContext.experienceNote is explicit USER_EXPERIENCE factual basis supplied by the user. You may use a natural first-person expression only within that note's stated facts; do not copy the note verbatim or extend it with unsupported details.",
-          "dailyMediaContext.experienceTags are classification hints, not evidence of a personal experience. dailyMediaContext.semanticCues provide visual or semantic context, not additional personal facts.",
+          "PRIMARY_STORY_SEED.experienceNote and PROVENANCE_SAFETY.userExperience.experienceNote are explicit USER_EXPERIENCE factual basis supplied by the user. You may use a natural first-person expression only within that note's stated facts; do not copy the note verbatim or extend it with unsupported details.",
+          "EVIDENCE_ONLY.dailyMedia.experienceTags are classification hints, not evidence of a personal experience. EVIDENCE_ONLY.dailyMedia.semanticCues provide visual or semantic context, not additional personal facts.",
           "If the explicit experience is negative, keep its facts without melodrama, fake positivity, or invented improvement; use balanced framing only when the stated facts support it."
         );
       }
