@@ -125,12 +125,12 @@ export function selectCommerceContentAsset(links, mediaRecords, workspaceId) {
   return candidates[0]?.media || null;
 }
 
-export function selectCommerceNarrativeSeed(opportunity, media) {
+export function selectCommerceNarrativeSource(opportunity, media) {
   const note = experienceNote(media);
   if (note) return { source: "USER_EXPERIENCE", field: "experienceNote", value: note };
   for (const field of ["angle", "situation", "problem"]) {
     const value = text(opportunity?.[field]);
-    if (value) return { source: "PRODUCT_OPPORTUNITY", field, value };
+    if (value) return { source: "AI_INFERENCE", field, value };
   }
   const productName = text(opportunity?.productName);
   return productName ? { source: "PRODUCT_FACT", field: "productName", value: productName } : null;
@@ -138,10 +138,10 @@ export function selectCommerceNarrativeSeed(opportunity, media) {
 
 export function buildCommerceContentInput({ opportunity, media, currentTopic = null }) {
   const note = experienceNote(media);
-  const primaryStorySeed = selectCommerceNarrativeSeed(opportunity, media);
+  const narrativeSource = selectCommerceNarrativeSource(opportunity, media);
   const narrativeFields = Object.fromEntries(
     ["angle", "situation", "problem"]
-      .filter((field) => field !== primaryStorySeed?.field)
+      .filter((field) => field !== narrativeSource?.field)
       .map((field) => [field, text(opportunity?.[field]) || null]),
   );
   const mediaEvidence = media ? {
@@ -158,7 +158,12 @@ export function buildCommerceContentInput({ opportunity, media, currentTopic = n
       productName: text(opportunity?.productName),
       category: text(opportunity?.category) || null,
     },
-    primaryStorySeed,
+    narrativeSource,
+    primaryStoryIdeaTask: {
+      requirement: "Before writing, choose exactly one human-scale observation, tension, realization, comparison, question, or practical thought directly supported by NARRATIVE_SOURCE. Return that one thought as primaryStoryIdea and materially develop it in the final text.",
+      sourceRole: "NARRATIVE_SOURCE is source material, not an outline, checklist, set of required items, or text that must be fully paraphrased. A composite source may contain several commercial criteria or solutions; select one underlying thought and omit the rest unless a small supporting reference is naturally necessary.",
+      provenance: "Choosing a primaryStoryIdea never strengthens the factual authority of NARRATIVE_SOURCE. AI_INFERENCE remains non-personal inference; PRODUCT_FACT remains factual reference only; USER_EXPERIENCE remains limited to its exact note.",
+    },
     evidenceOnly: {
       productOpportunity: {
         brand: text(opportunity?.brand) || null,
@@ -180,18 +185,18 @@ export function buildCommerceContentInput({ opportunity, media, currentTopic = n
     },
     provenanceSafety: {
       PRODUCT_FACT: "ProductOpportunity subject and evidenceOnly fields are factual reference only, not personal experience evidence.",
-      USER_EXPERIENCE: note ? "Only primaryStorySeed.value is factual first-person experience evidence." : "No USER_EXPERIENCE evidence is available.",
+      USER_EXPERIENCE: note ? "Only narrativeSource.value is factual first-person experience evidence." : "No USER_EXPERIENCE evidence is available.",
       AI_INFERENCE: "Narrative field labels are framing only, never personal experience or objective product fact.",
       CURRENT_TOPIC: currentTopic ? { forbiddenClaims: currentTopic.forbiddenClaims } : null,
     },
     outputControl: {
       language: "Korean",
       format: "Write a concise Korean Threads-native Commerce story.",
-      roles: "SUBJECT defines what the post must materially remain about. PRIMARY_STORY_SEED is the one narrative thought to develop. EVIDENCE_ONLY is optional reference material for factual accuracy only: it is not a checklist, outline, or set of facts that must appear in the post, and most or all of it may be omitted. PROVENANCE_SAFETY defines what may be claimed. EVIDENCE_ONLY must never override PRIMARY_STORY_SEED or SUBJECT.",
-      story: "ProductOpportunity is the mandatory SUBJECT. Let PRIMARY_STORY_SEED earn attention before a natural product/problem connection; the product name need not appear in the opening or at all when the connection remains material. The post must stand on its own even without a purchase. Do not lead with catalog benefits, recommendation, CTA, SEO, listicle, feature dump, fake quote, fake dialogue, fake number, or hard-sell language. Avoid routine openings about fatigue, aging, office complaints, parenting exhaustion, or financial anxiety unless the supplied material genuinely requires them. Current Topic is EVIDENCE_ONLY supporting flavor: never use it as the main story, replace the ProductOpportunity subject with it, or make the ProductOpportunity incidental merely because the topic is timely.",
-      angleSelection: `Choose exactly one contentAngle from ${COMMERCE_CONTENT_ANGLES.join(", ")} and one hookType from ${COMMERCE_HOOK_TYPES.join(", ")}. The labels describe a useful generated strategy, never a rigid writing template. The opening one or two lines must create factual curiosity or tension, never fake clickbait. A FAILURE or CONFESSION first-person claim is allowed only when PRIMARY_STORY_SEED is USER_EXPERIENCE and explicitly supports it. A QUESTION must be specific and genuinely debatable, never generic engagement bait.`,
+      roles: "SUBJECT defines what the post must materially remain about. NARRATIVE_SOURCE supplies material from which PRIMARY_STORY_IDEA selects one thought to develop. EVIDENCE_ONLY is optional reference material for factual accuracy only: it is not a checklist, outline, or set of facts that must appear in the post, and most or all of it may be omitted. PROVENANCE_SAFETY defines what may be claimed. EVIDENCE_ONLY must never override NARRATIVE_SOURCE, PRIMARY_STORY_IDEA, or SUBJECT.",
+      story: "ProductOpportunity is the mandatory SUBJECT. First choose one PRIMARY_STORY_IDEA directly supported by NARRATIVE_SOURCE, then let that idea earn attention before a natural product/problem connection. Do not cover every criterion, solution, or observation contained in a composite NARRATIVE_SOURCE. The product name need not appear in the opening or at all when the connection remains material. The post must stand on its own even without a purchase. Do not lead with catalog benefits, recommendation, CTA, SEO, listicle, feature dump, fake quote, fake dialogue, fake number, or hard-sell language. Avoid routine openings about fatigue, aging, office complaints, parenting exhaustion, or financial anxiety unless the supplied material genuinely requires them. Current Topic is EVIDENCE_ONLY supporting flavor: never use it as the main story, replace the ProductOpportunity subject or PRIMARY_STORY_IDEA with it, or make the ProductOpportunity incidental merely because the topic is timely.",
+      angleSelection: `Choose exactly one contentAngle from ${COMMERCE_CONTENT_ANGLES.join(", ")} and one hookType from ${COMMERCE_HOOK_TYPES.join(", ")}. The labels describe a useful generated strategy, never a rigid writing template. The opening one or two lines must create factual curiosity or tension, never fake clickbait. A FAILURE or CONFESSION first-person claim is allowed only when NARRATIVE_SOURCE is USER_EXPERIENCE and explicitly supports it. A QUESTION must be specific and genuinely debatable, never generic engagement bait.`,
       safety: note
-        ? "Any first-person claim must stay strictly within PRIMARY_STORY_SEED.value. Do not add purchase, ownership, duration, comparison, location, price, specification, satisfaction, or use facts not explicitly in that note. experienceTags, visual tags, description, and altText are context only, never personal experience evidence."
+        ? "Any first-person claim must stay strictly within narrativeSource.value. Do not add purchase, ownership, duration, comparison, location, price, specification, satisfaction, or use facts not explicitly in that note. experienceTags, visual tags, description, and altText are context only, never personal experience evidence."
         : "Do not use first-person product-use, purchase, ownership, satisfaction, comparison-from-use, or long-term-experience claims. Write non-first-person commerce copy only. experienceTags, visual tags, description, and altText are context only, never personal experience evidence.",
       urlPolicy: "Do not fabricate, embed, or imply a source URL or affiliate link in the prose. They remain metadata outside the draft.",
       avoid: ["hard-sell language", "affiliate language", "fake urgency", "fabricated discounts or prices", "unsupported specifications", "fake testimonials", "fabricated comparison claims", "generic engagement bait", "fake personal history"],
@@ -206,6 +211,12 @@ function commerceInstructions(systemPrompt) {
 function normalizeDraftText(value) {
   const result = text(value);
   if (!result || result.length > 500) fail("Commerce draft text is invalid", "commerce_content_generation_invalid");
+  return result;
+}
+
+function normalizePrimaryStoryIdea(value) {
+  const result = text(value);
+  if (!result || result.length > 500) fail("Commerce primary story idea is invalid", "commerce_content_generation_invalid");
   return result;
 }
 
@@ -240,10 +251,11 @@ export async function generateCommerceContent(env, { workspaceId, opportunity } 
       additionalProperties: false,
       properties: {
         text: { type: "string" },
+        primaryStoryIdea: { type: "string" },
         contentAngle: { type: "string", enum: COMMERCE_CONTENT_ANGLES },
         hookType: { type: "string", enum: COMMERCE_HOOK_TYPES },
       },
-      required: ["text", "contentAngle", "hookType"],
+      required: ["text", "primaryStoryIdea", "contentAngle", "hookType"],
     },
   });
 
@@ -255,6 +267,7 @@ export async function generateCommerceContent(env, { workspaceId, opportunity } 
     usedUserExperience: Boolean(experienceNote(media)),
   });
   if (!storyMetadata) fail("Commerce story metadata is invalid", "commerce_content_generation_invalid");
+  normalizePrimaryStoryIdea(generated?.primaryStoryIdea);
 
   return {
     text: normalizeDraftText(generated?.text),
