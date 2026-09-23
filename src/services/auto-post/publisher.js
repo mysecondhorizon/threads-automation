@@ -428,6 +428,9 @@ export async function publishGeneralAutoPost(
   try {
     logKey = await logSuccess(env, profile.username, publishResult.postId, text, {
       ...metadata,
+      workspaceId: published.workspaceId || workspaceId,
+      connectedAccountId: published.connectedAccountId || null,
+      threadsUserId: published.publisherUserId || null,
       publishMode: selection.mode,
       mediaId: selection.mediaId,
       contentPoolId: selection.contentPoolId,

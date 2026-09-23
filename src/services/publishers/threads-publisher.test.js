@@ -55,7 +55,7 @@ const scopedPublished = await threadsPublisher.publish({
     ...dependencies,
     async getThreadsCredentialForAccount(_env, options) {
       resolvedOptions = options;
-      return { credential: { access_token: "scoped-token" } };
+      return { account: { id:"threads-account-a", workspaceId:"workspace-a" }, credential: { access_token: "scoped-token" } };
     },
     async getThreadsProfile(token) {
       assert.equal(token, "scoped-token");
@@ -69,4 +69,7 @@ assert.deepEqual(resolvedOptions, {
 });
 assert.equal("access_token" in scopedPublished, false);
 assert.equal("authRef" in scopedPublished, false);
+assert.equal(scopedPublished.workspaceId, "workspace-a");
+assert.equal(scopedPublished.connectedAccountId, "threads-account-a");
+assert.equal(scopedPublished.publisherUserId, "scoped-user");
 console.log("threads publisher adapter fixture passed");

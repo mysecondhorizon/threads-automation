@@ -378,11 +378,20 @@ export async function runScheduledAutoPost(
       });
     }
 
-    // Sync is a legacy Default-account operation. A workspace scheduler must
-    // never read the legacy credential as a side effect of a scoped run.
-    const syncResult = workspaceId
-      ? null
-      : await syncThreadsData(env);
+    const sync = services.syncThreadsData || syncThreadsData;
+    let syncResult;
+    if (workspaceId) {
+      try {
+        syncResult = await sync(env, { workspaceId, executionContext });
+      } catch {
+        // Newly enabled measurement must not prevent an otherwise valid
+        // Workspace publishing run; the collector preserves earlier insights.
+        console.warn("Workspace insight refresh unavailable");
+        syncResult = null;
+      }
+    } else {
+      syncResult = await sync(env);
+    }
 
     console.log(
       "Scheduled Threads sync completed",

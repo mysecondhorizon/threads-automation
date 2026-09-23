@@ -94,6 +94,7 @@ function formatDate(
 function formatNumber(
   value
 ) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "-";
   return Number(
     value || 0
   ).toLocaleString(
@@ -286,10 +287,7 @@ function renderPostRow(
       ? `${text.slice(0, 80)}...`
       : text;
 
-  const engagementRate =
-    Number(
-      post.engagementRate || 0
-    );
+  const engagementRate = Number.isFinite(post.engagementRate) ? post.engagementRate.toFixed(2) + "%" : "-";
 
   return `
     <tr>
@@ -369,10 +367,8 @@ function renderPostRow(
         text-align:right;
       ">
         ${escapeHtml(
-          engagementRate.toFixed(
-            2
-          )
-        )}%
+          engagementRate
+        )}
       </td>
     </tr>
   `;
@@ -1013,6 +1009,15 @@ export async function handleDashboard(
     return auth.response;
   }
 
+  // This dashboard still reads the legacy, unscoped operational stores.
+  // Registered Workspace sessions must use Workspace-aware app surfaces.
+  if (!auth.session.legacy) {
+    return new Response("Forbidden", {
+      status: 403,
+      headers: { "cache-control": "no-store" },
+    });
+  }
+
   const [
     dashboardResult,
     autoPostResult,
@@ -1193,12 +1198,7 @@ export async function handleDashboard(
               post,
               index
             ) => {
-              const engagementRate =
-                Number(
-                  post
-                    .engagementRate ||
-                  0
-                );
+              const engagementRate = Number.isFinite(post.engagementRate) ? post.engagementRate.toFixed(2) + "%" : "-";
 
               return `
                 <article style="
@@ -1234,10 +1234,7 @@ export async function handleDashboard(
                   ">
                     참여율 ${escapeHtml(
                       engagementRate
-                        .toFixed(
-                          2
-                        )
-                    )}% · 반응 ${escapeHtml(
+                    )} · 반응 ${escapeHtml(
                       formatNumber(
                         post.interactions
                       )
@@ -1391,14 +1388,9 @@ export async function handleDashboard(
 
     ${renderMetricCard(
       "평균 참여율",
-      Number(
-        data.summary
-          .averageEngagementRate ||
-        0
-      ).toFixed(
-        2
-      ),
-      "%"
+      Number.isFinite(data.summary.averageEngagementRate)
+        ? data.summary.averageEngagementRate.toFixed(2) + "%"
+        : "-"
     )}
   </section>
 

@@ -10,13 +10,16 @@ const result = await publishCommerceContent({}, {
   media: { id: "media-a", mediaKind: "image" },
   storyMetadata: { contentAngle: "DISCOVERY", hookType: "CURIOSITY", usedCurrentTopic: true, currentTopicId: "topic-a", usedUserExperience: true },
 }, {
-  publishWithResolvedApp: async (input) => { calls.push(input); return { provider: "THREADS", externalPostId: "post-a", logUsername: "owner" }; },
+  publishWithResolvedApp: async (input) => { calls.push(input); return { provider: "THREADS", externalPostId: "post-a", logUsername: "owner", workspaceId:"workspace-a", connectedAccountId:"account-a", publisherUserId:"provider-a" }; },
   logPostSuccess: async (_env, _username, _postId, text, metadata) => { calls.push({ text, metadata }); },
 });
 assert.equal(result.postId, "post-a");
 assert.equal(calls[0].content, "  Reviewed text stays exact.  ");
 assert.deepEqual(calls[0].context.mediaSelection, { mode: "IMAGE", mediaId: "media-a" });
 assert.equal(calls[1].metadata.contentBasis, "PRODUCT_OPPORTUNITY");
+assert.equal(calls[1].metadata.workspaceId, "workspace-a");
+assert.equal(calls[1].metadata.connectedAccountId, "account-a");
+assert.equal(calls[1].metadata.threadsUserId, "provider-a");
 assert.equal(calls[1].metadata.opportunityId, "opportunity-a");
 assert.equal(calls[1].metadata.contentAngle, "DISCOVERY");
 assert.equal(calls[1].metadata.hookType, "CURIOSITY");

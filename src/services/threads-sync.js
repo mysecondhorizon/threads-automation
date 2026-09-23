@@ -1,405 +1,161 @@
-import {
-  getJson,
-  putJson,
-} from "./kv.js";
+import { getJson, putJson } from "./kv.js";
+import { getPostLogEntries, syncPostLogFromThreads } from "./logger.js";
+import { getUserThreads, getThreadsProfile } from "./threads.js";
+import { getPostInsights } from "./insights.js";
+import { getThreadsCredentialForAccount, resolveWorkspaceThreadsConnectedAccount } from "./connected-accounts.js";
+import { DEFAULT_WORKSPACE_ID } from "./workspace-foundation.js";
 
-import {
-  getPostLogEntries,
-  markPostLogDeleted,
-  syncPostLogFromThreads,
-} from "./logger.js";
+const MAX_POSTS_PER_REFRESH = 20;
+const THREADS_FETCH_LIMIT = 100;
+const text = (value) => typeof value === "string" ? value.trim() : "";
 
-import {
-  getUserThreads,
-  ThreadsApiError,
-} from "./threads.js";
+export class InsightCollectionError extends Error {
+  constructor(code, status = 502) {
+    super("Threads insight collection is unavailable");
+    this.name = "InsightCollectionError";
+    this.code = code;
+    this.status = status;
+  }
+}
 
-import {
-  getPostInsights,
-  ThreadsInsightsError,
-} from "./insights.js";
+function logWorkspace(log) {
+  const value = log?.metadata?.workspaceId;
+  return value === undefined || value === null ? DEFAULT_WORKSPACE_ID : text(value);
+}
 
-const MAX_POSTS_PER_REFRESH =
-  20;
+async function resolveScope(env, { workspaceId, executionContext } = {}, dependencies) {
+  const scope = workspaceId === undefined || workspaceId === null ? DEFAULT_WORKSPACE_ID : text(workspaceId);
+  if (!scope || (executionContext && executionContext.workspaceId !== scope)) {
+    throw new InsightCollectionError("insight_scope_invalid", 403);
+  }
+  const resolveAccount = dependencies.resolveWorkspaceThreadsConnectedAccount || resolveWorkspaceThreadsConnectedAccount;
+  const resolveCredential = dependencies.getThreadsCredentialForAccount || getThreadsCredentialForAccount;
+  const accountId = executionContext
+    ? executionContext.connectedAccountId
+    : scope !== DEFAULT_WORKSPACE_ID ? (await resolveAccount(env, { workspaceId: scope })).id : undefined;
+  if (executionContext && !text(accountId)) throw new InsightCollectionError("insight_scope_invalid", 403);
+  const { account, credential } = await resolveCredential(env, { workspaceId: scope, connectedAccountId: accountId });
+  if (account?.workspaceId !== scope || !text(account?.id) || !text(credential?.access_token)) {
+    throw new InsightCollectionError("insight_scope_invalid", 403);
+  }
+  const profile = await (dependencies.getThreadsProfile || getThreadsProfile)(credential.access_token);
+  if (!text(profile?.id)) throw new InsightCollectionError("insight_account_unavailable");
+  return { workspaceId: scope, connectedAccountId: account.id, threadsUserId: profile.id, accessToken: credential.access_token };
+}
 
-const THREADS_FETCH_LIMIT =
-  100;
+function matchesOwner(log, scope, remotePosts) {
+  if (logWorkspace(log) !== scope.workspaceId) return false;
+  const metadata = log.metadata || {};
+  if (metadata.connectedAccountId != null && metadata.connectedAccountId !== scope.connectedAccountId) return false;
+  if (metadata.threadsUserId != null && metadata.threadsUserId !== scope.threadsUserId) return false;
+  return (metadata.connectedAccountId === scope.connectedAccountId && metadata.threadsUserId === scope.threadsUserId) ||
+    remotePosts.has(String(log.post_id));
+}
 
-function isPublishedLog(
-  log
-) {
-  return (
-    log &&
-    log.status === "published" &&
-    log.post_id
+function publishedEntries(entries, scope) {
+  return entries.filter(({ log }) =>
+    log?.status === "published" && text(log.post_id) && logWorkspace(log) === scope
   );
 }
 
-function createThreadMap(
-  threads
-) {
-  const map =
-    new Map();
-
-  for (
-    const thread of
-    threads
-  ) {
-    if (!thread?.id) {
-      continue;
-    }
-
-    map.set(
-      String(
-        thread.id
-      ),
-      thread
-    );
-  }
-
-  return map;
+async function loadRemotePosts(scope, dependencies) {
+  const response = await (dependencies.getUserThreads || getUserThreads)(scope.accessToken, { limit: THREADS_FETCH_LIMIT });
+  return new Map((Array.isArray(response?.data) ? response.data : [])
+    .filter((post) => text(post?.id)).map((post) => [post.id, post]));
 }
 
-function normalizeText(
-  value
-) {
-  return String(
-    value || ""
-  ).trim();
+function validTimestamp(value) {
+  return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : null;
 }
 
-function hasTextChanged(
-  log,
-  thread
-) {
-  return (
-    normalizeText(
-      log?.text
-    ) !==
-    normalizeText(
-      thread?.text
-    )
-  );
+async function collectPost(env, entry, scope, remotePosts, dependencies) {
+  const postId = String(entry.log.post_id);
+  const key = `post_insight:${postId}`;
+  const previous = await getJson(env, key);
+  // A reconnect, conflicting log, or another Workspace must not take over an
+  // observation already attributed to a different owner.
+  if (previous && ["workspaceId", "connectedAccountId", "threadsUserId"].some((field) =>
+    previous[field] != null && previous[field] !== scope[field]
+  )) throw new InsightCollectionError("insight_cache_owner_mismatch", 409);
+  const insights = await (dependencies.getPostInsights || getPostInsights)(scope.accessToken, postId);
+  if (insights?.integrityVersion !== 1 || insights.postId !== postId ||
+      !["success", "partial"].includes(insights.collectionStatus)) {
+    throw new InsightCollectionError("insight_observation_unavailable");
+  }
+  const remote = remotePosts.get(postId);
+  const observation = {
+    ...insights,
+    postId,
+    workspaceId: scope.workspaceId,
+    connectedAccountId: scope.connectedAccountId,
+    threadsUserId: scope.threadsUserId,
+    ownershipSource: entry.log.metadata?.connectedAccountId && entry.log.metadata?.threadsUserId
+      ? "published_log" : "account_post_list",
+    text: remote?.text || entry.log.text || "",
+    username: remote?.username || entry.log.username || "",
+    // Local log creation time is not asserted to be the provider's publish time.
+    publishedAt: validTimestamp(remote?.timestamp) || validTimestamp(entry.log.threads_timestamp) ||
+      validTimestamp(previous?.publishedAt),
+    permalink: remote?.permalink || previous?.permalink || null,
+    syncedAt: new Date().toISOString(),
+  };
+  await putJson(env, key, observation);
+  return observation;
 }
 
-export async function syncThreadsData(
-  env
-) {
-  const threadsAuth =
-    await getJson(
-      env,
-      "threads_auth"
-    );
-
-  if (
-    !threadsAuth?.access_token
-  ) {
-    throw new Error(
-      "Threads 연결 정보가 없습니다."
-    );
+export async function refreshScopedPostInsights(env, postId, options = {}, dependencies = {}) {
+  const entries = await (dependencies.getPostLogEntries || getPostLogEntries)(env);
+  const workspaceId = options.workspaceId ?? DEFAULT_WORKSPACE_ID;
+  const candidates = publishedEntries(entries, workspaceId).filter(({ log }) => log.post_id === postId);
+  if (!candidates.length) throw new InsightCollectionError("insight_post_not_found", 404);
+  const scope = await resolveScope(env, options, dependencies);
+  const remotePosts = await loadRemotePosts(scope, dependencies);
+  if (!candidates.every(({ log }) => matchesOwner(log, scope, remotePosts))) {
+    throw new InsightCollectionError("insight_post_not_owned", 403);
   }
+  return collectPost(env, candidates[0], scope, remotePosts, dependencies);
+}
 
-  let currentThreads;
-
-  try {
-    const response =
-      await getUserThreads(
-        threadsAuth.access_token,
-        {
-          limit:
-            THREADS_FETCH_LIMIT,
-        }
-      );
-
-    currentThreads =
-      response.data;
-  } catch (
-    error
-  ) {
-    if (
-      error instanceof
-      ThreadsApiError
-    ) {
-      throw error;
-    }
-
-    throw error;
+export async function syncThreadsData(env, options = {}, dependencies = {}) {
+  const scope = await resolveScope(env, options, dependencies);
+  const remotePosts = await loadRemotePosts(scope, dependencies);
+  const entries = publishedEntries(await (dependencies.getPostLogEntries || getPostLogEntries)(env), scope.workspaceId);
+  const owned = entries.filter(({ log }) => matchesOwner(log, scope, remotePosts));
+  const syncResults = [];
+  for (const entry of owned) {
+    const remote = remotePosts.get(String(entry.log.post_id));
+    // Bounded-list absence is never a deletion signal, even for owned posts.
+    if (!remote) continue;
+    const changed = String(entry.log.text || "").trim() !== String(remote.text || "").trim();
+    await (dependencies.syncPostLogFromThreads || syncPostLogFromThreads)(env, entry.key, remote);
+    syncResults.push({ post_id: entry.log.post_id, status: changed ? "updated" : "unchanged" });
   }
-
-  const threadMap =
-    createThreadMap(
-      currentThreads
-    );
-
-  const logEntries =
-    await getPostLogEntries(
-      env
-    );
-
-  const publishedEntries =
-    logEntries.filter(
-      (
-        entry
-      ) =>
-        isPublishedLog(
-          entry.log
-        )
-    );
-
-  let deletedCount =
-    0;
-
-  let updatedCount =
-    0;
-
-  let unchangedCount =
-    0;
-
-  const syncResults =
-    [];
-
-  for (
-    const entry of
-    publishedEntries
-  ) {
-    const log =
-      entry.log;
-
-    const postId =
-      String(
-        log.post_id
-      );
-
-    const currentThread =
-      threadMap.get(
-        postId
-      );
-
-    if (!currentThread) {
-      await markPostLogDeleted(
-        env,
-        entry.key
-      );
-
-      deletedCount +=
-        1;
-
-      syncResults.push({
-        post_id:
-          postId,
-
-        status:
-          "deleted",
-      });
-
-      continue;
-    }
-
-    const textChanged =
-      hasTextChanged(
-        log,
-        currentThread
-      );
-
-    await syncPostLogFromThreads(
-      env,
-      entry.key,
-      currentThread
-    );
-
-    if (
-      textChanged
-    ) {
-      updatedCount +=
-        1;
-
-      syncResults.push({
-        post_id:
-          postId,
-
-        status:
-          "updated",
-      });
-    } else {
-      unchangedCount +=
-        1;
-
-      syncResults.push({
-        post_id:
-          postId,
-
-        status:
-          "unchanged",
-      });
-    }
-  }
-
-  const activeEntries =
-    publishedEntries
-      .filter(
-        (
-          entry
-        ) =>
-          threadMap.has(
-            String(
-              entry.log.post_id
-            )
-          )
-      )
-      .slice(
-        0,
-        MAX_POSTS_PER_REFRESH
-      );
-
-  const insightResults =
-    [];
-
-  for (
-    const entry of
-    activeEntries
-  ) {
-    const postId =
-      String(
-        entry.log.post_id
-      );
-
-    const currentThread =
-      threadMap.get(
-        postId
-      );
-
+  const activeEntries = [...new Map(owned.map((entry) => [entry.log.post_id, entry])).values()]
+    .slice(0, MAX_POSTS_PER_REFRESH);
+  const results = [];
+  for (const entry of activeEntries) {
     try {
-      const insights =
-        await getPostInsights(
-          threadsAuth.access_token,
-          postId
-        );
-
-      await putJson(
-        env,
-        `post_insight:${postId}`,
-        {
-          ...insights,
-
-          text:
-            currentThread
-              ?.text ||
-            entry.log.text ||
-            "",
-
-          username:
-            currentThread
-              ?.username ||
-            entry.log.username ||
-            "",
-
-          publishedAt:
-            currentThread
-              ?.timestamp ||
-            entry.log
-              .created_at ||
-            null,
-
-          permalink:
-            currentThread
-              ?.permalink ||
-            null,
-
-          syncedAt:
-            new Date()
-              .toISOString(),
-        }
-      );
-
-      insightResults.push({
-        ok:
-          true,
-
-        post_id:
-          postId,
-
-        insights,
-      });
-    } catch (
-      error
-    ) {
-      if (
-        error instanceof
-        ThreadsInsightsError
-      ) {
-        insightResults.push({
-          ok:
-            false,
-
-          post_id:
-            postId,
-
-          error:
-            error.message,
-
-          details:
-            error.details,
-        });
-
-        continue;
-      }
-
-      insightResults.push({
-        ok:
-          false,
-
-        post_id:
-          postId,
-
-        error:
-          "Unexpected server error",
-      });
+      const insights = await collectPost(env, entry, scope, remotePosts, dependencies);
+      results.push({ ok: true, post_id: entry.log.post_id, insights });
+    } catch (error) {
+      // Preserve the previous observation; failure details must not contain
+      // provider payloads, credentials, or request headers.
+      results.push({ ok: false, post_id: entry.log.post_id, collectionStatus: "failed",
+        error: "Insight refresh failed",
+        code: error instanceof InsightCollectionError ? error.code : "insight_refresh_failed" });
     }
   }
-
-  const refreshed =
-    insightResults.filter(
-      (
-        result
-      ) =>
-        result.ok
-    ).length;
-
-  const failed =
-    insightResults.length -
-    refreshed;
-
+  const refreshed = results.filter((result) => result.ok).length;
   return {
-    threadsFetched:
-      currentThreads.length,
-
-    localPublishedLogs:
-      publishedEntries.length,
-
+    threadsFetched: remotePosts.size,
+    localPublishedLogs: entries.length,
     sync: {
-      deleted:
-        deletedCount,
-
-      updated:
-        updatedCount,
-
-      unchanged:
-        unchangedCount,
-
-      results:
-        syncResults,
+      deleted: 0,
+      updated: syncResults.filter((result) => result.status === "updated").length,
+      unchanged: syncResults.filter((result) => result.status === "unchanged").length,
+      skipped: entries.length - owned.length,
+      results: syncResults,
     },
-
-    insights: {
-      requested:
-        activeEntries.length,
-
-      refreshed,
-
-      failed,
-
-      results:
-        insightResults,
-    },
+    insights: { requested: activeEntries.length, refreshed, failed: results.length - refreshed, results },
   };
 }

@@ -1,20 +1,68 @@
 import { getJson } from "./kv.js";
+import { POST_INSIGHT_METRICS, normalizeInsightMetric, deriveInsightTotals } from "./insights.js";
+import { DEFAULT_WORKSPACE_ID } from "./workspace-foundation.js";
 
 const MAX_PERFORMANCE_POSTS = 30;
 
 function normalizeNumber(value) {
-  const number = Number(value);
+  return normalizeInsightMetric(value);
+}
 
-  return Number.isFinite(number)
-    ? number
-    : 0;
+function normalizeObservation(post, insights) {
+  const empty = {
+    available: false,
+    legacyInsight: false,
+    ownershipVerified: false,
+    collectionStatus: "pending",
+    ...Object.fromEntries(POST_INSIGHT_METRICS.map((name) => [name, null])),
+    interactions: null,
+    engagementRate: null,
+    fetchedAt: null,
+    publishedAt: null,
+  };
+  if (!insights || typeof insights !== "object" || Array.isArray(insights)) return empty;
+  const times = {
+    fetchedAt: typeof insights.fetchedAt === "string" ? insights.fetchedAt : null,
+    publishedAt: typeof insights.publishedAt === "string" ? insights.publishedAt : null,
+  };
+  if (insights.integrityVersion !== 1) {
+    // Old positive values remain readable as unverified legacy data. Historical
+    // zeros may have been fabricated by the old normalizer; never certify them.
+    const legacyMetrics = Object.fromEntries(POST_INSIGHT_METRICS.map((name) => {
+      const value = normalizeNumber(insights[name]);
+      return [name, value > 0 ? value : null];
+    }));
+    return { ...empty, ...times, ...legacyMetrics, legacyInsight: true, collectionStatus: "legacy" };
+  }
+  const nonblank = (value) => typeof value === "string" && Boolean(value.trim());
+  const owned = insights.postId === post.postId &&
+    insights.workspaceId === (post.workspaceId || DEFAULT_WORKSPACE_ID) &&
+    nonblank(insights.connectedAccountId) && nonblank(insights.threadsUserId) &&
+    (!post.connectedAccountId || post.connectedAccountId === insights.connectedAccountId) &&
+    (!post.threadsUserId || post.threadsUserId === insights.threadsUserId);
+  if (!owned) return { ...empty, collectionStatus: "ownership_mismatch" };
+  const metrics = Object.fromEntries(POST_INSIGHT_METRICS.map((name) => [
+    name,
+    insights.metricAvailability?.[name] === true ? normalizeNumber(insights[name]) : null,
+  ]));
+  const validCount = POST_INSIGHT_METRICS.filter((name) => metrics[name] !== null).length;
+  return {
+    ...empty,
+    ...times,
+    ...metrics,
+    ...deriveInsightTotals(metrics),
+    available: validCount > 0,
+    ownershipVerified: true,
+    collectionStatus: validCount === POST_INSIGHT_METRICS.length ? "success" : validCount ? "partial" : "unavailable",
+  };
 }
 
 function normalizeCachedInsights(
   post,
   insights
 ) {
-  if (!insights) {
+  const observation = normalizeObservation(post, insights);
+  if (!observation.available) {
     return {
       postId: post.postId,
       createdAt: post.createdAt,
@@ -58,16 +106,7 @@ function normalizeCachedInsights(
           post.productConnected
         ),
 
-      available: false,
-      views: null,
-      likes: null,
-      replies: null,
-      reposts: null,
-      quotes: null,
-      shares: null,
-      interactions: null,
-      engagementRate: null,
-      fetchedAt: null,
+      ...observation,
     };
   }
 
@@ -113,35 +152,7 @@ function normalizeCachedInsights(
         post.productConnected
       ),
 
-    available: true,
-    views: normalizeNumber(
-      insights.views
-    ),
-    likes: normalizeNumber(
-      insights.likes
-    ),
-    replies: normalizeNumber(
-      insights.replies
-    ),
-    reposts: normalizeNumber(
-      insights.reposts
-    ),
-    quotes: normalizeNumber(
-      insights.quotes
-    ),
-    shares: normalizeNumber(
-      insights.shares
-    ),
-    interactions: normalizeNumber(
-      insights.interactions
-    ),
-    engagementRate: normalizeNumber(
-      insights.engagementRate
-    ),
-    fetchedAt:
-      typeof insights.fetchedAt === "string"
-        ? insights.fetchedAt
-        : null,
+    ...observation,
   };
 }
 
@@ -218,11 +229,13 @@ function buildPerformanceTotals(items) {
 
   for (const metric of PERFORMANCE_METRICS) {
     const values = items
-      .map((item) => Number(item?.[metric]))
-      .filter(Number.isFinite);
+      .map((item) => normalizeNumber(item?.[metric]))
+      .filter((value) => value !== null);
 
     if (values.length) {
       totals[metric] = values.reduce((sum, value) => sum + value, 0);
+    } else {
+      totals[metric] = null;
     }
   }
 
@@ -311,18 +324,10 @@ function summarizeGroup(
       0
     );
 
-  const totalInteractions =
-    items.reduce(
-      (
-        sum,
-        item
-      ) =>
-        sum +
-        normalizeNumber(
-          item.interactions
-        ),
-      0
-    );
+  const interactionValues = items.map((item) => normalizeNumber(item.interactions)).filter((value) => value !== null);
+  const totalInteractions = interactionValues.length
+    ? interactionValues.reduce((sum, value) => sum + value, 0)
+    : null;
 
   const averageViews =
     count > 0
@@ -336,27 +341,10 @@ function summarizeGroup(
         )
       : 0;
 
-  const averageEngagementRate =
-    count > 0
-      ? Number(
-          (
-            items.reduce(
-              (
-                sum,
-                item
-              ) =>
-                sum +
-                normalizeNumber(
-                  item.engagementRate
-                ),
-              0
-            ) /
-            count
-          ).toFixed(
-            2
-          )
-        )
-      : 0;
+  const rates = items.map((item) => normalizeNumber(item.engagementRate)).filter((value) => value !== null);
+  const averageEngagementRate = rates.length
+    ? Number((rates.reduce((sum, value) => sum + value, 0) / rates.length).toFixed(2))
+    : null;
 
   return {
     key,
@@ -405,6 +393,7 @@ function buildGroupedSummary(
           );
         }
 
+        if (first.averageEngagementRate === null || second.averageEngagementRate === null) return 0;
         return (
           second.averageEngagementRate -
           first.averageEngagementRate
@@ -417,13 +406,13 @@ export function buildAnalyticsSummary(
   recentPerformance
 ) {
   const available = recentPerformance.filter(
-    (item) => item.available
+    (item) => item.available && normalizeNumber(item.views) !== null
   );
 
   if (available.length === 0) {
     return {
       totalPosts:       0,
-      averageViews:     0,
+      averageViews:     null,
       bestPost:         null,
       worstPost:        null,
       insightCoverage:  0,
@@ -474,7 +463,7 @@ export function buildAnalyticsSummary(
     worstPost,
 
     insightCoverage:
-      100,
+      Number(((available.length / recentPerformance.length) * 100).toFixed(1)),
 
     byContentType:
       buildGroupedSummary(
@@ -707,9 +696,9 @@ export function buildAnalyticsObservations(
         .interactions
     ) > 0;
 
-  if (
-    !hasInteractions
-  ) {
+  if (normalizeNumber(summary.bestPost?.interactions) === null) {
+    observations.push("반응 지표가 완전히 수집되지 않아 반응 수준을 판단할 수 없습니다.");
+  } else if (!hasInteractions) {
     observations.push(
       "좋아요, 답글, 재게시, 공유 반응이 부족해 현재는 조회수 중심으로 판단해야 합니다."
     );

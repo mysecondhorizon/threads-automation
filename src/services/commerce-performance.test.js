@@ -31,6 +31,8 @@ class MemoryKv {
 const env = { THREADS_KV: new MemoryKv() };
 const metadata = (workspaceId, opportunityId) => ({
   workspaceId,
+  connectedAccountId: "account-a",
+  threadsUserId: "provider-a",
   source: "COMMERCE_MANUAL",
   contentBasis: "PRODUCT_OPPORTUNITY",
   opportunityId,
@@ -64,6 +66,9 @@ assert.deepEqual(await buildProductOpportunityPerformanceSummary(env, posts), {
 
 await logPostSuccess(env, "operator", "insight-post", "Measured Commerce post", metadata("workspace-next", "opportunity-one"));
 await env.THREADS_KV.put("post_insight:insight-post", JSON.stringify({
+  postId: "insight-post", workspaceId: "workspace-next", connectedAccountId: "account-a", threadsUserId: "provider-a",
+  integrityVersion: 1, collectionStatus: "success",
+  metricAvailability: { views:true, likes:true, replies:true, reposts:true, quotes:true, shares:true },
   views: 125,
   likes: 12,
   replies: 3,
@@ -75,6 +80,9 @@ await env.THREADS_KV.put("post_insight:insight-post", JSON.stringify({
 }));
 await logPostSuccess(env, "operator", "aggregate-post", "Another measured Commerce post", metadata("workspace-next", "opportunity-one"));
 await env.THREADS_KV.put("post_insight:aggregate-post", JSON.stringify({
+  postId: "aggregate-post", workspaceId: "workspace-next", connectedAccountId: "account-a", threadsUserId: "provider-a",
+  integrityVersion: 1, collectionStatus: "success",
+  metricAvailability: { views:true, likes:true, replies:true, reposts:true, quotes:true, shares:true },
   views: 75,
   likes: 8,
   replies: 2,

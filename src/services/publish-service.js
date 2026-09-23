@@ -96,6 +96,9 @@ export async function publishOperatorPost({
   // turn an already-successful external post into a caller-visible failure.
   try {
     await logSuccess(env, publishResult.logUsername, publishResult.externalPostId, post.body.trim(), {
+      workspaceId: publishResult.workspaceId || null,
+      connectedAccountId: publishResult.connectedAccountId || null,
+      threadsUserId: publishResult.publisherUserId || null,
       source: "OPERATOR",
       contentMode: "operator_post",
     });

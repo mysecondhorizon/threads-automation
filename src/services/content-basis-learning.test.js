@@ -42,7 +42,7 @@ const userExperienceKey = await logPostSuccess(
   "auto",
   "post-user-experience",
   "A grounded post.",
-  { source:"cron_auto_general", contentBasis:"USER_EXPERIENCE" }
+  { source:"cron_auto_general", contentBasis:"USER_EXPERIENCE", connectedAccountId:"account-a", threadsUserId:"provider-a" }
 );
 const currentTopicKey = await logPostSuccess(
   env,
@@ -81,6 +81,9 @@ const missingKey = await logPostSuccess(
 );
 
 assert.equal((await kv.get(userExperienceKey, "json")).metadata.contentBasis, "USER_EXPERIENCE");
+
+assert.equal((await kv.get(userExperienceKey, "json")).metadata.connectedAccountId, "account-a");
+assert.equal((await kv.get(userExperienceKey, "json")).metadata.threadsUserId, "provider-a");
 assert.equal((await kv.get(currentTopicKey, "json")).metadata.contentBasis, "CURRENT_TOPIC");
 assert.equal((await kv.get(personaKey, "json")).metadata.contentBasis, "PERSONA");
 assert.equal((await kv.get(commerceKey, "json")).metadata.contentBasis, "PRODUCT_OPPORTUNITY");
@@ -93,8 +96,13 @@ assert.equal((await kv.get(missingKey, "json")).metadata.contentBasis, null);
 
 await updatePostLogFirstComment(env, userExperienceKey, { topicApplied:true });
 assert.equal((await kv.get(userExperienceKey, "json")).metadata.contentBasis, "USER_EXPERIENCE");
+assert.equal((await kv.get(userExperienceKey, "json")).metadata.connectedAccountId, "account-a");
+assert.equal((await kv.get(userExperienceKey, "json")).metadata.threadsUserId, "provider-a");
 
 const history = await getPostingHistory(env);
+assert.equal(history.recentSevenDayPosts.find((post) => post.postId === "post-user-experience").connectedAccountId, "account-a");
+assert.equal(history.recentSevenDayPosts.find((post) => post.postId === "post-user-experience").threadsUserId, "provider-a");
+assert.equal(history.recentSevenDayPosts.find((post) => post.postId === "post-missing").threadsUserId, null);
 assert.equal(
   history.recentSevenDayPosts.find((post) => post.postId === "post-user-experience").contentBasis,
   "USER_EXPERIENCE"
@@ -121,10 +129,17 @@ assert.equal(
   null
 );
 
-await kv.put("post_insight:post-current-topic", JSON.stringify({ views:100, interactions:10 }));
-await kv.put("post_insight:post-user-experience", JSON.stringify({ views:200, interactions:30 }));
-await kv.put("post_insight:post-persona", JSON.stringify({ views:300, interactions:50 }));
-await kv.put("post_insight:post-commerce", JSON.stringify({ views:125, interactions:15 }));
+for (const [postId, views, likes] of [
+  ["post-current-topic", 100, 10], ["post-user-experience", 200, 30],
+  ["post-persona", 300, 50], ["post-commerce", 125, 15],
+]) {
+  await kv.put(`post_insight:${postId}`, JSON.stringify({
+    postId, workspaceId:"default-workspace", connectedAccountId:"account-a", threadsUserId:"provider-a",
+    integrityVersion:1, collectionStatus:"success",
+    metricAvailability:{ views:true, likes:true, replies:true, reposts:true, quotes:true, shares:true },
+    views, likes, replies:0, reposts:0, quotes:0, shares:0,
+  }));
+}
 await kv.put("post_insight:post-legacy", JSON.stringify({ views:400, interactions:60 }));
 const commerceHistoryPost = history.recentSevenDayPosts.find((post) => post.postId === "post-commerce");
 const commercePerformance = await buildRecentPerformance(env, [commerceHistoryPost]);
@@ -141,8 +156,8 @@ assert.equal(performance.find((item) => item.postId === "post-no-insight").conte
 
 const summary = buildAnalyticsSummary(performance);
 assert.deepEqual(summary.byContentBasis, [
-  { key:"USER_EXPERIENCE", count:2, totalViews:500, totalInteractions:80, averageViews:250, averageEngagementRate:0 },
-  { key:"CURRENT_TOPIC", count:1, totalViews:100, totalInteractions:10, averageViews:100, averageEngagementRate:0 },
+  { key:"USER_EXPERIENCE", count:2, totalViews:500, totalInteractions:80, averageViews:250, averageEngagementRate:15.84 },
+  { key:"CURRENT_TOPIC", count:1, totalViews:100, totalInteractions:10, averageViews:100, averageEngagementRate:10 },
 ]);
 assert.deepEqual(buildAnalyticsSummary([]).byContentBasis, []);
 

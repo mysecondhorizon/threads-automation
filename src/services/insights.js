@@ -1,6 +1,6 @@
 import { config } from "../config.js";
 
-const POST_INSIGHT_METRICS = [
+export const POST_INSIGHT_METRICS = [
   "views",
   "likes",
   "replies",
@@ -17,11 +17,30 @@ export class ThreadsInsightsError extends Error {
   }
 }
 
-function normalizeInsights(data) {
-  const metrics = {};
+export function normalizeInsightMetric(value) {
+  if (typeof value !== "number" && (typeof value !== "string" || !value.trim())) return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
 
-  for (const item of data.data || []) {
-    if (!item?.name) {
+export function deriveInsightTotals(metrics) {
+  const components = POST_INSIGHT_METRICS.filter((name) => name !== "views")
+    .map((name) => normalizeInsightMetric(metrics[name]));
+  const total = components.every((value) => value !== null)
+    ? components.reduce((sum, value) => sum + value, 0)
+    : null;
+  const interactions = Number.isFinite(total) ? total : null;
+  const views = normalizeInsightMetric(metrics.views);
+  const rate = views > 0 && interactions !== null ? (interactions / views) * 100 : null;
+  const engagementRate = Number.isFinite(rate) ? Number(rate.toFixed(2)) : null;
+  return { interactions, engagementRate };
+}
+
+function normalizeInsights(data) {
+  const metrics = Object.fromEntries(POST_INSIGHT_METRICS.map((name) => [name, null]));
+
+  for (const item of Array.isArray(data?.data) ? data.data : []) {
+    if (!POST_INSIGHT_METRICS.includes(item?.name)) {
       continue;
     }
 
@@ -32,16 +51,9 @@ function normalizeInsights(data) {
     const rawValue =
       valueItem?.value ??
       item.total_value?.value ??
-      item.value ??
-      0;
+      item.value;
 
-    metrics[item.name] = Number(rawValue) || 0;
-  }
-
-  for (const metric of POST_INSIGHT_METRICS) {
-    if (!(metric in metrics)) {
-      metrics[metric] = 0;
-    }
+    metrics[item.name] = normalizeInsightMetric(rawValue);
   }
 
   return metrics;
@@ -89,28 +101,16 @@ export async function getPostInsights(
 
   const metrics = normalizeInsights(data);
 
-  const interactions =
-    metrics.likes +
-    metrics.replies +
-    metrics.reposts +
-    metrics.quotes +
-    metrics.shares;
-
-  const engagementRate =
-    metrics.views > 0
-      ? Number(
-          (
-            (interactions / metrics.views) *
-            100
-          ).toFixed(2)
-        )
-      : 0;
+  const metricAvailability = Object.fromEntries(POST_INSIGHT_METRICS.map((name) => [name, metrics[name] !== null]));
+  const validCount = Object.values(metricAvailability).filter(Boolean).length;
 
   return {
     postId,
+    integrityVersion: 1,
+    collectionStatus: validCount === POST_INSIGHT_METRICS.length ? "success" : validCount ? "partial" : "unavailable",
+    metricAvailability,
     ...metrics,
-    interactions,
-    engagementRate,
+    ...deriveInsightTotals(metrics),
     fetchedAt: new Date().toISOString(),
   };
 }

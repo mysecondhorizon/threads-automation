@@ -1,5 +1,5 @@
-import { getJson, listKeys } from "./kv.js";
 import { getPostLogs } from "./logger.js";
+import { buildRecentPerformance } from "./analytics.js";
 
 export async function getDashboardData(env) {
   const logs = await getPostLogs(env);
@@ -10,50 +10,23 @@ export async function getDashboardData(env) {
       log?.post_id
   );
 
-  const insightKeyList = await listKeys(
-    env,
-    "post_insight:"
-  );
-
-  const insightItems = await Promise.all(
-    insightKeyList.keys.map((item) =>
-      getJson(env, item.name)
-    )
-  );
-
-  const insightMap = new Map();
-
-  for (const insight of insightItems) {
-    if (insight?.postId) {
-      insightMap.set(
-        String(insight.postId),
-        insight
-      );
-    }
-  }
-
-  const posts = publishedLogs.map((log) => {
-    const insight =
-      insightMap.get(String(log.post_id)) || {};
-
+  // Reuse the same ownership and metric-validity rules as analytics.
+  const performance = await buildRecentPerformance(env, publishedLogs.map((log) => ({
+    postId: log.post_id,
+    workspaceId: log.metadata?.workspaceId,
+    connectedAccountId: log.metadata?.connectedAccountId,
+    threadsUserId: log.metadata?.threadsUserId,
+    text: log.text || "",
+    createdAt: log.created_at || null,
+  })), { limit: publishedLogs.length });
+  const posts = publishedLogs.map((log, index) => {
+    const insight = performance[index];
     return {
+      ...insight,
       postId: log.post_id,
       text: log.text || "",
       username: log.username || "",
-      publishedAt: log.created_at || null,
-
-      views: Number(insight.views) || 0,
-      likes: Number(insight.likes) || 0,
-      replies: Number(insight.replies) || 0,
-      reposts: Number(insight.reposts) || 0,
-      quotes: Number(insight.quotes) || 0,
-      shares: Number(insight.shares) || 0,
-
-      interactions:
-        Number(insight.interactions) || 0,
-
-      engagementRate:
-        Number(insight.engagementRate) || 0,
+      publishedAt: insight.publishedAt || log.created_at || null,
 
       insightsFetchedAt:
         insight.fetchedAt || null,
@@ -61,49 +34,53 @@ export async function getDashboardData(env) {
   });
 
   const postsWithInsights = posts.filter(
-    (post) => post.insightsFetchedAt
+    (post) => post.available
   );
 
-  const totalViews = posts.reduce(
+  const viewPosts = postsWithInsights.filter((post) => post.views !== null);
+  const interactionPosts = postsWithInsights.filter((post) => post.interactions !== null);
+  const ratePosts = postsWithInsights.filter((post) => post.engagementRate !== null);
+  const totalViews = viewPosts.length ? viewPosts.reduce(
     (sum, post) => sum + post.views,
     0
-  );
+  ) : null;
 
-  const totalInteractions = posts.reduce(
+  const totalInteractions = interactionPosts.length ? interactionPosts.reduce(
     (sum, post) =>
       sum + post.interactions,
     0
-  );
+  ) : null;
 
   const averageViews =
-    postsWithInsights.length > 0
+    viewPosts.length > 0
       ? Math.round(
           totalViews /
-            postsWithInsights.length
+            viewPosts.length
         )
-      : 0;
+      : null;
 
   const averageEngagementRate =
-    postsWithInsights.length > 0
+    ratePosts.length > 0
       ? Number(
           (
-            postsWithInsights.reduce(
+            ratePosts.reduce(
               (sum, post) =>
                 sum +
                 post.engagementRate,
               0
             ) /
-            postsWithInsights.length
+            ratePosts.length
           ).toFixed(2)
         )
-      : 0;
+      : null;
 
-  const topPosts = [...posts]
+  const topPosts = [...viewPosts]
     .sort((a, b) => {
       if (b.views !== a.views) {
         return b.views - a.views;
       }
 
+      if (a.engagementRate === null || b.engagementRate === null) return 0;
       return (
         b.engagementRate -
         a.engagementRate

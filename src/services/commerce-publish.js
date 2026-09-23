@@ -80,7 +80,9 @@ export async function publishCommerceContent(env, {
   // An external post is already successful even if observability storage fails.
   try {
     await logSuccess(env, published.logUsername, published.externalPostId, text, {
-      workspaceId,
+      workspaceId: published.workspaceId || workspaceId,
+      connectedAccountId: published.connectedAccountId || null,
+      threadsUserId: published.publisherUserId || null,
       source: "COMMERCE_MANUAL",
       contentMode: "commerce_manual",
       contentBasis: "PRODUCT_OPPORTUNITY",

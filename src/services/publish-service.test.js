@@ -52,6 +52,9 @@ await publishOperatorPost({
               provider: "THREADS",
               externalPostId: "threads-scoped",
               logUsername: "operator",
+              workspaceId: "workspace-a",
+              connectedAccountId: "threads-account-a",
+              publisherUserId: "provider-a",
             };
           },
         },
@@ -60,6 +63,9 @@ await publishOperatorPost({
   },
 });
 assert.deepEqual(receivedExecutionContext, executionContext);
+assert.equal(calls.at(-1).metadata.workspaceId, "workspace-a");
+assert.equal(calls.at(-1).metadata.connectedAccountId, "threads-account-a");
+assert.equal(calls.at(-1).metadata.threadsUserId, "provider-a");
 
 await assert.rejects(
   publishOperatorPost({ env: {}, post: { ...post, targetApp: "missing" }, dependencies }),

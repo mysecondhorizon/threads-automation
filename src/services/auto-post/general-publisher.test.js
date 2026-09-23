@@ -13,7 +13,7 @@ function dependencies(overrides = {}) {
       },
       async getThreadsCredentialForAccount(_env, options) {
         assert.deepEqual(options, {});
-        return { credential: { access_token: "token" } };
+        return { account:{ id:"account-default", workspaceId:"default-workspace" }, credential: { access_token: "token" } };
       },
       async getThreadsProfile(token) { assert.equal(token, "token"); return { id: "user-1", username: "auto" }; },
       async publishTextPost(token, userId, text) { calls.push({ mode: "TEXT", token, userId, text }); return { postId: "text-1" }; },
@@ -30,12 +30,15 @@ function dependencies(overrides = {}) {
 
 const text = dependencies();
 const textResult = await publishGeneralAutoPost({}, {
-  accessToken: "token", text: "same text", metadata: { source: "cron_auto_general", contentBasis: "USER_EXPERIENCE" }, dependencies: text.value,
+  accessToken: "token", text: "same text", metadata: { source: "cron_auto_general", contentBasis: "USER_EXPERIENCE", workspaceId:"spoof", connectedAccountId:"spoof", threadsUserId:"spoof" }, dependencies: text.value,
 });
 assert.equal(textResult.publishResult.postId, "text-1");
 assert.deepEqual(text.calls.filter((call) => call.mode === "TEXT"), [{ mode: "TEXT", token: "token", userId: "user-1", text: "same text" }]);
 assert.equal(text.calls.find((call) => call.mode === "LOG").metadata.publishMode, "TEXT");
 assert.equal(text.calls.find((call) => call.mode === "LOG").metadata.contentBasis, "USER_EXPERIENCE");
+assert.equal(text.calls.find((call) => call.mode === "LOG").metadata.workspaceId, "default-workspace");
+assert.equal(text.calls.find((call) => call.mode === "LOG").metadata.connectedAccountId, "account-default");
+assert.equal(text.calls.find((call) => call.mode === "LOG").metadata.threadsUserId, "user-1");
 
 const image = dependencies();
 const imageResult = await publishGeneralAutoPost({ env: "image" }, {

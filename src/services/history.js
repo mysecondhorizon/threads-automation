@@ -135,6 +135,14 @@ function normalizePublishedPost(
       typeof metadata.workspaceId === "string" && metadata.workspaceId.trim()
         ? metadata.workspaceId.trim()
         : DEFAULT_WORKSPACE_ID,
+    connectedAccountId:
+      typeof metadata.connectedAccountId === "string" && metadata.connectedAccountId.trim()
+        ? metadata.connectedAccountId.trim()
+        : null,
+    threadsUserId:
+      typeof metadata.threadsUserId === "string" && metadata.threadsUserId.trim()
+        ? metadata.threadsUserId.trim()
+        : null,
     postId:
       typeof log.post_id ===
       "string"

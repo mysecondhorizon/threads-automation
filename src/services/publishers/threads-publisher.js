@@ -43,6 +43,7 @@ export const threadsPublisher = {
       });
     }
     let auth;
+    let account;
     try {
       const resolved = await resolveCredential(
         env,
@@ -55,6 +56,7 @@ export const threadsPublisher = {
           : {}
       );
       auth = resolved?.credential;
+      account = resolved?.account;
     } catch {
       throw new ThreadsPublisherError("Threads account is not connected", {
         code: "threads_auth_missing",
@@ -84,6 +86,8 @@ export const threadsPublisher = {
         // Internal log context only. It is not returned from the operator API.
         logUsername: profile.username,
         publisherUserId: profile.id,
+        workspaceId: account?.workspaceId || null,
+        connectedAccountId: account?.id || null,
       };
     } catch (error) {
       console.error("Threads publisher adapter failed", {
