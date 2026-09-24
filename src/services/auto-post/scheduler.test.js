@@ -49,7 +49,7 @@ try {
       services: {
         async syncThreadsData(_env, options) {
           calls.push("sync");
-          assert.deepEqual(options, { workspaceId:"workspace-a", executionContext });
+          assert.deepEqual(options, { workspaceId:"workspace-a", executionContext, automatic:true });
           if (refreshFails) throw new Error("fixture refresh failure");
           return { sync:{ deleted:0 }, insights:{ refreshed:1 } };
         },
@@ -64,6 +64,30 @@ try {
     assert.deepEqual(calls, ["sync", "execute"]);
     assert.equal(result.sync === null, refreshFails);
   }
+  const values = new Map();
+  const legacyEnv = { THREADS_KV: {
+    async get(key, type) { const value = values.get(key); return value === undefined ? null : type === "json" ? JSON.parse(value) : value; },
+    async put(key, value) { values.set(key, value); },
+    async list() { return { keys: [] }; },
+  } };
+  const legacyCalls = [];
+  const legacyResult = await runScheduledAutoPost(legacyEnv, {
+    cron: "10 23 * * *",
+    services: {
+      async syncThreadsData(_env, options) {
+        legacyCalls.push("sync");
+        assert.deepEqual(options, { automatic: true });
+        return { sync: { deleted: 0 }, insights: { refreshed: 0 } };
+      },
+      async executeAutoPost(_env, options) {
+        legacyCalls.push("execute");
+        assert.deepEqual(options, { source: "cron_auto_general", generalOnly: true, workspaceId: null, executionContext: null });
+        return { executionId: "legacy-fixture", post_id: "legacy-post", source: "cron_auto_general" };
+      },
+    },
+  });
+  assert.equal(legacyResult.ok, true);
+  assert.deepEqual(legacyCalls, ["sync", "execute"]);
 } finally {
   globalThis.fetch = realFetch;
 }

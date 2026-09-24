@@ -325,42 +325,47 @@ export async function logPostFailure(
 }
 
 export async function getPostLogEntries(
-  env
+  env,
+  { paginate = false } = {}
 ) {
-  const list =
+  let list =
     await listKeys(
       env,
       "post_log:"
     );
+  const keys = [...list.keys];
+  const cursors = new Set();
+  // Insight candidate discovery must not stop at the first KV page (which
+  // can even be empty). Other callers keep their existing enumeration mode.
+  while (paginate && list.list_complete === false) {
+    if (!list.cursor || cursors.has(list.cursor)) throw new Error("Post log pagination unavailable");
+    cursors.add(list.cursor);
+    list = await env.THREADS_KV.list({ prefix: "post_log:", cursor: list.cursor });
+    keys.push(...list.keys);
+  }
 
-  const entries =
-    await Promise.all(
-      list.keys.map(
-        async (
-          item
-        ) => {
-          const log =
-            await getJson(
-              env,
-              item.name
-            );
-
-          if (!log) {
-            return null;
-          }
-
-          return {
-            key:
-              item.name,
-
-            log,
-          };
-        }
-      )
-    );
+  const entries = [];
+  if (paginate) {
+    // Cloudflare KV bulk reads support at most 100 keys and count as one
+    // external operation. Keep this optimization scoped to insight discovery.
+    for (let index = 0; index < keys.length; index += 100) {
+      const batch = keys.slice(index, index + 100);
+      const names = batch.map((item) => item.name);
+      const values = await env.THREADS_KV.get(names, "json");
+      // Older local test doubles may only implement scalar get(). Production
+      // KV returns a Map for an array request.
+      if (!values || typeof values.get !== "function") {
+        entries.push(...await Promise.all(batch.map(async (item) => ({ key: item.name, log: await getJson(env, item.name) }))));
+        continue;
+      }
+      entries.push(...batch.map((item) => ({ key: item.name, log: values.get(item.name) })));
+    }
+  } else {
+    entries.push(...await Promise.all(keys.map(async (item) => ({ key: item.name, log: await getJson(env, item.name) }))));
+  }
 
   return entries
-    .filter(Boolean)
+    .filter((entry) => entry?.log)
     .sort(
       (
         first,

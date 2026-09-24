@@ -382,7 +382,7 @@ export async function runScheduledAutoPost(
     let syncResult;
     if (workspaceId) {
       try {
-        syncResult = await sync(env, { workspaceId, executionContext });
+        syncResult = await sync(env, { workspaceId, executionContext, automatic: true });
       } catch {
         // Newly enabled measurement must not prevent an otherwise valid
         // Workspace publishing run; the collector preserves earlier insights.
@@ -390,7 +390,7 @@ export async function runScheduledAutoPost(
         syncResult = null;
       }
     } else {
-      syncResult = await sync(env);
+      syncResult = await sync(env, { automatic: true });
     }
 
     console.log(
