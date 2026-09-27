@@ -385,6 +385,81 @@ export async function getPostLogEntries(
     );
 }
 
+// Attribution needs a unique, exact-scope success from a COMPLETE scan. The
+// legacy post_log key has no scope segment, so this bounded reader must filter
+// stored identities after reading; it never applies Default Workspace fallback.
+export async function getScopedSuccessfulPostLog(env, identity) {
+  const discovery = { scannedKeys: 0, listCalls: 0, bulkReadCalls: 0 };
+  const unavailable = (reason) => ({ available: false, reason, entry: null, discovery });
+  const fields = ["workspaceId", "connectedAccountId", "threadsUserId", "postId"];
+  if (!fields.every((field) => typeof identity?.[field] === "string" && identity[field].trim())) {
+    return unavailable("invalid_log_identity");
+  }
+  const seenKeys = new Set();
+  const cursors = new Set();
+  let cursor;
+  let match = null;
+  let matchCount = 0;
+  while (true) {
+    if (discovery.listCalls >= 20) return unavailable("log_list_budget_exceeded");
+    let page;
+    try {
+      discovery.listCalls += 1;
+      page = await env.THREADS_KV.list({ prefix: "post_log:", limit: 1000, ...(cursor ? { cursor } : {}) });
+    } catch {
+      return unavailable("log_list_failed");
+    }
+    if (!Array.isArray(page?.keys) || typeof page.list_complete !== "boolean") {
+      return unavailable("log_pagination_invalid");
+    }
+    discovery.scannedKeys += page.keys.length;
+    if (discovery.scannedKeys > 5000) return unavailable("log_key_budget_exceeded");
+    const names = [];
+    for (const key of page.keys) {
+      const name = key?.name;
+      if (typeof name !== "string" || !name.startsWith("post_log:") || seenKeys.has(name)) {
+        return unavailable("log_pagination_invalid");
+      }
+      seenKeys.add(name);
+      names.push(name);
+    }
+    for (let start = 0; start < names.length; start += 100) {
+      if (discovery.bulkReadCalls >= 50) return unavailable("log_bulk_budget_exceeded");
+      const batch = names.slice(start, start + 100);
+      let values;
+      try {
+        discovery.bulkReadCalls += 1;
+        values = await env.THREADS_KV.get(batch, "json");
+      } catch {
+        return unavailable("log_bulk_read_failed");
+      }
+      // A listed key that disappears or cannot be read prevents proving
+      // uniqueness. Do not silently treat unreadable records as non-matches.
+      if (!(values instanceof Map) || batch.some((name) => {
+        const value = values.get(name);
+        return !value || typeof value !== "object" || Array.isArray(value);
+      })) return unavailable("log_bulk_read_failed");
+      for (const key of batch) {
+        const log = values.get(key);
+        if (log.status !== "published" || log.post_id !== identity.postId ||
+            !fields.slice(0, 3).every((field) => log.metadata?.[field] === identity[field])) continue;
+        matchCount += 1;
+        if (matchCount === 1) match = { key, log };
+      }
+    }
+    if (page.list_complete) {
+      if (!matchCount) return unavailable("published_log_not_found");
+      if (matchCount !== 1) return unavailable("published_log_ambiguous");
+      return { available: true, reason: null, entry: match, discovery };
+    }
+    if (typeof page.cursor !== "string" || !page.cursor.trim() || cursors.has(page.cursor)) {
+      return unavailable("log_pagination_invalid");
+    }
+    cursors.add(page.cursor);
+    cursor = page.cursor;
+  }
+}
+
 export async function updatePostLog(
   env,
   key,
