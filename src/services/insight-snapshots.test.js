@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { saveInsightSnapshot, getInsightSnapshot, insightObservationWindow, observationAgeSeconds } from "./insight-snapshots.js";
+import { saveInsightSnapshot, getInsightSnapshot, listAccountInsightSnapshots, insightObservationWindow, observationAgeSeconds } from "./insight-snapshots.js";
 import { syncThreadsData, refreshScopedPostInsights } from "./threads-sync.js";
 import { getPostLogEntries } from "./logger.js";
 import { POST_INSIGHT_METRICS, deriveInsightTotals } from "./insights.js";
@@ -102,6 +102,21 @@ try {
   assert.equal(partialSnapshot.metricAvailability.shares, false);
   assert.equal(partialSnapshot.likes, 0);
   assert.equal(partialSnapshot.interactions, null);
+  // Discovery and direct reads share stored validation/normalization. Select
+  // only the requested window, including valid partial/zero snapshots.
+  const discoveryWrites = env.THREADS_KV.writes.length;
+  const discovered = await listAccountInsightSnapshots(env, owner, "D1");
+  assert.equal(discovered.available, true);
+  assert.deepEqual(discovered.snapshots, [snapshot, partialSnapshot]);
+  assert.equal(env.THREADS_KV.writes.length, discoveryWrites);
+  const d3Discovered = await listAccountInsightSnapshots(env, owner, "D3");
+  assert.deepEqual(d3Discovered.snapshots, [await getInsightSnapshot(env, first, "D3")]);
+  assert.deepEqual((await listAccountInsightSnapshots(env, { ...owner, workspaceId: "other" }, "D1")).snapshots, []);
+  for (const [scope, window] of [[{ ...owner, connectedAccountId: null }, "D1"], [owner, "unknown"]]) {
+    const invalidScope = await listAccountInsightSnapshots(env, scope, window);
+    assert.equal(invalidScope.available, false);
+    assert.equal(invalidScope.listCalls, 0);
+  }
   for (const overrides of [{ collectionStatus: "failed" }, { collectionStatus: "unavailable" }, { integrityVersion: 0 },
     { metricAvailability: {} }, { publishedAt: null }, { publishedAt: "bad" }, { fetchedAt: null },
     { ownershipSource: "guessed" }, { workspaceId: "" }, { threadsUserId: null },

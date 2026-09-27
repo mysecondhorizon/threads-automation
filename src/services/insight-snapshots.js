@@ -50,14 +50,79 @@ function normalizeSnapshot(observation) {
   };
 }
 
-export async function getInsightSnapshot(env, identity, windowId) {
-  const key = snapshotKey(identity, windowId);
-  if (!key) return null;
-  const stored = await getJson(env, key);
+function normalizeStoredSnapshot(stored, identity, windowId) {
   if (stored?.schemaVersion !== 1 || stored.windowId !== windowId ||
       !IDENTITY_FIELDS.every((field) => stored[field] === identity[field])) return null;
   const snapshot = normalizeSnapshot(stored);
   return snapshot?.windowId === windowId ? snapshot : null;
+}
+
+export async function getInsightSnapshot(env, identity, windowId) {
+  const key = snapshotKey(identity, windowId);
+  if (!key) return null;
+  return normalizeStoredSnapshot(await getJson(env, key), identity, windowId);
+}
+
+// Complete account discovery only: a failed/budget-limited scan never exposes
+// the subset already read. Budgets also bound empty/repeating pagination.
+export async function listAccountInsightSnapshots(env, identity, windowId) {
+  const counts = { scannedKeys: 0, listCalls: 0, bulkReadCalls: 0 };
+  const unavailable = (reason) => ({ available: false, reason, snapshots: [], ...counts });
+  const probe = snapshotKey({ ...identity, postId: "probe" }, windowId);
+  if (!probe) return unavailable("invalid_snapshot_scope");
+  const prefix = probe.slice(0, -`probe:${windowId}`.length);
+  const snapshots = [];
+  const seenKeys = new Set();
+  const cursors = new Set();
+  let cursor;
+  while (true) {
+    if (counts.listCalls >= 20) return unavailable("snapshot_list_budget_exceeded");
+    let page;
+    try {
+      counts.listCalls += 1;
+      page = await env.THREADS_KV.list({ prefix, limit: 1000, ...(cursor ? { cursor } : {}) });
+    } catch {
+      return unavailable("snapshot_list_failed");
+    }
+    if (!Array.isArray(page?.keys) || typeof page.list_complete !== "boolean" ||
+        page.keys.some((key) => typeof key?.name !== "string")) return unavailable("snapshot_pagination_invalid");
+    counts.scannedKeys += page.keys.length;
+    if (counts.scannedKeys > 5000) return unavailable("snapshot_key_budget_exceeded");
+
+    const candidates = [];
+    for (const { name } of page.keys) {
+      if (!name.startsWith(prefix) || seenKeys.has(name)) continue;
+      seenKeys.add(name);
+      const parts = name.slice(prefix.length).split(":");
+      if (parts.length !== 2 || parts[1] !== windowId) continue;
+      let postId;
+      try { postId = decodeURIComponent(parts[0]); } catch { continue; }
+      const expected = { ...identity, postId };
+      if (snapshotKey(expected, windowId) === name) candidates.push({ name, identity: expected });
+    }
+    for (let start = 0; start < candidates.length; start += 100) {
+      if (counts.bulkReadCalls >= 50) return unavailable("snapshot_bulk_budget_exceeded");
+      const batch = candidates.slice(start, start + 100);
+      let values;
+      try {
+        counts.bulkReadCalls += 1;
+        values = await env.THREADS_KV.get(batch.map((item) => item.name), "json");
+      } catch {
+        return unavailable("snapshot_bulk_read_failed");
+      }
+      if (!(values instanceof Map) || batch.some((item) => !values.has(item.name))) {
+        return unavailable("snapshot_bulk_read_failed");
+      }
+      for (const item of batch) {
+        const snapshot = normalizeStoredSnapshot(values.get(item.name), item.identity, windowId);
+        if (snapshot) snapshots.push(snapshot);
+      }
+    }
+    if (page.list_complete) return { available: true, reason: null, snapshots, ...counts };
+    if (!nonblank(page.cursor) || cursors.has(page.cursor)) return unavailable("snapshot_pagination_invalid");
+    cursors.add(page.cursor);
+    cursor = page.cursor;
+  }
 }
 
 // Only fresh, server-owned collection observations are passed here. No cache
