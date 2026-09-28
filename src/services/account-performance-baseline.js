@@ -31,6 +31,9 @@ function quantile(values, p) {
   return values[lower] + (values[Math.ceil(position)] - values[lower]) * fraction;
 }
 
+// Aggregation reuses the same sorted-value interpolation and baseline policy.
+export { quantile as performanceQuantile, POLICY as ACCOUNT_BASELINE_POLICY };
+
 function summarize(values, target) {
   values.sort((a, b) => a - b);
   const enough = values.length >= POLICY.minimumValidSamples;

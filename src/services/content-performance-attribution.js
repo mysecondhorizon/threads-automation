@@ -3,6 +3,7 @@ import { getScopedSuccessfulPostLog } from "./logger.js";
 import { buildPerformanceDimensions } from "./performance-dimensions.js";
 import { getAccountPerformanceBaseline } from "./account-performance-baseline.js";
 import { POST_INSIGHT_METRICS } from "./insights.js";
+import { snapshotKey } from "./insight-snapshots.js";
 
 const IDENTITY_FIELDS = ["workspaceId", "connectedAccountId", "threadsUserId", "postId"];
 const CONTENT_BASES = ["CURRENT_TOPIC", "USER_EXPERIENCE", "PERSONA", "CONTENT_POOL", "PRODUCT_OPPORTUNITY"];
@@ -108,12 +109,45 @@ function projectPerformance(dimensions, comparison) {
 
 // Internal read-only service; callers must authorize the requested account.
 // No history projection, latest insight fallback, source-store reads or writes.
+export function validateAttributionIdentity(identity, windowId) {
+  if (!IDENTITY_FIELDS.every((field) => typeof identity?.[field] === "string" && identity[field].trim())) {
+    return "invalid_attribution_identity";
+  }
+  return ["D1", "D3"].includes(windowId) ? null : "invalid_attribution_window";
+}
+
+export function inspectAttributionSnapshot(snapshot, identity, windowId) {
+  const invalid = validateAttributionIdentity(identity, windowId);
+  if (invalid) return { reason: invalid, dimensions: null };
+  if (!snapshot) return { reason: "snapshot_not_found", dimensions: null };
+  if (snapshot.windowId !== windowId || !IDENTITY_FIELDS.every((field) => snapshot[field] === identity[field])) {
+    return { reason: "snapshot_identity_mismatch", dimensions: null };
+  }
+  const dimensions = buildPerformanceDimensions(snapshot);
+  return { reason: dimensions ? null : "invalid_trusted_snapshot", dimensions };
+}
+
+// Internal composition only: entry comes from completed unique-log discovery,
+// dimensions from inspectAttributionSnapshot, comparison from LEARNING-05.
+export function composeContentPerformanceAttribution(entry, dimensions, comparison, discovery) {
+  return {
+    available: true, reason: null, discovery,
+    attribution: {
+      schemaVersion: 1,
+      identity: Object.fromEntries(IDENTITY_FIELDS.map((field) => [field, dimensions.observation[field]])),
+      observation: {
+        ...dimensions.observation,
+        metricAvailability: Object.fromEntries(POST_INSIGHT_METRICS.map((name) => [name, dimensions.observation.metricAvailability[name]])),
+      },
+      provenance: projectProvenance(entry), performance: projectPerformance(dimensions, comparison),
+    },
+  };
+}
+
 export async function getContentPerformanceAttribution(env, identity, windowId) {
   const unavailable = (reason, discovery = null) => ({ available: false, reason, attribution: null, discovery });
-  if (!IDENTITY_FIELDS.every((field) => typeof identity?.[field] === "string" && identity[field].trim())) {
-    return unavailable("invalid_attribution_identity");
-  }
-  if (!["D1", "D3"].includes(windowId)) return unavailable("invalid_attribution_window");
+  const invalid = validateAttributionIdentity(identity, windowId);
+  if (invalid) return unavailable(invalid);
   const scope = Object.fromEntries(IDENTITY_FIELDS.map((field) => [field, identity[field]]));
   const log = await getScopedSuccessfulPostLog(env, scope);
   if (!log.available) return unavailable(log.reason, log.discovery);
@@ -122,27 +156,12 @@ export async function getContentPerformanceAttribution(env, identity, windowId) 
     // Same v1 key as insight-snapshots.js. Read the raw record deliberately:
     // getInsightSnapshot normalizes stored totals/ages, while attribution must
     // reject an invalid trusted target rather than repair it during the read.
-    const key = `post_insight_snapshot:v1:${IDENTITY_FIELDS.map((field) => encodeURIComponent(scope[field])).join(":")}:${windowId}`;
-    snapshot = await getJson(env, key);
+    snapshot = await getJson(env, snapshotKey(scope, windowId));
   } catch {
     return unavailable("snapshot_read_failed", log.discovery);
   }
-  if (!snapshot) return unavailable("snapshot_not_found", log.discovery);
-  if (snapshot.windowId !== windowId || !IDENTITY_FIELDS.every((field) => snapshot[field] === scope[field])) {
-    return unavailable("snapshot_identity_mismatch", log.discovery);
-  }
-  const dimensions = buildPerformanceDimensions(snapshot);
-  if (!dimensions) return unavailable("invalid_trusted_snapshot", log.discovery);
+  const { reason, dimensions } = inspectAttributionSnapshot(snapshot, scope, windowId);
+  if (reason) return unavailable(reason, log.discovery);
   const comparison = await getAccountPerformanceBaseline(env, snapshot);
-  return {
-    available: true, reason: null, discovery: log.discovery,
-    attribution: {
-      schemaVersion: 1, identity: scope,
-      observation: {
-        ...dimensions.observation,
-        metricAvailability: Object.fromEntries(POST_INSIGHT_METRICS.map((name) => [name, dimensions.observation.metricAvailability[name]])),
-      },
-      provenance: projectProvenance(log.entry), performance: projectPerformance(dimensions, comparison),
-    },
-  };
+  return composeContentPerformanceAttribution(log.entry, dimensions, comparison, log.discovery);
 }

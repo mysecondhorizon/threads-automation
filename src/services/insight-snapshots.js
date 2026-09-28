@@ -18,7 +18,7 @@ export function insightObservationWindow(publishedAt, observedAt) {
   return Object.keys(WINDOWS).find((id) => age >= WINDOWS[id][0] && age < WINDOWS[id][1]) || null;
 }
 
-function snapshotKey(identity, windowId) {
+export function snapshotKey(identity, windowId) {
   if (!Object.hasOwn(WINDOWS, windowId) || !IDENTITY_FIELDS.every((field) => nonblank(identity?.[field]))) return null;
   return `post_insight_snapshot:v1:${IDENTITY_FIELDS.map((field) => encodeURIComponent(identity[field])).join(":")}:${windowId}`;
 }
@@ -65,8 +65,10 @@ export async function getInsightSnapshot(env, identity, windowId) {
 
 // Complete account discovery only: a failed/budget-limited scan never exposes
 // the subset already read. Budgets also bound empty/repeating pagination.
-export async function listAccountInsightSnapshots(env, identity, windowId) {
+export async function listAccountInsightSnapshots(env, identity, windowId, { strictDiscovery = false } = {}) {
   const counts = { scannedKeys: 0, listCalls: 0, bulkReadCalls: 0 };
+  // Opt-in for aggregation only; existing single/baseline contracts stay intact.
+  if (strictDiscovery) counts.invalidSnapshotCount = 0;
   const unavailable = (reason) => ({ available: false, reason, snapshots: [], ...counts });
   const probe = snapshotKey({ ...identity, postId: "probe" }, windowId);
   if (!probe) return unavailable("invalid_snapshot_scope");
@@ -91,7 +93,14 @@ export async function listAccountInsightSnapshots(env, identity, windowId) {
 
     const candidates = [];
     for (const { name } of page.keys) {
-      if (!name.startsWith(prefix) || seenKeys.has(name)) continue;
+      if (!name.startsWith(prefix)) {
+        if (strictDiscovery) return unavailable("snapshot_pagination_invalid");
+        continue;
+      }
+      if (seenKeys.has(name)) {
+        if (strictDiscovery && name.endsWith(`:${windowId}`)) return unavailable("duplicate_snapshot_identity");
+        continue;
+      }
       seenKeys.add(name);
       const parts = name.slice(prefix.length).split(":");
       if (parts.length !== 2 || parts[1] !== windowId) continue;
@@ -116,6 +125,7 @@ export async function listAccountInsightSnapshots(env, identity, windowId) {
       for (const item of batch) {
         const snapshot = normalizeStoredSnapshot(values.get(item.name), item.identity, windowId);
         if (snapshot) snapshots.push(snapshot);
+        else if (strictDiscovery) counts.invalidSnapshotCount += 1;
       }
     }
     if (page.list_complete) return { available: true, reason: null, snapshots, ...counts };

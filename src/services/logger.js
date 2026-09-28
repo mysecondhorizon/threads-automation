@@ -389,17 +389,26 @@ export async function getPostLogEntries(
 // legacy post_log key has no scope segment, so this bounded reader must filter
 // stored identities after reading; it never applies Default Workspace fallback.
 export async function getScopedSuccessfulPostLog(env, identity) {
+  const result = await getScopedSuccessfulPostLogs(env, identity, [identity?.postId]);
+  if (!result.available) return { available: false, reason: result.reason, entry: null, discovery: result.discovery };
+  return { ...result.results.get(identity.postId), discovery: result.discovery };
+}
+
+// Scan once for a bounded candidate set. Per-post missing/ambiguous results are
+// released only after the same complete traversal used by the single reader.
+export async function getScopedSuccessfulPostLogs(env, identity, postIds) {
   const discovery = { scannedKeys: 0, listCalls: 0, bulkReadCalls: 0 };
-  const unavailable = (reason) => ({ available: false, reason, entry: null, discovery });
-  const fields = ["workspaceId", "connectedAccountId", "threadsUserId", "postId"];
-  if (!fields.every((field) => typeof identity?.[field] === "string" && identity[field].trim())) {
+  const unavailable = (reason) => ({ available: false, reason, results: null, discovery });
+  const fields = ["workspaceId", "connectedAccountId", "threadsUserId"];
+  if (!fields.every((field) => typeof identity?.[field] === "string" && identity[field].trim()) ||
+      !Array.isArray(postIds) || !postIds.length || postIds.length > 100 ||
+      !postIds.every((id) => typeof id === "string" && id.trim()) || new Set(postIds).size !== postIds.length) {
     return unavailable("invalid_log_identity");
   }
   const seenKeys = new Set();
   const cursors = new Set();
   let cursor;
-  let match = null;
-  let matchCount = 0;
+  const matches = new Map(postIds.map((id) => [id, { count: 0, entry: null }]));
   while (true) {
     if (discovery.listCalls >= 20) return unavailable("log_list_budget_exceeded");
     let page;
@@ -441,16 +450,20 @@ export async function getScopedSuccessfulPostLog(env, identity) {
       })) return unavailable("log_bulk_read_failed");
       for (const key of batch) {
         const log = values.get(key);
-        if (log.status !== "published" || log.post_id !== identity.postId ||
-            !fields.slice(0, 3).every((field) => log.metadata?.[field] === identity[field])) continue;
-        matchCount += 1;
-        if (matchCount === 1) match = { key, log };
+        const match = matches.get(log.post_id);
+        if (log.status !== "published" || !match ||
+            !fields.every((field) => log.metadata?.[field] === identity[field])) continue;
+        match.count += 1;
+        if (match.count === 1) match.entry = { key, log };
       }
     }
     if (page.list_complete) {
-      if (!matchCount) return unavailable("published_log_not_found");
-      if (matchCount !== 1) return unavailable("published_log_ambiguous");
-      return { available: true, reason: null, entry: match, discovery };
+      const results = new Map([...matches].map(([id, match]) => [id, {
+        available: match.count === 1,
+        reason: match.count === 1 ? null : match.count ? "published_log_ambiguous" : "published_log_not_found",
+        entry: match.count === 1 ? match.entry : null,
+      }]));
+      return { available: true, reason: null, results, discovery };
     }
     if (typeof page.cursor !== "string" || !page.cursor.trim() || cursors.has(page.cursor)) {
       return unavailable("log_pagination_invalid");
