@@ -15,8 +15,14 @@ publishing, KV storage, or the meaning of any L02–L07 observation.
 
 The evaluator receives two L07 aggregation results for the same exact scope:
 
-- `D1`: the 48-hour observation window;
-- `D3`: the 96-hour observation window.
+- `D1`: observations collected at age 24 to under 48 hours, with a 48-hour cohort maturity boundary;
+- `D3`: observations collected at age 72 to under 96 hours, with a 96-hour cohort maturity boundary.
+
+Both inputs must have the same valid `period.asOf`. Each publication period is
+the 14 days ending at its own maturity boundary, with `maxPosts: 100`. The two
+publication ranges are intentionally different; their cohorts are not matched.
+Malformed periods or mismatched as-of instants make the result unavailable.
+V1 evaluates historical aligned pairs too: it has no wall-clock freshness cutoff.
 
 The scope must match exactly on `workspaceId`, `connectedAccountId`, and
 `threadsUserId`. General and Commerce groupings remain separate. The evaluator
@@ -35,13 +41,24 @@ these conditions applies:
 1. either window has fewer than 10 valid target samples;
 2. either window has fewer than 10 valid delta samples for every metric being
    considered;
-3. the grouping has missing/invalid provenance or exceeds the L07 cardinality
+3. the grouping has a missing/invalid/nonzero `excludedCount` or exceeds the L07 cardinality
    limit;
-4. either window reports an unavailable baseline or an excluded delta sample;
+4. either window reports any excluded delta sample in any present allowlisted metric,
+   or its exclusion counts are missing/malformed;
 5. the value is not present in the same kind-specific field in both windows.
 
 No value is inferred from absence. Unknown provenance never becomes an
 `UNKNOWN` learning group.
+
+Nonzero grouping exclusions hold the candidate as `UNAVAILABLE` with
+`provenance_coverage_uncertain`: L07 combines invalid provenance and
+`not_applicable`, so this policy cannot distinguish them. Delta exclusions hold
+the entire candidate as `UNAVAILABLE`, even when other families have support.
+Exclusion counts are nonnegative integers; explicit zero counts are permitted.
+An absent metric supplies no support. A present metric must have valid exclusion
+counts. Supporting metrics require both target and delta counts to be finite
+integers from 10 through 100, delta count no greater than target count, finite
+delta medians, and finite nonnegative target medians.
 
 ## Consistency rules
 
@@ -62,6 +79,10 @@ The candidate is `LEARNABLE_DESCRIPTIVE` only when:
 - both windows meet the sample and provenance rules; and
 - the candidate is present in both windows with the same kind and field.
 
+Opposing non-neutral directions across families also produce `INCONSISTENT`,
+even if two other families agree. Neutral families do not count as directional
+support. These rules add no effect-size or significance threshold.
+
 If the required sample exists but the metric directions disagree, the result is
 `INCONSISTENT`, not a recommendation. If only one metric family is available,
 the result is `INSUFFICIENT_SUPPORT`.
@@ -70,23 +91,35 @@ the result is `INSUFFICIENT_SUPPORT`.
 
 The evaluator returns a read-only object with:
 
-- exact scope and the two window IDs;
+- exact valid scope and the two window IDs (malformed scope identifiers are null);
 - `interpretationMode: "DESCRIPTIVE"`;
 - `causalClaimAllowed: false`;
 - policy version and thresholds;
-- group labels are limited to 200 characters; longer or malformed labels are
-  out of scope;
+- group string labels are nonblank, limited to 200 characters and exclude control
+  characters; commerce `usedCurrentTopic` and `usedUserExperience` retain boolean
+  values exactly. No string/boolean coercion occurs;
 - deterministic candidate ordering by kind, field, and value;
 - per-candidate status: `LEARNABLE_DESCRIPTIVE`, `INCONSISTENT`,
-  `INSUFFICIENT_SUPPORT`, `UNAVAILABLE`, or `OUT_OF_SCOPE`;
+  `INSUFFICIENT_SUPPORT`, or `UNAVAILABLE`;
 - per-metric D1/D3 medians, directions, and support reasons;
-- coverage counts for candidates considered, held back, and unavailable;
+- coverage counts for matched candidates, considered, learnable, and held back;
+  rejected groupings/values have bounded diagnostic entries;
 - limitations stating that the result is observational, descriptive, and not a
   causal estimate or an automatic content instruction.
 
 No post body, raw log metadata, experience note, topic text, product text, or
 unbounded source record is returned. The output contains labels and aggregate
 statistics only.
+
+At most 14 grouping containers per window and 20 values per grouping are
+accepted (at most 280 matched candidates and 560 diagnostics across both
+windows). Excess containers make the result unavailable; excess values reject
+the grouping. Duplicate allowed grouping containers or duplicate value keys make
+the result unavailable. Diagnostics use fixed reasons and allowlisted field/kind
+names, never upstream arbitrary reason strings or rejected labels. Unsupported
+groups are reported in diagnostics rather than emitted as candidates. Policy
+arrays and all returned objects are deeply frozen; caller inputs are untouched.
+Scope identifiers use the same nonblank/control-free 200-character bound.
 
 ## Consumer boundary
 
