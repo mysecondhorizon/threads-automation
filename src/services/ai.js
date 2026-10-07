@@ -1,3 +1,4 @@
+import { sanitizeLearningEvidenceContext, LEARNING_EVIDENCE_GUIDANCE } from "./learning-evidence-consumer.js";
 import {
   THREADS_SYSTEM_PROMPT,
 } from "../prompts/threads/index.js";
@@ -728,6 +729,7 @@ function buildAiContextData(
       context?.currentTopic
     );
   const dailyMediaContext = normalizeDailyMediaContext(context?.dailyMediaContext);
+  const learningEvidence = sanitizeLearningEvidenceContext(context?.learningEvidence, "general");
 
   return {
     meta: {
@@ -996,6 +998,8 @@ function buildAiContextData(
         ),
     },
 
+    ...(learningEvidence ? { learningEvidence } : {}),
+
     ...(currentTopic
       ? { currentTopic }
       : {}),
@@ -1011,7 +1015,7 @@ function buildNarrativeGenerationContext(contextData) {
   const experienceNote = dailyMediaContext?.experienceProvenance === "USER_EXPERIENCE"
     ? dailyMediaContext.experienceNote
     : null;
-  const { currentTopic: _currentTopic, dailyMediaContext: _dailyMediaContext, ...outputControl } = contextData || {};
+  const { currentTopic: _currentTopic, dailyMediaContext: _dailyMediaContext, learningEvidence, ...outputControl } = contextData || {};
   const primaryStorySeed = currentTopic
     ? {
       source: "CURRENT_TOPIC",
@@ -1049,6 +1053,7 @@ function buildNarrativeGenerationContext(contextData) {
       ...(experienceNote ? { userExperience: { experienceNote } } : {}),
     },
     outputControl,
+    ...(learningEvidence ? { learningAdvisory: learningEvidence } : {}),
   };
 }
 
@@ -1107,6 +1112,7 @@ export function buildGenerationInput(
       "publishing.questionAvailable이 false면 질문형 마무리를 사용하지 마세요.",
       "publishing.productConnectedAvailable이 false면 제품이 핵심인 글을 작성하지 마세요.",
       "publishing.affiliateLinkAvailable이 false면 제휴 링크와 광고 고지가 필요한 글을 작성하지 마세요.",
+      ...(contextData.learningEvidence ? [LEARNING_EVIDENCE_GUIDANCE] : []),
       "",
       "[THREAD_CONTEXT_JSON]",
       JSON.stringify(
@@ -1211,7 +1217,9 @@ export async function generateThreadsDrafts(
             },
 
             instructions:
-              systemPrompt,
+              sanitizeLearningEvidenceContext(context?.learningEvidence, "general")
+                ? `${systemPrompt}\n\n${LEARNING_EVIDENCE_GUIDANCE}`
+                : systemPrompt,
 
             input,
 

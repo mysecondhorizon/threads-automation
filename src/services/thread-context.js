@@ -9,6 +9,8 @@ import {
   buildAnalyticsObservations,
 } from "./analytics.js";
 
+import { buildLearningEvidenceContext } from "./learning-evidence-consumer.js";
+
 const SEOUL_TIME_ZONE =
   "Asia/Seoul";
 
@@ -279,7 +281,8 @@ function buildHistorySignals(
 
 export async function buildThreadContext(
   env,
-  workspaceId
+  workspaceId,
+  options = {}
 ) {
   const now =
     new Date();
@@ -321,6 +324,13 @@ export async function buildThreadContext(
   const todayLinkCount =
     historySignals
       .todayAffiliateLinkCount;
+
+  const learningEvidence = options?.scope?.workspaceId === workspaceId && options?.generationKind === "general"
+    ? await buildLearningEvidenceContext(env, options.scope, {
+      generationKind: options.generationKind,
+      asOf: options.asOf ?? now.toISOString(),
+    })
+    : null;
 
   return {
     meta: {
@@ -547,5 +557,7 @@ export async function buildThreadContext(
               )
           : [],
     },
+
+    ...(learningEvidence ? { learningEvidence } : {}),
   };
 }

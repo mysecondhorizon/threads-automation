@@ -10,6 +10,7 @@ import {
   ThreadsApiError,
 } from "../threads.js";
 
+import { resolveGeneralAutoLearningScope } from "../learning-evidence-consumer.js";
 import {
   getThreadsCredentialForAccount,
 } from "../connected-accounts.js";
@@ -1074,6 +1075,7 @@ async function runExecution(
     );
 
     let threadsAuth = null;
+    let learningScope = null;
     try {
       const resolvedCredential = await getThreadsCredentialForAccount(
         env,
@@ -1085,6 +1087,9 @@ async function runExecution(
           : {}
       );
       threadsAuth = resolvedCredential.credential;
+      learningScope = resolveGeneralAutoLearningScope({
+        source, generalOnly, workspaceId, executionContext, resolvedCredential,
+      });
     } catch {
       threadsAuth = null;
     }
@@ -1119,7 +1124,13 @@ async function runExecution(
     const context =
       await buildThreadContext(
         env,
-        workspaceId || undefined
+        workspaceId || undefined,
+        learningScope
+          ? {
+            scope: learningScope,
+            generationKind: "general",
+          }
+          : {}
       );
 
     context.publishing.goal =
