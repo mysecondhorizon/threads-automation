@@ -1,688 +1,79 @@
 # Second Horizon Project Status
 
-> This file is the shared project checkpoint between ChatGPT/Codex accounts.
-> GitHub `main` is the source of truth.
-> Update this file whenever a workstream is merged to `main`.
+Updated: 2026-10-09 KST. This checkpoint replaces the outdated 4eceeb09-era status; earlier milestone details remain in Git history.
 
----
+## Product goal
 
-## 1. Repository
+Build an operator-controlled Threads business: publish credible everyday/experience-based content, grow audience trust, connect relevant product opportunities naturally, and validate sustainable affiliate revenue (including Coupang Partners). Automation reduces operating effort; descriptive learning informs content. Feature completion is not evidence of audience growth, conversion, revenue, or causal improvement.
 
-Repository:
+## Repository and deployment
 
-`mysecondhorizon/threads-automation`
+- Repository: mysecondhorizon/threads-automation; branch: main.
+- Latest application checkpoint: bf89457d1f35583023e56f15049336f2a9d0df8b — feat: add learning evidence consumer.
+- On 2026-10-08, production index.js matched a Wrangler 4.131.2 dry-run build of bf89457 byte-for-byte (1,136,739 bytes).
+- Verified production version: 6f83288f-e4f1-430d-a0fa-ccaf8b0ece64, serving 100%, deployed 2026-10-07 18:43:47 KST.
+- The established deployment path is GitHub main -> Cloudflare Workers Builds. Treat any push to main as potentially production-changing. Metadata says wrangler; the exact actor/build trigger for that deployment was not verified.
+- Do not run an actual local deploy, change scheduler ownership, or publish test posts without explicit user authorization.
+- Prior version candidate: 6570c41c-d095-4b12-a3f6-229872edb76a (2026-10-06 21:49:53 KST). Existence/binding names verified; rollback execution and state compatibility are not validated.
 
-Production branch:
+## Implemented capabilities
 
-`main`
+| Area | Code state | Verification boundary |
+|---|---|---|
+| Account/workspace | Connected-account credentials and workspace-scoped write, media, prompts, activity and schedule paths | Not every workspace/account's production activation has been verified |
+| General AUTO | Topic/experience context, provenance, image/video selection and publishing paths | Latest inspected run completed; intermittent AI failures remain; see operations below |
+| Commerce | Product opportunities, discovery, asset matching, Coupang candidates, generation, manual publishing and performance linkage | Revenue/conversion results not verified |
+| Legacy product/review | Old product/review domain removed; Commerce supersedes it | Do not restore old 20:30 Product Review assumptions |
+| L02-L07 | Scoped collection hardening, D1/D3 snapshots, dimensions, account baselines, attribution and aggregation | Observational, bounded discovery and KV consistency limits remain |
+| L08 policy | Sufficient and consistent descriptive evidence evaluation | Not causal evidence or statistical significance |
+| L08 consumer | Exact scoped General cron AUTO integration, max 5 signals, 4096-byte serialized advisory, fixed safety guidance | Deployed code does not mean active legacy cron consumes it |
 
-Production deployment:
+L08 consumer excludes insufficient/inconsistent/unavailable evidence and omits guidance on failures. General and Commerce stay separate. Manual/preview/Commerce runtime integration, content ranking/selection changes and automatic prompt learning are out of scope. analytics.js is unchanged.
 
-`GitHub main -> Cloudflare Workers Builds`
+## Actual operations: last successful read on 2026-10-09 14:42 KST
 
-Local production deployment is prohibited unless explicitly approved.
+- Scheduler ownership constant remains LEGACY_ACTIVE_RUNTIME_PREPARING. Runtime scheduler code exists but global ownership has not switched.
+- Legacy scheduled execution calls the engine without workspace/executionContext. The consumer requires trusted workspace/account/user scope, so the inspected legacy path omits learning guidance intentionally.
+- No stored consumer-usage diagnostic exists. Do not claim actual signal use from code deployment alone.
+- Remote cron configuration: KST 08:10, 11:30, 14:30, 18:40; matches wrangler.jsonc. This is not proof of successful posting.
+- Stored schedule history (50 records, 2026-09-26 11:30 KST through 2026-10-09 14:31 KST): 39 completed, 11 failed; none has workspace scope. All 11 failure codes were ai_generation_failed. This bounded history is not a lifetime reliability measure.
+- Latest inspected execution: started 2026-10-09 14:32:16 KST, completed, no workspace scope. The issue is intermittent, not a claim that every current run fails.
+- A previously inspected failure (2026-10-08 08:11:59 through 08:25:05 KST) had outputText in its error details, matching the invalid-JSON branch in ai.js. Exact response content/provider root cause was not inspected; avoid attributing all failures to that branch or to the new consumer.
+- Recent preceding runs had published:true in application history. Independent Threads-side verification was not performed.
 
-Do not run:
+## Validation
 
-`wrangler deploy`
+- 2026-10-08: production dry-run build passed; container rollout disabled. No container image build/runtime validation.
+- 2026-10-09: full src Node test suite passed 191/191 on Node 24.19.0 after test-only media-batch fixture repair.
+- After local AI response hardening: 201/201 tests passed; JavaScript syntax, diff whitespace check and Wrangler dry-run build passed. This newer build has not been deployed.
+- Repair isolates the Workers-only @cloudflare/containers import using node:module registerHooks; unexpected container calls fail. It also supplies missing topics:[] in a normalized-input fixture.
+- This verifies image upload/metadata and video metadata behavior, not actual container normalization.
+- Production bindings and secret names were present; secret values/validity were not tested. OPENAI_MODEL=gpt-5.6-luna; compatibility_date=2026-08-02.
+- Consumer independently reviewed APPROVED before bf89457 commit, including serialized byte-limit repair.
 
----
+## Next priorities
 
-## 2. Repository and Application Checkpoints
+1. Separately authorize commit/main push of the reviewed AI response validation/diagnostics patch if desired; main push may auto-deploy. Provider root cause remains unresolved until status/usage evidence is available.
+2. Design the minimal trusted identity bridge for the active legacy General AUTO path, or separately approve runtime ownership cutover. Never infer user identity from post history or silently switch scheduler ownership.
+3. Make actual advisory use/omission measurable with minimal diagnostics if approved; do not log post bodies, private experience text or credentials.
+4. Evaluate generated-content quality, diversity and factuality before expanding consumer scope.
+5. Define business measurement: operating effort, publishing success, audience engagement, product/affiliate conversion and revenue. No achieved revenue or KPI target is claimed here.
 
-Latest shared repository checkpoint before this documentation commit:
+Potential later work: Commerce learning integration, external research with explicit provenance, other publisher platforms, legacy admin migration, KV scalability and stronger deduplication. These are options, not active assignments.
 
-`4eceeb09a661c1c618489f6da3d1e70316c39d5a`
+## Current working changes and safety
 
-Latest application implementation checkpoint:
+Reviewed, pending commit authorization: PROJECT_STATUS.md, WORKSTREAMS.md, src/services/media-batch.test.js, src/services/ai.js and new src/services/ai-response.test.js. No commit/push/deploy/actual post was authorized for these changes.
 
-`4eceeb09a661c1c618489f6da3d1e70316c39d5a`
+### AI response investigation and local hardening
 
-**PROJECT2-ASSET-CLEANUP-01 — FINAL APPROVED**
+The 11 failures in the inspected 50-record history all contained unparsable outputText (434-532 characters), with JSON parsing failing at end-of-input; none was a fenced JSON response. Three structurally inspected samples had one closed draft object inside an unclosed drafts array/root. Content was not copied into fixtures or documentation. The application error logger and KV writer do not truncate these details; the request already requires exactly three drafts. Original response status/incomplete_details/usage were not retained, so provider truncation, refusal, or other upstream causes cannot be established retrospectively.
 
-Historical milestone reference:
+The uncommitted patch changes generateThreadsDrafts only: require completed response/message status, reject refusals/incomplete/ambiguous output, omit commentary from final JSON, and store bounded category/status/reason/token counts instead of raw response/draft text for errors at this boundary. It preserves the model, prompt, strict schema, three-draft requirement and downstream validation. It adds no retry, partial-JSON repair, scheduler change or live API call. The shared requestOpenAiJson path is unchanged.
 
-**R11D — Target App Selection UI Foundation**
+Diagnostics persist through the existing raw execution/log path; the normalized dashboard currently does not expose these new fields. This is validation/diagnostic hardening, not a claim that the production failure rate has been fixed. Independent final reviewer ai_response_final_review approved the five-file tranche and reran all 201 tests successfully. Compatibility limitation: one final message containing one output_text part is accepted; segmented/multiple output is rejected safely. No live-provider validation was performed.
 
-Default local switch check:
+References: https://developers.openai.com/api/docs/guides/structured-outputs (completed/incomplete/refusal handling).
 
-```bash
-git status
-git log -3 --oneline
-```
-
-Fetch/pull only when another machine or clone may have pushed, GitHub changed directly, `origin/main` may be ahead, or the PM explicitly requests remote synchronization.
-
----
-
-## 3. Current Production State
-
-### Scheduler ownership
-
-Current real production owner:
-
-`LEGACY_ACTIVE_RUNTIME_PREPARING`
-
-Runtime Scheduler business execution:
-
-`false`
-
-Runtime Scheduler remains in preparation / suppressed mode.
-
-Do not perform R10C2 or switch scheduler ownership without explicit PM approval.
-
-### Current production schedules — Asia/Seoul
-
-General AUTO:
-
-- 08:10
-- 11:30
-- 14:30
-- 18:40
-
-Product Review candidate generation:
-
-- 20:30
-
-Existing Cloudflare Cron expressions:
-
-- `10 23 * * *`
-- `30 2 * * *`
-- `30 5 * * *`
-- `40 9 * * *`
-- `30 11 * * *`
-
-`wrangler.jsonc` must remain unchanged unless a specifically approved scheduler migration task requires otherwise.
-
----
-
-## 4. Production Verification
-
-### General AUTO format and diagnostics
-
-Previous production failures:
-
-`post_format_validation_failed`
-
-Stage:
-
-`similarity_validation`
-
-Reason:
-
-`recent_signature_repeated`
-
-Root cause:
-
-- format feasibility selection considered a shorter recent-pattern window;
-- final exact-signature validation considered a longer recent-signature window;
-- exact-repeat failure did not force target reselection;
-- regeneration could retry the same effective target/pattern.
-
-Current behavior:
-
-- Structural format is advisory for General AUTO generation.
-- Paragraph, sentence, opening, and ending structure alone do not block an otherwise valid General AUTO post.
-- Semantic duplicate protection and code-owned text/content validation remain blocking.
-- Bounded diagnostics record failed drafts, retries, and the Current Topic decision without persisting raw prompts.
-
-### Confirmed production success
-
-On 2026-08-29 at 11:30 KST:
-
-**General AUTO — SUCCESS / 게시 완료**
-
-This is the first confirmed successful production General AUTO run after the format-diversity fix.
-
-Do not weaken or remove the current diversity safeguards without explicit PM approval.
-
-### AUTO-PV1 — Additional General AUTO Production Verification
-
-- Read-only verification was attempted after the confirmed 2026-08-29 11:30 KST success.
-- 14:30 KST / later run evidence could not be retrieved.
-- Result: **NOT VERIFIABLE**.
-- No production write or manual trigger was performed.
-- Code-level scheduler owner remains `LEGACY_ACTIVE_RUNTIME_PREPARING` and runtime execution remains disabled by the current ownership mode.
-- Do not claim runtime diversity safeguards were re-verified.
-
-### TOPIC-VERIFY-01 — Current Topic Production Verification
-
-- Result: **NOT_YET_VERIFIABLE**.
-- The authenticated production diagnostic payload was unavailable in the read-only verification environment.
-- This is not evidence of a Current Topic functional failure.
-- No production write, manual trigger, or diagnostic refresh was performed.
-
----
-
-## 5. Major Completed Milestones
-
-### R1 — App Shell
-Complete.
-
-### R2 — Post Storage Model
-Complete.
-
-### R3 — `/app/write`
-Complete first version.
-
-### R4 — Topic + AI Draft
-Complete.
-
-### R5 — `/app/media`
-Complete first version.
-
-### R6 — `/app/products`
-Complete first version.
-
-### R7 — `/app/prompts`
-Complete.
-
-Prompt Profile scope is complete across Manual AI generation, General AUTO, General AUTO preview, and Product Review candidate generation.
-
-### ARCH-01-I2A — Workspace-Aware Prompt Profile Storage
-**COMPLETE / MERGED**
-
-- Omitted or null `workspaceId` resolves to `DEFAULT_WORKSPACE_ID`.
-- The Default Workspace retains the legacy `operator_prompt_profile:v1` profile.
-- Non-default Workspaces use deterministic isolated prompt-profile storage.
-- A missing non-default profile receives built-in R7 defaults and never inherits customized Default Workspace data.
-- No bulk migration was performed.
-
-### ARCH-01-I2B — Workspace-Aware Products Storage Foundation
-**COMPLETE / MERGED**
-
-- The physical KV store remains `content_products`.
-- Product records now support service-owned `workspaceId`; omitted/null scope resolves to `DEFAULT_WORKSPACE_ID`.
-- Legacy records without `workspaceId` remain Default Workspace compatible and are lazily normalized only when mutated.
-- Reads, CRUD, product-key resolution, and batch upserts are Workspace-scoped.
-- The same `productKey` may exist in different Workspaces; cross-Workspace ID mutation is blocked.
-- Mutations preserve raw records belonging to other Workspaces, and the capacity remains 50 per Workspace.
-- No bulk migration and no route, UI, or runtime Workspace propagation were introduced.
-
-### ARCH-01-I2C — Workspace-Aware Media and Content Pool Storage
-**COMPLETE / MERGED**
-
-- Media Library and Content Pool records are Workspace-scoped with Default Workspace legacy compatibility and no bulk migration.
-- Cross-Workspace media/content-pool mutations are blocked while foreign raw records are preserved.
-
-### ARCH-01-I3A / I3B1 / I3B2 / I3B3
-**COMPLETE / MERGED**
-
-- Connected Account credential resolution, trusted execution context, Workspace business-data propagation, and Product Review candidate storage foundations are complete.
-- Connected Account credential/runtime publishing activation remains the next implementation direction.
-
-### LOGIN-01-I1 / I2 / I3 and registered User provisioning
-**COMPLETE / MERGED**
-
-- Minimal registered User login, logout, Workspace selection, and PM-controlled provisioning are available.
-- A registered session with a selected non-default Workspace is fail-closed from existing unscoped app/API paths.
-
-### WCLONE-I1 / I1.1 / I2
-**COMPLETE / HOLD**
-
-- Clone preflight is zero-write and R2 body handling is bounded in memory.
-- The temporary legacy-admin-only runner remains on hold until explicit clone approval, verification, and a separate removal task.
-
-### AUTO-PROMPT-01-I1 / AUTO-DIAG-02-I1
-**COMPLETE / MERGED**
-
-- General AUTO structural format is advisory while semantic/text validation remains blocking.
-- Recent General AUTO status includes bounded failed-attempt and Current Topic diagnostics.
-
-### MEDIA-02-U — Media Experience Metadata View/Edit
-**COMPLETE / MERGED**
-
-- Daily and Product asset operator views support `experienceTags` and `experienceNote` without changing asset-domain separation.
-
-### PROJECT2-ASSET-CLEANUP-01
-**FINAL APPROVED / MERGED**
-
-- `/app/daily` is the independent Daily asset domain; `/app/media` remains a 302 compatibility redirect.
-- Daily and Product asset domains each support IMAGE/VIDEO plus description, tags, `experienceTags`, and `experienceNote`.
-- Product external/business link remains supported; price is not part of the active PROJECT2 operator model.
-- PROJECT2 operator flows do not use, expose, require, or depend on `media.productId`.
-
-### R13A — Shared Operator Prompt Scope
-**COMPLETE / MERGED**
-
-Prompt Profile now applies to:
-
-- `/app/write` Manual AI generation
-- General AUTO
-- General AUTO preview
-- Product Review candidate generation
-
-Code-owned validation, safety/factual constraints, output/schema rules, post-format diversity/repetition protection, and Product Review disclosure/link rules remain protected. Legacy `/admin/ai/draft` remains outside R13A scope.
-
-### ADMIN-01-D — Legacy `/admin` Retirement Inventory
-**ANALYSIS COMPLETE**
-
-- Auth/OAuth/token lifecycle remains required.
-- `/app` does not yet replace Product Review, Content Pool, AUTO preview/review-publish, or logs/dashboard/insights.
-- Low-risk future retirement candidates were identified; no legacy route was removed.
-- Actual retirement is deferred for a separately approved follow-up after prompt-scope completion.
-
-### R8 — Controlled Threads Publish
-Complete.
-
-### R9 — Product Media
-Complete.
-
-### R10 — Scheduler Program
-
-Completed:
-
-- Runtime Schedule Coordinator
-- Durable Object production hotfix
-- Schedule operations view
-- Runtime ownership attempt
-- rollback to legacy ownership
-- alarm observability
-- alarm reconcile
-- stale receipt recovery
-- safe failure display
-- real production next-run display
-- production schedule overview
-
-Current status:
-
-Runtime infrastructure is healthy but not production owner.
-
-### R11A — App Connection Registry
-Complete.
-
-### R11B — Publisher Adapter Foundation
-Complete.
-
-### R11C — General AUTO Publisher Adapter Migration
-Complete.
-
-### R11D — Target App Selection UI Foundation
-Complete.
-
-- Added target-app selection to `/app/write`.
-- Uses the App Registry through `GET /api/apps`.
-- `threads-primary` is the only currently proven selectable publish destination.
-- WordPress and Custom API remain preparing/nonfunctional.
-- `targetApp = null` remains backward compatible.
-- Explicit invalid targets do not silently fall back to Threads.
-- Published post targets are read-only.
-- No Workspace implementation was added.
-
-### R11D-V — Target App Selection Integration Verification
-Complete.
-
-- Verified `targetApp` save, edit, and publish boundaries.
-- Verified null compatibility and explicit invalid-target no-fallback behavior.
-- Verified built-in fallback when the app registry is unavailable or empty.
-- No code changes were required.
-
-### UI-02 — Products UI/UX Cleanup
-Complete.
-
-- Improved `/app/products` operator layout and information hierarchy.
-- Reorganized product create/edit and product media areas for clearer operation.
-- Added clearer state badges, feedback, responsive layout, and product-media presentation.
-- Product API/storage semantics were not changed.
-- Product Media remains `sourceType: product` and is not directly associated with an individual Product record.
-
-### PRODUCT-01 — Product ↔ Product Media Relationship Decision
-Decision complete / DEFERRED.
-
-- Current Product Review is text-only.
-- Direct per-product image association is not required now.
-- Existing nullable `productId` capability reduces future migration risk.
-- Revisit only when an actual Product Review/image publishing consumer exists.
-
-### MEDIA-02-D — User Experience Media Hints Design Verification
-Complete.
-
-- Inspected existing tags/description provenance.
-- Decision: do not reuse legacy/vision tags as user-experience provenance.
-- Selected a small model/API extension.
-
-### MEDIA-02-I — User Experience Media Hints
-Complete.
-
-- Media records now support optional `experienceTags` and `experienceNote`.
-- These fields represent `USER_EXPERIENCE` context.
-- General Media and Product Media uploads support batch-level optional hints.
-- Image/video media model compatibility is preserved and existing records require no migration.
-- Existing `tags`, `description`, and `altText` semantics remain unchanged.
-- AI generation/research consumption is **not** implemented yet.
-
----
-
-## 6. Current Publishing Architecture
-
-### Operator Post
-
-`Stored Post`
-→ `Publish Service`
-→ `App Registry`
-→ `Publisher Resolver`
-→ `Threads Publisher Adapter`
-→ existing Threads domain services
-
-### General AUTO
-
-General AUTO uses the same shared Publisher Service / Adapter architecture.
-
-Supported:
-
-- TEXT
-- IMAGE
-
-General AUTO VIDEO remains intentionally disabled.
-
-### Product Review
-
-Product Review remains candidate-only.
-
-It must not automatically publish externally.
-
----
-
-## 7. App Registry
-
-KV:
-
-`operator_apps:v1`
-
-Built-in Threads app:
-
-- id: `threads-primary`
-- name: `Second Horizon Threads`
-- type: `THREADS`
-
-Registry contains metadata/configuration only.
-
-Do not store credentials in `operator_apps:v1`.
-
-Existing Threads authentication remains in the existing `threads_auth` storage.
-
-Current functional publisher:
-
-- THREADS
-
-Future only / not functional:
-
-- WORDPRESS
-- CUSTOM_API
-
-Do not present WordPress or Custom API as working integrations until explicitly implemented.
-
----
-
-## 8. Prompt Profile
-
-KV:
-
-`operator_prompt_profile:v1`
-
-Workspace storage compatibility:
-
-- Omitted/null workspace ID and `DEFAULT_WORKSPACE_ID` use the legacy key above.
-- Non-default Workspaces use isolated deterministic scoped keys.
-- Existing Default Workspace customization remains readable without migration.
-
-Operator-editable sections:
-
-- `identityWriting`
-- `generalWritingPolicy`
-- `contentAndFormatPreferences`
-- `productWritingGuidance`
-- `analyticsWritingGuidance`
-
-Code-owned and not operator-editable:
-
-- validation rules
-- output rules
-- semantic duplicate/repetition protection
-- code-owned output/format constraints
-- verified-facts constraints
-- forbidden-claims constraints
-- Current Topic factual safety
-- Product Review disclosure/link placement rules
-- provider/schema constraints
-
-Operator prompt preferences must not override code-owned safety/validation rules.
-
----
-
-## 9. Current Parallel Work
-
-See `WORKSTREAMS.md` for live ownership.
-
-Current workstream status:
-
-### Codex A
-
-**WAITING FOR NEXT TASK**
-
-R13A is complete and merged in `84509f055ef4e49549c163e762cbcb5819ca3836`.
-
-### Codex B
-
-**WAITING / NEXT = ARCH-01-I3C — ConnectedAccount credential/runtime resolution**
-
-The latest application implementation checkpoint is `4eceeb09a661c1c618489f6da3d1e70316c39d5a` (PROJECT2-ASSET-CLEANUP-01). Do not begin I3C in this documentation-only task.
-
----
-
-## 10. Existing Post Target Compatibility
-
-Post model already includes:
-
-`targetApp`
-
-Backward compatibility:
-
-`targetApp = null`
-
-resolves to:
-
-`threads-primary`
-
-Explicit invalid targets must not silently fall back to Threads.
-
-Existing posts do not require bulk migration.
-
----
-
-## 11. Protected Behavior
-
-Unless a task explicitly changes them, preserve:
-
-- General AUTO daily posting limit
-- 90-minute spacing guard
-- TEXT/IMAGE AUTO publishing
-- VIDEO AUTO exclusion
-- media tracking
-- Content Pool usage tracking
-- first-comment behavior
-- Threads authentication storage
-- Publisher Adapter architecture
-- semantic duplicate protection and code-owned text validation
-- General AUTO structural format advisory behavior
-- Product Review candidate-only behavior
-- Product Review valid-link/disclosure behavior
-- legacy scheduler production ownership
-- Runtime Scheduler business execution disabled
-
----
-
-## 12. Known Remaining Product Gaps
-
-Major remaining work includes:
-
-- additional General AUTO production verification when evidence access becomes available
-- AUTO-PROVENANCE-01 — later show simple generation basis: `PERSONA`, `CURRENT_TOPIC`, or `CONTENT_POOL`; show media basis separately as `NONE`, `DAILY_IMAGE`, or `DAILY_VIDEO`. No persona text/version snapshot is required.
-- MEDIA-02-AI — consume user experience hints as provenance-labeled AI generation context
-- MEDIA-02-R — optional future external research use, preserving `USER_EXPERIENCE` vs `EXTERNAL_FACT` distinction
-- Runtime Scheduler final production ownership cutover
-- WordPress publisher
-- Custom API publisher
-- real external HTML publishing
-- legacy `/admin` retirement/migration
-- whole-collection KV scalability
-- stronger global exactly-once guarantees
-- optional future General AUTO video support only if explicitly approved
-- Workspace clone execution remains **HOLD** until explicit approval, post-clone verification, and temporary-runner removal planning.
-
-### ARCH-01 — Multi-Account / Multi-Platform Workspace Architecture
-
-Priority: **HIGH**
-
-Status: **FOUNDATION IN PROGRESS**
-
-Architecture direction:
-
-`User → Workspace → ConnectedAccount`
-
-- **User** is login identity only for small personal/family usage.
-- **Workspace** has `ownerUserId` and is the brand, system, and business-data isolation unit.
-- **Connected Account** represents an actual platform, account, or channel destination.
-
-The current design does **not** require a Tenant abstraction, Membership, RBAC, invitations, an organization/team model, or shared Workspace infrastructure.
-
-Principles:
-
-- One User may access multiple Workspaces.
-- One Workspace may contain multiple Connected Accounts.
-- Same-platform multiple accounts must be supported.
-- Future platforms include Threads, TikTok, YouTube Shorts, and future publisher platforms.
-
-Data scope direction:
-
-**SYSTEM**
-
-- code-owned safety
-- validation
-- platform capability / shared runtime behavior
-
-**WORKSPACE**
-
-- Products
-- Daily assets
-- Product assets
-- Prompt / Profile
-- Content Pool
-- Product Review candidates
-
-**CONNECTED_ACCOUNT**
-
-- platform/account identity
-- credential / `authRef` direction
-- future account-specific schedules, history, and analytics
-
-Long-term AI context composition:
-
-`SYSTEM → WORKSPACE → CONNECTED_ACCOUNT → CONTENT-SPECIFIC CONTEXT`
-
-Architecture evolution direction:
-
-- Keep and extend the existing `targetApp` concept where possible.
-- Keep and extend the existing Publisher Resolver / Adapter architecture.
-- Do not replace the publisher architecture wholesale.
-
-Completed ARCH-01 checkpoints:
-
-- ARCH-01-D
-- ARCH-01-I1
-- ARCH-01-I2-D
-- ARCH-01-I2A
-- ARCH-01-I2B-D
-- ARCH-01-I2B
-- ARCH-01-I2C
-- ARCH-01-I3A
-- ARCH-01-I3B1
-- ARCH-01-I3B2
-- ARCH-01-I3B3
-
-ARCH-01 now includes User login/Workspace selection and business-data propagation foundations. The next active direction is ConnectedAccount credential/runtime resolution; second Threads account activation, account-level schedule/history/analytics, and later SNS expansion follow I3C.
-
-#### ARCH-01-D — Multi-Account / Multi-Platform Storage & Scope Design Verification
-
-Status: **COMPLETE / DESIGN VERIFIED**
-
-Completed design verification determined the appropriate `SYSTEM`, `WORKSPACE`, and `CONNECTED_ACCOUNT` scopes without a migration or schema rollout in that tranche.
-
-Review examples:
-
-- Posts, Products, Media Library, Content Pool, Prompt Profile, App Registry
-- `threads_auth`, schedules, execution/history records, analytics/context, diversity/recent-post history
-
-Next direction:
-
-- ConnectedAccount credential/runtime resolution (ARCH-01-I3C)
-- second Threads account activation
-- account-level schedules, history, analytics, and diversity
-- later SNS/platform expansion
-
----
-
-## 13. Files Never Included in Commits
-
-Do not stage or commit:
-
-- `.gitignore`
-- `.wrangler/`
-- `diagnostic-reply-container.js`
-- `maintenance-mark-log-deleted.js`
-
-Their presence as untracked files is expected.
-
----
-
-## 14. Shared Account Handoff Protocol
-
-ChatGPT account A and account B do not share conversation memory.
-
-Therefore:
-
-**GitHub `main` + this file + `WORKSTREAMS.md` are the synchronization layer.**
-
-After a workstream is approved and merged:
-
-1. push the code commit to `origin/main`;
-2. update `PROJECT_STATUS.md`;
-3. update `WORKSTREAMS.md`;
-4. commit those status updates with the implementation or as a small follow-up checkpoint;
-5. use the Shared Local Repository Rule below before switching workstreams.
-
-Do not rely on copied chat history as the canonical project state.
-
----
-
-## 15. Shared Local Repository Rule
-
-Codex A and Codex B currently use the same local repository:
-
-`C:\Users\cmy11\projects\threads-automation`
-
-Account switching does not automatically require `git fetch` or `git pull`.
-The default switch check is:
-
-```bash
-git status
-git log -3 --oneline
-```
-
-This confirms the current HEAD, reveals another Codex's uncommitted work, and prevents file collisions. Use fetch/pull only when another machine or clone may have pushed, GitHub changed directly, `origin/main` may be ahead, or the PM explicitly requests remote synchronization.
-
-Because both workers share one working tree, uncommitted changes are immediately visible. Never edit the same file concurrently, and never reset, restore, clean, pull, rebase, or checkout unknown work while another Codex has uncommitted changes.
-
----
-
-## 16. Status Update Rules
-
-When a milestone is merged, update at least:
-
-- `Current Main`
-- `Major Completed Milestones`
-- `Current Parallel Work`
-- `Known Remaining Product Gaps`
-- production verification if relevant
-
-Keep this file concise enough that a new PM conversation can recover project state quickly.
+Never stage protected untracked items: .gitignore, .wrangler/, diagnostic-reply-container.js, maintenance-mark-log-deleted.js, node_modules/.
+Preserve existing TEXT/first-comment behavior, validated publishing boundaries, credential isolation and provenance. Never reset/clean another worker's changes.

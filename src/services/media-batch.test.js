@@ -1,12 +1,41 @@
 import assert from "node:assert/strict";
-import {
+import { registerHooks } from "node:module";
+
+// These fixtures exercise image uploads and video metadata, not the Workers
+// container runtime. Keep the real normalization module but stub its runtime
+// dependency; any accidental container use must fail this test.
+const containerStubUrl = `data:text/javascript,${encodeURIComponent(`
+  export let calls = 0;
+  export function getContainer() {
+    calls += 1;
+    throw new Error("Unexpected container invocation in media-batch fixtures");
+  }
+`)}`;
+const normalizationUrl = new URL("./media-video-normalization.js", import.meta.url).href;
+const runtimeHook = registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "@cloudflare/containers" && context.parentURL === normalizationUrl) {
+      return { url: containerStubUrl, shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  },
+});
+let mediaBatch;
+try {
+  mediaBatch = await import("./media-batch.js");
+} finally {
+  runtimeHook.deregister();
+}
+const containerStub = await import(containerStubUrl);
+const {
   batchUploadMedia,
   mergeMediaMetadata,
   mergeVideoMediaMetadata,
-} from "./media-batch.js";
+} = mediaBatch;
 
 const input = {
   tags: ["사용자 기존 태그"],
+  topics: [],
   description: "사용자 기존 설명",
   experienceTags: ["출근길", "비 오는 날"],
   experienceNote: "비 오는 날 출퇴근할 때 사용.",
@@ -163,4 +192,5 @@ try {
   globalThis.fetch = originalFetch;
 }
 
+assert.equal(containerStub.calls, 0, "Image fixtures must not invoke a video container");
 console.log("media batch experience metadata fixture passed");

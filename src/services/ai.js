@@ -70,6 +70,51 @@ function parseJsonOutputText(value) {
   return JSON.parse(fenced ? fenced[1].trim() : text);
 }
 
+// Only bounded metadata may reach execution history; never retain draft text or
+// the provider's raw response/error. Used by the General draft generation path.
+function draftResponseDetails(category, data, httpStatus, extra = {}) {
+  const statuses = ["completed", "incomplete", "failed", "cancelled", "queued", "in_progress"];
+  const reasons = ["max_output_tokens", "content_filter"];
+  const count = value => Number.isSafeInteger(value) && value >= 0 && value <= 1e9 ? value : null;
+  return {
+    category,
+    httpStatus: Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599 ? httpStatus : null,
+    responseStatus: statuses.includes(data?.status) ? data.status : "unknown",
+    incompleteReason: reasons.includes(data?.incomplete_details?.reason) ? data.incomplete_details.reason : null,
+    inputTokens: count(data?.usage?.input_tokens),
+    outputTokens: count(data?.usage?.output_tokens),
+    reasoningTokens: count(data?.usage?.output_tokens_details?.reasoning_tokens),
+    ...extra,
+  };
+}
+
+function extractCompletedDraftText(data, httpStatus) {
+  const fail = category => {
+    throw new AiServiceError("OpenAI draft response unavailable", draftResponseDetails(category, data, httpStatus));
+  };
+  if (!data || typeof data !== "object" || Array.isArray(data)) fail("malformed_response");
+  if (data.status === "incomplete") fail("incomplete_response");
+  if (data.status !== "completed") fail("response_not_completed");
+  if (data.error != null || data.incomplete_details != null || !Array.isArray(data.output)) fail("malformed_response");
+  const messages = data.output.filter(item => item?.type === "message");
+  const finals = [];
+  for (const message of messages) {
+    if (message.status === "incomplete") fail("incomplete_message");
+    if (message.status !== "completed" || message.role !== "assistant" || !Array.isArray(message.content)) fail("malformed_response");
+    if (message.content.some(item => item?.type === "refusal")) fail("refusal");
+    if (message.phase === "commentary") continue;
+    if (message.phase != null && message.phase !== "final_answer") fail("malformed_response");
+    finals.push(message);
+  }
+  // Do not concatenate independent JSON documents or guess which answer to use.
+  if (finals.length !== 1) fail(finals.length ? "ambiguous_output" : "missing_output");
+  const content = finals[0].content;
+  if (content.length !== 1 || content[0]?.type !== "output_text" || typeof content[0].text !== "string") fail("malformed_response");
+  const text = content[0].text.trim();
+  if (!text) fail("missing_output");
+  return text;
+}
+
 export async function requestOpenAiJson(
   env,
   {
@@ -1187,7 +1232,9 @@ export async function generateThreadsDrafts(
       context,
     });
 
-  const response =
+  let response;
+  try {
+    response =
     await fetch(
       OPENAI_RESPONSES_URL,
       {
@@ -1381,27 +1428,21 @@ export async function generateThreadsDrafts(
       }
     );
 
-  const data =
-    await response.json();
-
+  } catch {
+    throw new AiServiceError("OpenAI request failed", draftResponseDetails("network", null, null));
+  }
+  // Classify HTTP errors even when their bodies are HTML or otherwise non-JSON.
   if (!response.ok) {
-    throw new AiServiceError(
-      "OpenAI request failed",
-      data
-    );
+    try { await response.body?.cancel(); } catch { /* Keep the HTTP classification. */ }
+    throw new AiServiceError("OpenAI request failed", draftResponseDetails("http", null, response.status));
   }
-
-  const outputText =
-    extractOutputText(
-      data
-    );
-
-  if (!outputText) {
-    throw new AiServiceError(
-      "OpenAI returned no text",
-      data
-    );
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new AiServiceError("OpenAI returned invalid response JSON", draftResponseDetails("malformed_response", null, response.status));
   }
+  const outputText = extractCompletedDraftText(data, response.status);
 
   let parsed;
 
@@ -1413,21 +1454,19 @@ export async function generateThreadsDrafts(
   } catch {
     throw new AiServiceError(
       "OpenAI returned invalid JSON",
-      {
-        outputText,
-      }
+      draftResponseDetails("invalid_json", data, response.status, { outputLength: outputText.length })
     );
   }
 
   if (
     !Array.isArray(
-      parsed.drafts
+      parsed?.drafts
     ) ||
     parsed.drafts.length !== 3
   ) {
     throw new AiServiceError(
       "OpenAI returned an invalid draft list",
-      parsed
+      draftResponseDetails("invalid_draft_list", data, response.status, { outputLength: outputText.length })
     );
   }
 
@@ -1435,11 +1474,13 @@ export async function generateThreadsDrafts(
     (
       draft,
       index
-    ) =>
-      validateDraft(
-        draft,
-        index
-      )
+    ) => {
+      try {
+        return validateDraft(draft, index);
+      } catch {
+        throw new AiServiceError("OpenAI returned an invalid draft", draftResponseDetails("invalid_draft", data, response.status, { draftIndex: index }));
+      }
+    }
   );
 }
 

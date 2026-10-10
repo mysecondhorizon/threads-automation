@@ -1,522 +1,56 @@
 # Second Horizon Workstreams
 
-> Shared coordination file for Codex A and Codex B.
-> This file prevents file collisions and records active ownership.
-> GitHub `main` is the common handoff point between accounts.
+Updated: 2026-10-09 KST. Current assignments replace the old Codex A/B and ARCH-01-I3C queue. Historical records remain in Git history; implemented account runtime work is not a new assignment.
 
----
+## Coordination and authorization
 
-## 1. Operating Model
+- Primary agent owns coordination and reports concrete results to the user.
+- Use planning/implementation/independent review roles when assigned; one writer per file. Agents may discuss this authorized workflow with each other.
+- A usage-limit failure is an incomplete agent task, not an approval. Report it; the primary agent may continue authorized work.
+- User approves material product choices and production-changing actions.
+- Current authorization: read-only operational checks, local test-environment repair, status-document updates and bounded AI generation failure diagnosis/response-handling fixes.
+- Current prohibition: no commit, push, actual deploy, scheduler ownership/config changes or actual Threads test publication in this tranche.
+- Main pushes may trigger Cloudflare Workers Builds. Explain that production effect before requesting push approval.
 
-There are two independent ChatGPT/Codex accounts.
+## Completed application checkpoint
 
-### Account A
+bf89457d1f35583023e56f15049336f2a9d0df8b — feat: add learning evidence consumer.
 
-Primary worker:
+General scoped AUTO consumer implementation, tests and independent final review are complete; commit/push were separately approved and performed. Production bundle equality was verified on 2026-10-08. Actual legacy cron learning use is NOT established: its missing explicit identity scope prevents the consumer from running.
 
-**Codex A**
+## Current maintenance tranche
 
-Current workstream:
+| Task | Owner | State |
+|---|---|---|
+| Production/bundle/config comparison | Primary | Completed; see PROJECT_STATUS.md for verification date |
+| Bounded operational history inspection | Primary | Refreshed 2026-10-09 14:42 KST; latest run completed, intermittent AI failures and legacy scope gap remain |
+| media-batch local Node fixture repair | repair_test_runtime | Implemented, focused test passed; primary reviewed diff |
+| Full offline regression suite | Primary | 201/201 passed including new response regressions; dry-run build passed |
+| Current status and handoff documentation | Primary | Updated locally; not committed |
+| Independent final review | ai_response_final_review | APPROVED; independently reran 201/201 tests |
+| Commit/main push | Primary after user approval | Not authorized yet; main push may auto-deploy |
 
-**WAITING FOR NEXT TASK**
+Owned files: primary edits PROJECT_STATUS.md, WORKSTREAMS.md, src/services/ai.js and src/services/ai-response.test.js; test repair edited src/services/media-batch.test.js only. No dependency, model, prompt, schema or scheduler changes.
 
-### Account B
+AI failure investigation: all 11 inspected failures contain invalid JSON, no application-side truncation found. Primary completed a local completed/refusal/incomplete response gate plus safe metadata diagnostics and synthetic regressions after implementation agent usage exhaustion. Independent final reviewer ai_response_final_review approved the patch and verified 201/201 tests. Upstream generation failures are not proven resolved; segmented/multiple final output is intentionally rejected, and no live-provider validation was performed.
 
-PM / coordination account plus parallel worker:
+Independent consumer reviewer consumer_final_review completed APPROVED before commit. Several older implementation/planning/deployment-audit agents exhausted usage; they are not active work owners. Do not interpret their old summaries as current project state.
 
-**Codex B**
+## Next proposed work (not yet implementation authorization)
 
-Current parallel workstream:
+1. Diagnose ai_generation_failed / invalid JSON response handling using safe, bounded failure evidence.
+2. Design a trusted scope bridge for the active legacy General AUTO path. Keep manual/preview/Commerce excluded; do not remove identity gates simply to make signals appear.
+3. Decide minimal signal-use/omission observability and content-quality evaluation.
+4. Translate content/commerce operation into measurable business outcomes; revenue improvement remains unverified.
 
-**WAITING / NEXT = ARCH-01-I3C — ConnectedAccount credential/runtime resolution**
+Runtime scheduler ownership cutover, live posting, Commerce consumer integration and external publisher expansion each require their own scope/decision. The current priority is reliable publishing and verified learning use, not additional platform breadth.
 
-The two ChatGPT accounts do not share conversation memory.
+## Shared repository procedure
 
-The workers share the same local repository and working tree. GitHub `origin/main`, `PROJECT_STATUS.md`, and `WORKSTREAMS.md` remain the shared checkpoint for remote and cross-session coordination.
-
----
-
-## 2. Global Rules
-
-Before beginning any workstream:
-
-```bash
-git status
-git log -3 --oneline
-```
-
-Remote synchronization is conditional: fetch/pull only when another machine or clone may have pushed, GitHub changed directly, `origin/main` may be ahead, or the PM explicitly requests it.
-
-Confirm the working tree does not contain another worker's changes.
-
-Do not delete, overwrite, or reset unknown work.
-
-Avoid:
-
-- `git reset --hard`
-- `git clean`
-- `git restore .`
-- `git checkout -- .`
-
-unless explicitly approved by the PM.
-
----
-
-## 3. Commit Policy
-
-Default development flow:
-
-1. Agent/PM assigns bounded task.
-2. Codex implements.
-3. Codex runs tests.
-4. Codex reports exact changed files.
-5. Codex does NOT commit/push yet.
-6. PM reviews.
-7. PM issues separate commit/push instruction.
-8. Commit becomes the new shared checkpoint.
-
-Prefer frequent small checkpoints over one long uncommitted implementation.
-
----
-
-## 4. Protected Untracked Files
-
-Never include:
-
-- `.gitignore`
-- `.wrangler/`
-- `diagnostic-reply-container.js`
-- `maintenance-mark-log-deleted.js`
-
----
-
-# WORKSTREAM A
-
-## 5. Codex A Assignment
-
-Status:
-
-**WAITING FOR NEXT TASK**
-
-Last completed task:
-
-**R13A — Shared Operator Prompt Scope — COMPLETE / MERGED**
-
-Merged application checkpoint: `84509f055ef4e49549c163e762cbcb5819ca3836`
-
-### Objective
-
-Make the existing operator prompt profile apply consistently to:
-
-- Manual AI generation
-- General AUTO
-- Product Review
-
-using the existing:
-
-`operator_prompt_profile:v1`
-
-### Operator-editable sections
-
-- `identityWriting`
-- `generalWritingPolicy`
-- `contentAndFormatPreferences`
-- `productWritingGuidance`
-- `analyticsWritingGuidance`
-
-### Code-owned sections
-
-Must remain authoritative:
-
-- validation
-- output
-- post-format enforcement
-- semantic duplicate protection and code-owned text validation
-- factual verification
-- forbidden claims
-- Product Review disclosure/link safety
-- provider/schema requirements
-
----
-
-## 6. Completed R13A Checkpoints
-
-R13A is complete. The entries below are retained as implementation history.
-
-### R13A-1
-
-Shared effective prompt injection — **COMPLETE**.
-
-ARCH-01-I2A established the workspace-aware loader; R13A-1 injects it once at the shared regenerated-generation boundary.
-
-### R13A-2
-
-Manual and General AUTO integration — **COMPLETE**.
-
-Manual `/app/write`, General AUTO, and General AUTO preview receive the effective profile while publisher, media, format, and scheduler behavior remain unchanged.
-
-### R13A-3
-
-Product Review integration — **COMPLETE**.
-
-Product Review candidate generation receives the shared profile while code-owned link/disclosure rules remain authoritative.
-
-### R13A-4
-
-Prompt UI scope note and regression — **COMPLETE**.
-
-`/app/prompts` explains the scope and protected rules; focused Manual, General AUTO, Product Review, and prompt-profile regressions passed.
-
----
-
-## 7. Codex A Preferred File Ownership
-
-Codex A should primarily own prompt-generation / prompt-profile related files.
-
-Likely areas:
-
-- prompt profile service
-- prompt composition helpers
-- General AUTO generation prompt integration
-- Product Review prompt composition
-- `/api/prompts` only if needed
-- `/app/prompts` only if needed
-- focused prompt tests
-
-### Codex A should avoid
-
-No Codex B implementation files are active at this checkpoint.
-
-If both tasks require the same file:
-
-STOP.
-
-Do not modify concurrently.
-
-Merge one workstream first, sync the other, then continue.
-
----
-
-# WORKSTREAM B
-
-## 8. Codex B Assignment
-
-Status:
-
-**WAITING / NEXT = ARCH-01-I3C — ConnectedAccount credential/runtime resolution**
-
-Last completed task:
-
-**PROJECT2-ASSET-CLEANUP-01 — FINAL APPROVED / MERGED**
-
-Merged application checkpoint:
-
-`4eceeb09a661c1c618489f6da3d1e70316c39d5a`
-
-### Completed checkpoints
-
-- UI-02 — Products UI/UX Cleanup merged.
-- PRODUCT-01-D decision complete / deferred.
-- AUTO-PV1 read-only verification complete: **NOT VERIFIABLE**.
-- MEDIA-02-D design verification complete.
-- MEDIA-02-I merged: optional `experienceTags` / `experienceNote` upload hints.
-- ARCH-01-I2C merged: Workspace-aware Media Library and Content Pool storage.
-- ARCH-01-I3A, I3B1, I3B2, and I3B3 merged: Connected Account, trusted execution context, Workspace propagation, and Product Review candidate foundations.
-- LOGIN-01-I1/I2/I3 plus registered User/Workspace provisioning validation merged.
-- WCLONE-I1/I1.1 and temporary WCLONE-I2 runner merged; clone execution remains HOLD.
-- AUTO-PROMPT-01-I1 and AUTO-DIAG-02-I1 merged.
-- MEDIA-02-U and PROJECT2-ASSET-CLEANUP-01 merged.
-- ADMIN-01-D legacy `/admin` retirement inventory analysis complete; no route was removed.
-
-ARCH-01-I2A is complete. It preserves the Default Workspace legacy profile key and isolates non-default Workspace prompt profiles without migration.
-
-ARCH-01-I2B is complete. It scopes Product service reads and mutations by Workspace while retaining `content_products`, Default Workspace legacy compatibility, and no-migration behavior.
-
-Next main implementation direction: **ARCH-01-I3C — ConnectedAccount credential/runtime resolution**. Codex B is waiting for this assignment; do not start implementation in this documentation task.
-
-### R11D completion
-
-**COMPLETED / MERGED**
-
-Commit: `7d6eea3`
-
-The R11D detail below is retained as historical scope, not a current assignment.
-
-### Completed verification checkpoint
-
-**R11D-V — Target App Selection Integration Verification**
-
-Completed with no code changes required. Verified target-app save/edit/publish boundaries, null compatibility, explicit invalid-target no-fallback behavior, and empty/unavailable registry fallback.
-
-### Objective
-
-Expose the existing Post `targetApp` concept in `/app/write`.
-
-Use the existing:
-
-`GET /api/apps`
-
-and existing Post storage/API wherever possible.
-
----
-
-## 9. R11D Required Behavior
-
-For DRAFT / READY posts:
-
-show:
-
-`게시 대상`
-
-Current functional option:
-
-`Second Horizon Threads`
-
-Future unsupported options may be visible only as:
-
-- `WordPress — 준비 중`
-- `Custom API — 준비 중`
-
-They must not behave as working publishing destinations.
-
-### Backward compatibility
-
-Existing:
-
-`targetApp = null`
-
-must remain valid.
-
-Publishing continues resolving null to:
-
-`threads-primary`
-
-Do not bulk migrate existing posts.
-
-### PUBLISHED posts
-
-Target app must be read-only.
-
-Do not allow target changes after publication.
-
----
-
-## 10. Codex B Preferred File Ownership
-
-For the next approved ARCH-01-I3C tranche, Codex B should primarily own ConnectedAccount credential/runtime resolution files and focused tests.
-
-### Codex B should avoid
-
-Prompt-generation files remain protected unless the PM explicitly assigns a prompt task.
-
-Do not modify:
-
-- prompt composition
-- General AUTO prompt generation
-- Product Review prompt generation
-- `/app/prompts`
-
-unless the PM explicitly serializes the work.
-
----
-
-## 11. R11D Out of Scope
-
-Do not implement:
-
-- WordPress publishing
-- Custom API publishing
-- credentials UI
-- OAuth redesign
-- multi-destination publishing
-- General AUTO target-app selection
-- Product Review publisher
-- scheduler changes
-- post-format changes
-- Publisher Adapter redesign
-
----
-
-# COLLISION MANAGEMENT
-
-## 12. Collision Rule
-
-If Codex A and Codex B need the same file:
-
-Do not resolve by both editing and hoping Git merges cleanly.
-
-Instead:
-
-1. identify which workstream has higher dependency priority;
-2. pause the other;
-3. complete/review/commit/push the first;
-4. other account updates from new `origin/main`;
-5. rerun relevant regression;
-6. resume.
-
-File-level serialization is preferred over manual conflict resolution.
-
----
-
-## 13. Merge Order
-
-R11D is merged in commit:
-
-`7d6eea3`
-
-ARCH-01-I2A merged in `c81e037a138ef454b50be74f330153413f637bf7` before R13A resumed. R13A then merged in `4840261f3b3343cf1055bdc652e50b0df6a3e2d4` and `84509f055ef4e49549c163e762cbcb5819ca3836`.
-
-ARCH-01-I2B merged in `d3282b085cfca1a7221cc7c0dc0b31d820c1d247`, followed by I2C, I3A, I3B1, I3B2, I3B3, LOGIN-01, WCLONE, AUTO diagnostics, media metadata, and PROJECT2 asset cleanup. The current application checkpoint is `4eceeb09a661c1c618489f6da3d1e70316c39d5a`.
-
-Both workstreams are complete. Future work must still use the shared working-tree collision checks and rerun relevant regression before commit approval.
-
----
-
-## 14. Handoff Report Format
-
-Every Codex completion report should include:
-
-1. task / tranche name
-2. starting HEAD
-3. exact changed files
-4. implemented behavior
-5. intentionally unchanged behavior
-6. tests run
-7. test results
-8. `git diff --check`
-9. production safety confirmations
-10. final `git status`
-11. commit/push status
-
-After approved push also report:
-
-- commit hash
-- push range
-- final clean/expected-untracked state
-
----
-
-## 15. Production Safety Shared by Both Workstreams
-
-Current real scheduler owner:
-
-`LEGACY_ACTIVE_RUNTIME_PREPARING`
-
-Runtime Scheduler execution:
-
-`false`
-
-Do not alter:
-
-- scheduler ownership
-- ScheduleCoordinator
-- runtime alarm
-- Cron expressions
-- `wrangler.jsonc`
-
-unless explicitly assigned.
-
-Do not manually:
-
-- execute General AUTO
-- generate Product Review
-- publish Threads content
-- run `wrangler deploy`
-
-unless a PM task explicitly requires it.
-
----
-
-## 16. Current Protected Production Behavior
-
-Preserve:
-
-- successful 2026-08-29 11:30 KST General AUTO path
-- General AUTO TEXT/IMAGE adapter route
-- General AUTO VIDEO exclusion
-- semantic duplicate and code-owned text validation
-- General AUTO structural format advisory behavior
-- Product Review candidate-only workflow
-- R8 operator duplicate-publish protection
-- app registry credential separation
-- scheduler observability / stale receipt recovery
-
----
-
-## 17. Synchronization Checklist
-
-Whenever switching accounts:
-
-### Leaving current account
-
-Ensure latest completed tranche is:
-
-- reviewed;
-- committed;
-- pushed;
-- reflected in these status files when appropriate.
-
-### Entering other account
-
-Run:
-
-```bash
-git status
-git log -3 --oneline
-```
-
-Do not fetch/pull automatically when switching accounts in this shared local repository. Use remote synchronization only when another machine or clone may have pushed, GitHub changed directly, `origin/main` may be ahead, or the PM explicitly requests it.
-
-Read:
-
-- `PROJECT_STATUS.md`
-- `WORKSTREAMS.md`
-
-Then continue only the workstream assigned to that account.
-
----
-
-## 18. Current Shared Checkpoint
-
-Latest shared repository checkpoint before this documentation commit:
-
-`4eceeb09a661c1c618489f6da3d1e70316c39d5a`
-
-Latest application implementation checkpoint:
-
-`4eceeb09a661c1c618489f6da3d1e70316c39d5a` — PROJECT2-ASSET-CLEANUP-01 final approved.
-
-Before relying on this hash, use the default local switch check; verify `origin/main` only when remote synchronization is required.
-
-Update this section after each approved merged checkpoint.
-
----
-
-## 19. Next Handoff
-
-Current handoff status:
-
-### Codex A
-
-WAITING FOR NEXT TASK. R13A is complete.
-
-### Codex B
-
-WAITING / NEXT = **ARCH-01-I3C — ConnectedAccount credential/runtime resolution**.
-
----
-
-## 20. Pending PM Action Items
-
-- **MEDIA-02-AI — provenance-labeled AI generation context for user experience hints**
-  - preserve `USER_EXPERIENCE` as distinct from observation and fact context
-- **MEDIA-02-R — optional future external research use**
-  - preserve `USER_EXPERIENCE` vs `EXTERNAL_FACT` distinction
-- **AUTO-PROVENANCE-01 — later simple generation/media basis display**
-  - generation basis: `PERSONA`, `CURRENT_TOPIC`, `CONTENT_POOL`
-  - media basis: `NONE`, `DAILY_IMAGE`, `DAILY_VIDEO`
-  - no persona text/version snapshot requirement
-- **ARCH-01-I3C — ConnectedAccount credential/runtime resolution**
-  - after I3C: second Threads account, account-level schedules/history/analytics, and later SNS expansion
-
-These are pending PM decisions and are not assigned to Codex B.
+- On resumption: git status --short --branch; git log -3 --oneline; read PROJECT_STATUS.md and this file.
+- Inspect existing edits and agree file ownership before modifying; avoid overlapping writers.
+- Run relevant tests, JavaScript syntax checks and git diff --check. Review complete local diffs without printing full source to the user.
+- Report changed files, tests, limitations and production effect before requesting commit/push.
+- Stage only the approved files. Never include .gitignore, .wrangler/, diagnostic-reply-container.js, maintenance-mark-log-deleted.js or node_modules/.
+- Do not reset, clean, amend, force-push or discard unrelated work.
+- Verify production version rather than assuming no deployment occurred because this thread did not call deploy.
