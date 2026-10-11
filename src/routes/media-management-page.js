@@ -1,9 +1,9 @@
-import { requireAdminSession } from "../middleware/auth.js";
+import { requireLegacyAdminSession } from "../middleware/auth.js";
 import { html } from "../utils/response.js";
 import { renderAdminNavigation } from "../services/admin-navigation.js";
 
 export async function handleMediaManagementPage(request, env) {
-  const auth = await requireAdminSession(request, env);
+  const auth = await requireLegacyAdminSession(request, env);
   if (!auth.ok) return auth.response;
 
   return html(`<!doctype html>

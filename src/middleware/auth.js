@@ -73,6 +73,16 @@ export async function requireAdminSession(request, env) {
   };
 }
 
+// Temporary legacy maintenance boundary. Personal login and platform grants
+// never imply access to the default account's operational data.
+export async function requireLegacyAdminSession(request, env) {
+  const result = await requireAdminSession(request, env);
+  if (!result.ok || result.session.legacy) return result;
+  const response = fail("Forbidden", 403);
+  response.headers.set("cache-control", "no-store");
+  return { ok: false, response };
+}
+
 export async function requireAdminApiSession(
   request,
   env,
@@ -85,10 +95,10 @@ export async function requireAdminApiSession(
 
   if (result.ok) {
     if (allowSelectedWorkspace) {
-      if (result.session.legacy || result.session.selectedWorkspaceId === DEFAULT_WORKSPACE_ID) {
+      if (result.session.legacy) {
         return { ...result, workspaceId: DEFAULT_WORKSPACE_ID };
       }
-      if (!result.session.selectedWorkspaceId) {
+      if (!result.session.selectedWorkspaceId || result.session.selectedWorkspaceId === DEFAULT_WORKSPACE_ID) {
         return { ok: false, response: fail("Workspace data access is not available yet", 409) };
       }
       const workspace = await getWorkspaceForOwner(
@@ -102,9 +112,7 @@ export async function requireAdminApiSession(
       return { ...result, workspaceId: workspace.id };
     }
     if (
-      !result.session.legacy &&
-      result.session.selectedWorkspaceId &&
-      result.session.selectedWorkspaceId !== DEFAULT_WORKSPACE_ID
+      !result.session.legacy
     ) {
       return {
         ok: false,

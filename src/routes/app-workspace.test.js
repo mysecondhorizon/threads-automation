@@ -159,7 +159,7 @@ test("selected non-default Workspace blocks other unscoped app views and APIs wh
 });
 
 test("selected Workspace API opt-in rejects missing, foreign, and inactive Workspaces", async () => {
-  for (const selectedWorkspaceId of [null, "workspace-foreign", "workspace-inactive"]) {
+  for (const selectedWorkspaceId of [null, "default-workspace", "workspace-foreign", "workspace-inactive"]) {
     const { env } = createEnv(selectedWorkspaceId);
     const result = await requireAdminApiSession(
       request("/api/products/media"),
@@ -171,19 +171,19 @@ test("selected Workspace API opt-in rejects missing, foreign, and inactive Works
   }
 });
 
-test("legacy and registered Default Workspace API behavior remains available", async () => {
+test("legacy Default Workspace remains available but structured default selection is denied", async () => {
   const legacy = createEnv("workspace-a");
   assert.equal((await requireAdminApiSession(request("/api/products/media", "legacy"), legacy.env)).ok, true);
 
   const registeredDefault = createEnv("default-workspace");
-  assert.equal((await requireAdminApiSession(request("/api/products/media"), registeredDefault.env)).ok, true);
+  assert.equal((await requireAdminApiSession(request("/api/products/media"), registeredDefault.env)).ok, false);
   const productScope = await requireAdminApiSession(
     request("/api/products/media"),
     registeredDefault.env,
     { allowSelectedWorkspace: true },
   );
-  assert.equal(productScope.ok, true);
-  assert.equal(productScope.workspaceId, "default-workspace");
+  assert.equal(productScope.ok, false);
+  assert.equal(productScope.response.status, 409);
 });
 
 test("app home shows only safe Threads connection feedback", async () => {

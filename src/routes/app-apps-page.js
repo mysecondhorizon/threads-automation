@@ -1,9 +1,9 @@
-import { requireAdminSession } from "../middleware/auth.js";
+import { requireLegacyAdminSession } from "../middleware/auth.js";
 import { renderAppShell } from "./app-shell.js";
 import { appAppsClientScript } from "./app-apps-client.js";
 
 export async function handleAppAppsPage(request, env) {
-  const auth = await requireAdminSession(request, env);
+  const auth = await requireLegacyAdminSession(request, env);
   if (!auth.ok) return auth.response;
 
   return renderAppShell({

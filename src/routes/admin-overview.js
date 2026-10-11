@@ -1,4 +1,4 @@
-import { requireAdminSession } from "../middleware/auth.js";
+import { requireLegacyAdminSession } from "../middleware/auth.js";
 import { ADMIN_ENDPOINTS, renderAdminNavigation } from "../services/admin-navigation.js";
 import { html } from "../utils/response.js";
 
@@ -11,7 +11,7 @@ function pageShell(title, activePath, content) {
 }
 
 export async function handleAdminHomePage(request, env) {
-  const auth = await requireAdminSession(request, env);
+  const auth = await requireLegacyAdminSession(request, env);
   if (!auth.ok) return auth.response;
   const content = `<header style="margin-bottom:24px;"><h1 style="margin:0 0 8px;">Second Horizon Admin</h1><p style="margin:0;color:#555;">관리 기능과 안전한 진단 경로를 한곳에서 찾습니다.</p></header>
   <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
@@ -27,7 +27,7 @@ export async function handleAdminHomePage(request, env) {
 }
 
 export async function handleEndpointOverviewPage(request, env) {
-  const auth = await requireAdminSession(request, env);
+  const auth = await requireLegacyAdminSession(request, env);
   if (!auth.ok) return auth.response;
   const sections = CATEGORY_ORDER.map((category) => {
     const endpoints = ADMIN_ENDPOINTS.filter((entry) => entry.category === category);

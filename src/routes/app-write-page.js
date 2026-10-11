@@ -1,6 +1,5 @@
 import { requireAdminSession } from "../middleware/auth.js";
 import { resolveCurrentAppContext } from "../services/app-context.js";
-import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
 import { buildWritePageClientScript } from "./app-write-client.js";
 import { renderAppShell, renderAppWorkspaceUnavailable } from "./app-shell.js";
 
@@ -95,12 +94,12 @@ export async function handleAppWritePage(request, env) {
   const auth = await requireAdminSession(request, env);
   if (!auth.ok) return auth.response;
   const appContext = await resolveCurrentAppContext(request, env);
-  if (!auth.session.legacy && (!auth.session.selectedWorkspaceId || (auth.session.selectedWorkspaceId !== DEFAULT_WORKSPACE_ID && !appContext?.currentWorkspace))) return renderAppWorkspaceUnavailable(appContext, "/app/write");
+  if (!auth.session.legacy && !appContext?.currentWorkspace) return renderAppWorkspaceUnavailable(appContext, "/app/write");
   return renderAppShell({
     activePath: "/app/write",
     title: "글 작성",
     description: "직접 작성한 글을 저장하고 게시 준비 상태를 관리합니다.",
-    content: renderWritePageContent(),
+    content: (!auth.session.legacy ? '<p role="status">공용 앱 설정과 Topic 조회·새로고침은 현재 개인 계정에서 사용할 수 없습니다. 내 작업공간의 글 작성·저장 기능은 계속 사용할 수 있습니다.</p>' : '') + renderWritePageContent(),
     appContext,
   });
 }

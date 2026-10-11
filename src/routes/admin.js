@@ -1,6 +1,6 @@
 import { config } from "../config.js";
 import {
-  requireAdminSession,
+  requireLegacyAdminSession,
   requireAdminApiSession,
 } from "../middleware/auth.js";
 import {
@@ -222,7 +222,7 @@ export async function handleAdminPostPage(
   env
 ) {
   const auth =
-    await requireAdminSession(
+    await requireLegacyAdminSession(
       request,
       env
     );
