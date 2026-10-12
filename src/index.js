@@ -1,4 +1,5 @@
 import { handleGenerateDraft } from "./routes/ai.js";
+import { handleOperatorConsole } from "./routes/operator-console.js";
 import { handleThreadContext } from "./routes/context.js";
 import { handleAutoPost } from "./routes/auto-post.js";
 
@@ -199,6 +200,10 @@ export default {
 
     const method =
       request.method;
+
+    if (pathname === "/operator") {
+      return handleOperatorConsole(request, env);
+    }
 
     if (
       pathname === "/"

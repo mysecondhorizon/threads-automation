@@ -66,6 +66,10 @@ Potential later work: Commerce learning integration, external research with expl
 
 ## Current working changes and safety
 
+2026-10-12 newest checkpoint: phase 2B committed/pushed as 97809f4a728407566611014cec61d8154042f8c8. Version f9b9e901-ed4e-4802-aaf0-4cb5d0e675ae served 100% at 13:22 KST; production matched the local build (1,145,723 bytes). Current local work is a read-only `/operator` console, documented in docs/operator-console.md. It consumes the existing platform guard without granting any actual user authority. No current commit/push/deploy or account provisioning has been performed.
+
+Console validation: full tests 241/241; independent APPROVED with 6/6 focused tests; JS syntax, diff check and dry-run build passed. Six intended files are ready for user commit/push authorization. The displayed scheduler value is configuration, not a live health assertion.
+
 Current work has advanced to phase 2B connection/token mutation protection; see docs/operator-access-phase2b.md. The phase 1/2A changes described below are now committed and deployed as b400a1d. Phase 2B is local only; no new commit/push/deploy or real OAuth/token/post action is authorized in this tranche.
 
 2026-10-12 phase 2B ready for commit review: full suite 235/235, independent focused 23/23 and final APPROVED from phase2b_review; syntax/whitespace/dry-run build passed. Twelve intended files cover routing/navigation, OAuth and token handlers/tests, origin guard/tests, documentation and checkpoints. OAuth now ends on a user-activated return page to preserve Strict login-cookie behavior. Actual browser OAuth remains unverified; pending flows using old legacy state must restart after rollout. No live account grant, migration or real posting was performed.

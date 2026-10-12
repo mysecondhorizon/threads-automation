@@ -38,6 +38,10 @@ Independent consumer reviewer consumer_final_review completed APPROVED before co
 
 ## Current operator foundation tranche
 
+Latest work: phase 2B was committed/pushed as 97809f4 and deployed with byte-equal production verification. Primary now owns `/operator` read-only console, routing, tests and docs; operator_console_tests stopped before writing due to usage limits, so primary completed its six tests. Independent review assigned to operator_console_review. No live grants or current commit/push/deploy.
+
+Console validation completed: primary 241/241 full tests and dry-run build; independent operator_console_review APPROVED, focused 6/6 and syntax/diff checks passed. Approved scope: src/index.js, src/routes/operator-console.js, src/routes/operator-console.test.js, docs/operator-console.md, PROJECT_STATUS.md, WORKSTREAMS.md. Await explicit commit/main-push authorization; user provisioning is separate.
+
 Completion checkpoint: phase 1 + 2A was committed/pushed as b400a1d and production bundle equality verified for version 3d4d506a-fcc7-467a-a4a6-90a037428af9. Earlier pending-commit notes below describe the pre-commit review. Current assignment is phase 2B (docs/operator-access-phase2b.md): oauth_session_hardening owns oauth.js/tests; token_mutation_tests owns token/origin tests; primary owns the origin guard, token handlers, routing/navigation and docs. No commit/push/deploy/live OAuth/post action in phase 2B.
 
 Phase 2B completion (2026-10-12): implementation agents saved their changes before usage limits; primary completed the callback landing fix and structured fallback regressions. Full suite 235/235, JS syntax, whitespace and dry-run build passed. phase2b_review resumed and issued final APPROVED with 23/23 independent tests. Twelve intended files remain unstaged awaiting commit/push authorization. Production and browser OAuth were not exercised.
