@@ -212,14 +212,14 @@ export default {
       pathname === "/connect" &&
       method === "GET"
     ) {
-      return handleConnectPage();
+      return handleConnectPage(request, env);
     }
 
     if (
-      pathname === "/oauth/start" &&
-      method === "GET"
+      pathname === "/oauth/start"
     ) {
       return handleOAuthStart(
+        request,
         env
       );
     }
@@ -725,8 +725,7 @@ export default {
     }
 
     if (
-      pathname === "/admin/exchange-token" &&
-      method === "GET"
+      pathname === "/admin/exchange-token"
     ) {
       return handleTokenExchange(
         request,
@@ -735,8 +734,7 @@ export default {
     }
 
     if (
-      pathname === "/admin/me" &&
-      method === "GET"
+      pathname === "/admin/me"
     ) {
       return handleProfile(
         request,

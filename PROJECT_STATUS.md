@@ -9,7 +9,7 @@ Build an operator-controlled Threads business: publish credible everyday/experie
 ## Repository and deployment
 
 - Repository: mysecondhorizon/threads-automation; branch: main.
-- Latest application checkpoint: f7a52aa4eecd72191dbc74ca1bd2e6edeb15fb6f — fix: validate AI draft responses safely. Committed and pushed with user approval; deployment of this revision has not been verified.
+- Latest application checkpoint: b400a1da93031db4f55a474865cd97b518866d31 — fix: isolate legacy admin access from personal sessions. Committed and pushed with user approval. Version 3d4d506a-fcc7-467a-a4a6-90a037428af9 deployed 100% on 2026-10-11 15:06 KST; remote module matched the local build byte-for-byte (1,140,793 bytes).
 - On 2026-10-08, production index.js matched a Wrangler 4.131.2 dry-run build of bf89457 byte-for-byte (1,136,739 bytes).
 - Verified production version: 6f83288f-e4f1-430d-a0fa-ccaf8b0ece64, serving 100%, deployed 2026-10-07 18:43:47 KST.
 - The established deployment path is GitHub main -> Cloudflare Workers Builds. Treat any push to main as potentially production-changing. Metadata says wrangler; the exact actor/build trigger for that deployment was not verified.
@@ -65,6 +65,10 @@ L08 consumer excludes insufficient/inconsistent/unavailable evidence and omits g
 Potential later work: Commerce learning integration, external research with explicit provenance, other publisher platforms, legacy admin migration, KV scalability and stronger deduplication. These are options, not active assignments.
 
 ## Current working changes and safety
+
+Current work has advanced to phase 2B connection/token mutation protection; see docs/operator-access-phase2b.md. The phase 1/2A changes described below are now committed and deployed as b400a1d. Phase 2B is local only; no new commit/push/deploy or real OAuth/token/post action is authorized in this tranche.
+
+2026-10-12 phase 2B ready for commit review: full suite 235/235, independent focused 23/23 and final APPROVED from phase2b_review; syntax/whitespace/dry-run build passed. Twelve intended files cover routing/navigation, OAuth and token handlers/tests, origin guard/tests, documentation and checkpoints. OAuth now ends on a user-activated return page to preserve Strict login-cookie behavior. Actual browser OAuth remains unverified; pending flows using old legacy state must restart after rollout. No live account grant, migration or real posting was performed.
 
 2026-10-11 phase 2 design: docs/operator-access-phase2-design.md maps current routes and specifies controlled provisioning/recovery. It identifies a legacy/global guard gap for structured null-workspace sessions, verified with synthetic local storage and the token handler. Shared app/topic callers prevent blanket operator-only conversion. Prioritize boundary repair before live account rollout. Design independent final review remains incomplete after the audit agent's usage limit; runtime source was not changed in phase 2.
 

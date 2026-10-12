@@ -22,7 +22,7 @@ export async function handleAdminHomePage(request, env) {
     ${card("Next AUTO Mode diagnostic", "Read-only Current Topic cadence diagnostic details.", "/admin/endpoints#Diagnostics")}
     ${card("System", "Endpoint Overview and connected profile/session checks.", "/admin/endpoints#Auth-session")}
   </section>
-  <section style="margin-top:24px;padding:18px;border:1px solid #ddd;border-radius:12px;background:#fff;"><h2 style="margin-top:0;">Quick links</h2><a href="/admin/dashboard">Performance dashboard</a> · <a href="/admin/me">Current profile/session check</a></section>`;
+  <section style="margin-top:24px;padding:18px;border:1px solid #ddd;border-radius:12px;background:#fff;"><h2 style="margin-top:0;">Quick links</h2><a href="/admin/dashboard">Performance dashboard</a> · <a href="/connect">Threads connection controls</a></section>`;
   return pageShell("Second Horizon Admin", "/admin", content);
 }
 

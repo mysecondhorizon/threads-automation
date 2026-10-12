@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  handleConnectPage,
   handleConnectedAccountOAuthStart,
   handleOAuthCallback,
   handleOAuthStart,
@@ -15,6 +16,17 @@ import { CONNECTED_ACCOUNTS_KEY } from "../services/connected-accounts.js";
 
 const CREATED_AT = "2026-08-31T00:00:00.000Z";
 const EXPIRES_AT = "2099-08-31T00:00:00.000Z";
+
+async function assertLanding(response, destination) {
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("location"), null);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+  assert.match(response.headers.get("set-cookie"), /Max-Age=0/);
+  const body = await response.text();
+  assert.ok(body.includes(destination));
+  assert.doesNotMatch(body, /<script|http-equiv|legacy-code|short-token|long-token|legacy-session/);
+}
 
 function createEnv({ selectedWorkspaceId = "workspace-next", failPut = null } = {}) {
   const values = new Map([
@@ -75,10 +87,10 @@ function createEnv({ selectedWorkspaceId = "workspace-next", failPut = null } = 
   };
 }
 
-function request(path, { sessionId = "structured-session", method = "GET" } = {}) {
+function request(path, { sessionId = "structured-session", method = "GET", origin = "https://example.test", binding } = {}) {
   return new Request(`https://example.test${path}`, {
     method,
-    headers: sessionId ? { cookie: `admin_session=${sessionId}` } : {},
+    headers: { ...(sessionId ? { cookie: `admin_session=${sessionId}` } : binding ? { cookie: `__Host-threads_oauth=${binding}` } : {}), ...(origin === null ? {} : { origin }) },
   });
 }
 
@@ -113,7 +125,7 @@ test("structured selected Workspace creates a pending account and server-bound O
   assert.match(response.headers.get("location"), /state=connection-state/u);
   const state = JSON.parse(values.get("oauth_state:connection-state"));
   assert.deepEqual(Object.keys(state).sort(), [
-    "connectedAccountId", "createdAt", "expiresAt", "sessionId",
+    "browserBinding", "connectedAccountId", "createdAt", "expiresAt", "sessionId",
     "type", "userId", "version", "workspaceId",
   ]);
   assert.equal(state.sessionId, "structured-session");
@@ -181,8 +193,8 @@ test("connected account callback writes only account credential then activates v
     },
   );
 
-  assert.equal(response.status, 302);
-  assert.equal(response.headers.get("location"), "https://example.test/app?threadsConnection=success");
+  assert.equal(response.status, 200);
+  await assertLanding(response, "/app?threadsConnection=success");
   assert.equal(values.has("oauth_state:connection-state"), false);
   assert.equal(values.has("threads_auth"), false);
   assert.equal(values.has("threads_short_lived_token"), false);
@@ -209,7 +221,7 @@ test("callback fails closed for session/workspace mismatch and writes no credent
     env,
     { fetchImpl: async () => assert.fail("must not exchange") },
   );
-  assert.equal(response.headers.get("location"), "https://example.test/app?threadsConnection=failed");
+  await assertLanding(response, "/app?threadsConnection=failed");
   assert.equal(values.has("connected_account_auth:threads-next"), false);
   assert.equal(JSON.parse(values.get(CONNECTED_ACCOUNTS_KEY)).records[0].active, false);
 });
@@ -238,7 +250,7 @@ test("credential write failure leaves the pending account inactive", async () =>
       getThreadsProfileImpl: async () => ({ id: "threads-user", username: "next-horizon" }),
     },
   );
-  assert.equal(response.headers.get("location"), "https://example.test/app?threadsConnection=failed");
+  await assertLanding(response, "/app?threadsConnection=failed");
   assert.equal(values.has("connected_account_auth:threads-next"), false);
   assert.equal(JSON.parse(values.get(CONNECTED_ACCOUNTS_KEY)).records[0].active, false);
 });
@@ -269,7 +281,7 @@ test("activation failure leaves the account inactive and never falls back to leg
       getThreadsProfileImpl: async () => ({ id: "threads-user", username: "next-horizon" }),
     },
   );
-  assert.equal(response.headers.get("location"), "https://example.test/app?threadsConnection=failed");
+  await assertLanding(response, "/app?threadsConnection=failed");
   assert.equal(JSON.parse(values.get(CONNECTED_ACCOUNTS_KEY)).records[0].active, false);
   assert.equal(values.has("connected_account_auth:threads-next"), true);
   assert.equal(values.has("threads_auth"), false);
@@ -288,7 +300,7 @@ test("expired state and existing account credential fail closed without external
     expired.env,
     { now: "2026-08-31T00:11:00.000Z", fetchImpl: async () => assert.fail("must not exchange") },
   );
-  assert.equal(expiredResponse.headers.get("location"), "https://example.test/app?threadsConnection=failed");
+  await assertLanding(expiredResponse, "/app?threadsConnection=failed");
 
   const existing = createEnv();
   await handleConnectedAccountOAuthStart(
@@ -303,20 +315,107 @@ test("expired state and existing account credential fail closed without external
     existing.env,
     { fetchImpl: async () => assert.fail("must not exchange") },
   );
-  assert.equal(existingResponse.headers.get("location"), "https://example.test/app?threadsConnection=failed");
+  await assertLanding(existingResponse, "/app?threadsConnection=failed");
   assert.equal(existing.values.get("connected_account_auth:threads-next"), "already-present");
 });
 
-test("legacy OAuth state still writes only the legacy short-lived token", async () => {
-  const { env, values } = createEnv();
-  await handleOAuthStart(env, { createState: () => "legacy-state" });
-  const response = await handleOAuthCallback(
-    request("/oauth/callback?code=legacy-code&state=legacy-state", { sessionId: null }),
-    new URL("https://example.test/oauth/callback?code=legacy-code&state=legacy-state"),
-    env,
-    { fetchImpl: async () => Response.json({ access_token: "legacy-short", user_id: "legacy-user" }) },
-  );
-  assert.equal(response.status, 200);
-  assert.equal(JSON.parse(values.get("threads_short_lived_token")).access_token, "legacy-short");
-  assert.equal(values.has("threads_auth"), false);
+test("legacy OAuth start requires a legacy session and same-origin POST without unauthenticated writes", async () => {
+  for (const options of [{ method: "GET" }, { method: "POST", sessionId: null }, { method: "POST" }, { method: "POST", sessionId: "legacy-session", origin: null }, { method: "POST", sessionId: "legacy-session", origin: "https://foreign.test" }]) {
+    const { env, writes } = createEnv();
+    const response = await handleOAuthStart(request("/oauth/start", options), env);
+    assert.notEqual(response.status, 200);
+    assert.equal(writes.length, 0);
+    assert.doesNotMatch(response.headers.get("location") || "", /threads.net/);
+  }
+});
+
+test("authenticated connect page uses POST forms and rejects personal login", async () => {
+  const { env } = createEnv();
+  assert.equal((await handleConnectPage(request("/connect"), env)).status, 403);
+  assert.equal((await handleConnectPage(request("/connect", { sessionId: null }), env)).status, 302);
+  const response = await handleConnectPage(request("/connect", { sessionId: "legacy-session" }), env);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal((await response.text()).match(/method="post"/g).length, 3);
+});
+
+async function startLegacy(setup) {
+  const response = await handleOAuthStart(request("/oauth/start", { sessionId: "legacy-session", method: "POST" }), setup.env, { now: CREATED_AT, createState: () => "legacy-state" });
+  assert.match(response.headers.get("set-cookie"), /HttpOnly; Secure; SameSite=Lax/);
+  assert.doesNotMatch(response.headers.get("set-cookie"), /legacy-session/);
+  return JSON.parse(setup.values.get("oauth_state:legacy-state")).browserBinding;
+}
+
+const callbackPath = "/oauth/callback?code=legacy-code&state=legacy-state";
+const callbackNow = "2026-08-31T00:01:00.000Z";
+test("legacy callback uses browser proof with Strict cookie absent, saves no public token and prevents replay", async () => {
+  const setup = createEnv();
+  const binding = await startLegacy(setup);
+  let calls = 0;
+  const options = { now: callbackNow, fetchImpl: async () => { calls++; return Response.json({ access_token: "legacy-short", user_id: "legacy-user" }); } };
+  const req = request(callbackPath, { sessionId: null, binding });
+  const response = await handleOAuthCallback(req, new URL(req.url), setup.env, options);
+  await assertLanding(response, "/connect?threadsConnection=success");
+  assert.equal(response.headers.get("cache-control"), "no-store");
+
+  const saved = JSON.parse(setup.values.get("threads_short_lived_token"));
+  assert.equal(saved.access_token, "legacy-short");
+  assert.equal(saved.sessionId, "legacy-session");
+  assert.equal(setup.values.has("threads_auth"), false);
+  await handleOAuthCallback(req, new URL(req.url), setup.env, options);
+  assert.equal(calls, 1);
+});
+
+test("legacy callback rejects missing/wrong proof, wrong session, revoked session, expired and old state", async () => {
+  for (const mode of ["missing", "wrong", "session", "revoked", "expired", "old"]) {
+    const setup = createEnv();
+    const binding = await startLegacy(setup);
+    if (mode === "revoked") setup.values.delete("admin_session:legacy-session");
+    if (mode === "old") setup.values.set("oauth_state:legacy-state", "valid");
+    const req = request(callbackPath, { sessionId: mode === "session" ? "structured-session" : null, binding: mode === "missing" ? null : mode === "wrong" ? "wrong-proof" : binding });
+    const response = await handleOAuthCallback(req, new URL(req.url), setup.env, { now: mode === "expired" ? "2026-08-31T00:11:00.000Z" : callbackNow, fetchImpl: async () => assert.fail("must not exchange") });
+    await assertLanding(response, "threadsConnection=failed");
+    assert.equal(setup.values.has("threads_short_lived_token"), false);
+  }
+});
+
+test("structured OAuth accepts its browser proof and rejects cross-origin initiation", async () => {
+  const setup = createEnv();
+  const blocked = await handleConnectedAccountOAuthStart(request("/app/connected-accounts/threads/start", { method: "POST", origin: "https://foreign.test" }), setup.env);
+  assert.equal(blocked.status, 403);
+  assert.equal(setup.writes.length, 0);
+  await handleConnectedAccountOAuthStart(request("/app/connected-accounts/threads/start", { method: "POST" }), setup.env, { now: CREATED_AT, createState: () => "structured-state", createConnectedAccountId: () => "threads-next" });
+  const state = JSON.parse(setup.values.get("oauth_state:structured-state"));
+  const req = request("/oauth/callback?code=test-code&state=structured-state", { sessionId: null, binding: state.browserBinding });
+  const response = await handleOAuthCallback(req, new URL(req.url), setup.env, { now: callbackNow, fetchImpl: oauthFetch(), getThreadsProfileImpl: async () => ({ id: "threads-user", username: "next-horizon" }) });
+  await assertLanding(response, "threadsConnection=success");
+  assert.equal(setup.values.has("threads_auth"), false);
+});
+
+test("structured browser fallback revalidates session, user and workspace before any exchange", async () => {
+  for (const mode of ["revoked", "expired", "inactive", "workspace", "wrong-proof"]) {
+    const setup = createEnv();
+    await handleConnectedAccountOAuthStart(request("/app/connected-accounts/threads/start", { method: "POST" }), setup.env,
+      { now: CREATED_AT, createState: () => "bound-state", createConnectedAccountId: () => "threads-next" });
+    const state = JSON.parse(setup.values.get("oauth_state:bound-state"));
+    const sessionKey = ADMIN_SESSION_KEY_PREFIX + "structured-session";
+    if (mode === "revoked") setup.values.delete(sessionKey);
+    if (mode === "expired" || mode === "workspace") {
+      const session = JSON.parse(setup.values.get(sessionKey));
+      if (mode === "expired") session.expiresAt = "2026-09-01T00:00:00Z";
+      else session.selectedWorkspaceId = "foreign";
+      setup.values.set(sessionKey, JSON.stringify(session));
+    }
+    if (mode === "inactive") {
+      const users = JSON.parse(setup.values.get(USERS_KEY));
+      users.users[0].active = false;
+      setup.values.set(USERS_KEY, JSON.stringify(users));
+    }
+    const before = setup.writes.length;
+    const req = request("/oauth/callback?code=test-code&state=bound-state", { sessionId: null, binding: mode === "wrong-proof" ? "wrong" : state.browserBinding });
+    const response = await handleOAuthCallback(req, new URL(req.url), setup.env,
+      { now: callbackNow, fetchImpl: async () => assert.fail("No exchange on invalid callback") });
+    await assertLanding(response, "threadsConnection=failed");
+    assert.equal(setup.writes.length, before);
+    assert.equal(setup.values.has("connected_account_auth:threads-next"), false);
+  }
 });

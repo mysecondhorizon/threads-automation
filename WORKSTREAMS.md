@@ -38,6 +38,10 @@ Independent consumer reviewer consumer_final_review completed APPROVED before co
 
 ## Current operator foundation tranche
 
+Completion checkpoint: phase 1 + 2A was committed/pushed as b400a1d and production bundle equality verified for version 3d4d506a-fcc7-467a-a4a6-90a037428af9. Earlier pending-commit notes below describe the pre-commit review. Current assignment is phase 2B (docs/operator-access-phase2b.md): oauth_session_hardening owns oauth.js/tests; token_mutation_tests owns token/origin tests; primary owns the origin guard, token handlers, routing/navigation and docs. No commit/push/deploy/live OAuth/post action in phase 2B.
+
+Phase 2B completion (2026-10-12): implementation agents saved their changes before usage limits; primary completed the callback landing fix and structured fallback regressions. Full suite 235/235, JS syntax, whitespace and dry-run build passed. phase2b_review resumed and issued final APPROVED with 23/23 independent tests. Twelve intended files remain unstaged awaiting commit/push authorization. Production and browser OAuth were not exercised.
+
 - Primary completed the read-only grant service, opt-in middleware, 11 new tests and transition documentation after operator_auth_foundation exhausted usage. operator_design_review also stopped at its usage limit; its partial findings were not approval.
 - Independent reviewer operator_foundation_final_review approved the four source/test files and independently passed the 11 new tests. Primary passed the full 212-test suite and JavaScript syntax checks.
 - Owned files: src/services/platform-operators.js and its test, src/middleware/platform-operator-auth.js and its test, docs/operator-access-transition.md, PROJECT_STATUS.md and WORKSTREAMS.md.

@@ -3,7 +3,6 @@ import {
   deleteKey,
   getText,
   putJson,
-  putText,
 } from "../services/kv.js";
 import {
   activatePendingThreadsConnectedAccount,
@@ -14,13 +13,17 @@ import {
 import { resolveSelectedWorkspaceForSession } from "../services/login-foundation.js";
 import { getThreadsProfile } from "../services/threads.js";
 import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
-import { resolveCurrentSession } from "../middleware/auth.js";
-import { html, fail, redirect } from "../utils/response.js";
+import { requireLegacyAdminSession, resolveCurrentSession } from "../middleware/auth.js";
+import { html } from "../utils/response.js";
+import { createCookie, getCookieValue } from "../utils/cookie.js";
+import { requireSameOriginPost } from "../middleware/request-origin.js";
 
 const OAUTH_STATE_PREFIX = "oauth_state:";
 const CONNECTED_ACCOUNT_STATE_VERSION = 1;
 const CONNECTED_ACCOUNT_STATE_TYPE = "connected_threads_account";
 const OAUTH_STATE_TTL_SECONDS = 600;
+const LEGACY_STATE_TYPE = "legacy_threads_account";
+const BINDING_COOKIE = "__Host-threads_oauth";
 
 function oauthStateKey(state) {
   return `${OAUTH_STATE_PREFIX}${state}`;
@@ -58,7 +61,7 @@ function parseConnectedAccountState(value, { now = Date.now() } = {}) {
   if (!state || typeof state !== "object" || Array.isArray(state)) return null;
   const allowedKeys = new Set([
     "version", "type", "sessionId", "userId", "workspaceId",
-    "connectedAccountId", "createdAt", "expiresAt",
+    "connectedAccountId", "createdAt", "expiresAt", "browserBinding",
   ]);
   if (Object.keys(state).some((key) => !allowedKeys.has(key))) return null;
   if (
@@ -71,17 +74,43 @@ function parseConnectedAccountState(value, { now = Date.now() } = {}) {
     !Number.isFinite(Date.parse(state.createdAt)) ||
     !Number.isFinite(Date.parse(state.expiresAt)) ||
     Date.parse(state.expiresAt) <= Date.parse(state.createdAt) ||
-    Date.parse(state.expiresAt) <= now
+    Date.parse(state.expiresAt) <= new Date(now).getTime()
   ) {
     return null;
   }
   return state;
 }
 
+function oauthRedirect(location, binding) {
+  const headers = { location, "cache-control": "no-store", "referrer-policy": "no-referrer" };
+  if (binding !== undefined) headers["set-cookie"] = createCookie(BINDING_COOKIE, binding, { sameSite: "Lax", maxAge: binding ? OAUTH_STATE_TTL_SECONDS : 0 });
+  return new Response(null, { status: 302, headers });
+}
+
+async function resolveCallbackSession(request, env, state) {
+  // Strict login cookies are absent on the provider redirect. The separate
+  // short-lived browser proof can recover only this state-bound live session.
+  try {
+    if (getCookieValue(request, "admin_session")) return await resolveCurrentSession(request, env);
+    if (!state.browserBinding || getCookieValue(request, BINDING_COOKIE) !== state.browserBinding) return null;
+    const bound = new Request(request.url, { headers: { cookie: createCookie("admin_session", state.sessionId).split(";")[0] } });
+    return await resolveCurrentSession(bound, env);
+  } catch { return null; }
+}
+
+function connectionResult(path, outcome) {
+  // End the provider's cross-site redirect chain before navigating with the
+  // Strict login cookie. Only fixed local paths/status values enter this page.
+  const response = html(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>Threads 연결 결과</title></head><body><p>${outcome === "success" ? "Threads 연결 처리가 완료됐습니다." : "Threads 연결을 완료하지 못했습니다. 다시 시작해 주세요."}</p><a href="${path}?threadsConnection=${outcome}">돌아가기</a></body></html>`);
+  response.headers.set("cache-control", "no-store");
+  response.headers.set("referrer-policy", "no-referrer");
+  response.headers.set("content-security-policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
+  response.headers.set("set-cookie", createCookie(BINDING_COOKIE, "", { sameSite: "Lax", maxAge: 0 }));
+  return response;
+}
+
 function safeAppConnectionResult(request, outcome) {
-  const location = new URL("/app", request.url);
-  location.searchParams.set("threadsConnection", outcome);
-  return redirect(location.toString());
+  return connectionResult("/app", outcome);
 }
 
 async function exchangeAuthorizationCode(env, code, { fetchImpl = fetch } = {}) {
@@ -133,15 +162,30 @@ function createConnectedAccountState({ sessionId, userId, workspaceId, connected
   };
 }
 
-export function handleConnectPage() {
-  return html(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Second Horizon</title></head><body style="font-family:Arial;padding:40px;"><h1>Second Horizon</h1><a href="/oauth/start"><button type="button">Connect Threads</button></a></body></html>`);
+export async function handleConnectPage(request, env) {
+  const auth = await requireLegacyAdminSession(request, env);
+  if (!auth.ok) return auth.response;
+  const response = html(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Threads 연결</title></head><body><h1>Threads 연결 관리</h1><form method="post" action="/oauth/start"><button>Threads 연결 시작</button></form><form method="post" action="/admin/exchange-token"><button>장기 토큰으로 전환</button></form><form method="post" action="/admin/me"><button>프로필 확인 및 저장</button></form><a href="/admin">관리 화면</a></body></html>`);
+  response.headers.set("cache-control", "no-store");
+  response.headers.set("referrer-policy", "no-referrer");
+  return response;
 }
 
-/** Legacy default-account OAuth start. */
-export async function handleOAuthStart(env, { createState = () => crypto.randomUUID() } = {}) {
+/** Legacy default-account OAuth start, explicitly bound to a live operator session. */
+export async function handleOAuthStart(request, env, { createState = () => crypto.randomUUID(), now } = {}) {
+  const blocked = requireSameOriginPost(request);
+  if (blocked) return blocked;
+  const auth = await requireLegacyAdminSession(request, env);
+  if (!auth.ok) return auth.response;
   const state = createState();
-  await putText(env, oauthStateKey(state), "valid", { expirationTtl: OAUTH_STATE_TTL_SECONDS });
-  return redirect(buildThreadsAuthorizationUrl(env, state).toString());
+  const createdAt = nowIso(now);
+  const browserBinding = crypto.randomUUID();
+  await putJson(env, oauthStateKey(state), {
+    version: 1, type: LEGACY_STATE_TYPE, sessionId: auth.sessionId,
+    userId: auth.user.id, browserBinding, createdAt,
+    expiresAt: new Date(Date.parse(createdAt) + OAUTH_STATE_TTL_SECONDS * 1000).toISOString(),
+  }, { expirationTtl: OAUTH_STATE_TTL_SECONDS });
+  return oauthRedirect(buildThreadsAuthorizationUrl(env, state).toString(), browserBinding);
 }
 
 /** Creates a pending account for a trusted structured selected Workspace. */
@@ -150,12 +194,8 @@ export async function handleConnectedAccountOAuthStart(
   env,
   { createState = () => crypto.randomUUID(), now, createConnectedAccountId } = {}
 ) {
-  if (request.method !== "POST") {
-    return new Response("Method not allowed", {
-      status: 405,
-      headers: { allow: "POST", "cache-control": "no-store" },
-    });
-  }
+  const blocked = requireSameOriginPost(request);
+  if (blocked) return blocked;
 
   const current = await resolveCurrentSession(request, env);
   if (!current) return new Response("Authentication required", { status: 401, headers: { "cache-control": "no-store" } });
@@ -179,8 +219,9 @@ export async function handleConnectedAccountOAuthStart(
       workspaceId: workspace.id,
       connectedAccountId: account.id,
     }, { now });
+    payload.browserBinding = crypto.randomUUID();
     await putJson(env, oauthStateKey(state), payload, { expirationTtl: OAUTH_STATE_TTL_SECONDS });
-    return redirect(buildThreadsAuthorizationUrl(env, state).toString());
+    return oauthRedirect(buildThreadsAuthorizationUrl(env, state).toString(), payload.browserBinding);
   } catch {
     return new Response("Threads connection could not be started", {
       status: 500,
@@ -189,24 +230,34 @@ export async function handleConnectedAccountOAuthStart(
   }
 }
 
-async function handleLegacyOAuthCallback(url, env, savedState, { fetchImpl = fetch } = {}) {
+function parseLegacyState(value, { now = Date.now() } = {}) {
+  try {
+    const state = JSON.parse(value);
+    const keys = ["version", "type", "sessionId", "userId", "browserBinding", "createdAt", "expiresAt"];
+    if (!state || Object.keys(state).length !== keys.length || !keys.every(key => Object.hasOwn(state, key)) ||
+        state.version !== 1 || state.type !== LEGACY_STATE_TYPE ||
+        !keys.slice(2).every(key => isNonEmptyString(state[key])) ||
+        !Number.isFinite(Date.parse(state.createdAt)) || !Number.isFinite(Date.parse(state.expiresAt)) ||
+        Date.parse(state.expiresAt) <= Date.parse(state.createdAt) || Date.parse(state.expiresAt) <= new Date(now).getTime()) return null;
+    return state;
+  } catch { return null; }
+}
+
+async function handleLegacyOAuthCallback(request, url, env, state, { fetchImpl = fetch, now } = {}) {
+  const result = outcome => connectionResult("/connect", outcome);
+  const current = await resolveCallbackSession(request, env, state);
+  if (!current || !current.session.legacy || current.sessionId !== state.sessionId || current.user.id !== state.userId) return result("failed");
   const code = url.searchParams.get("code");
-  const oauthError = url.searchParams.get("error");
-  if (oauthError || !code || savedState !== "valid") {
-    return fail(oauthError || "Invalid or expired OAuth state", 400);
-  }
   await deleteKey(env, oauthStateKey(url.searchParams.get("state")));
+  if (url.searchParams.get("error") || !code) return result("failed");
   try {
     const data = await exchangeAuthorizationCode(env, code, { fetchImpl });
     await putJson(env, "threads_short_lived_token", {
-      access_token: data.access_token,
-      user_id: data.user_id,
-      saved_at: new Date().toISOString(),
+      access_token: data.access_token, user_id: data.user_id,
+      sessionId: current.sessionId, saved_at: nowIso(now),
     }, { expirationTtl: 3600 });
-    return Response.json({ ok: true, token_received: true, user_id: data.user_id });
-  } catch {
-    return fail("Token exchange failed", 400);
-  }
+    return result("success");
+  } catch { return result("failed"); }
 }
 
 /** Dispatches legacy and server-bound connected-account OAuth states safely. */
@@ -223,9 +274,8 @@ export async function handleOAuthCallback(
   }
 
   const savedState = await getText(env, oauthStateKey(stateId));
-  if (savedState === "valid") {
-    return handleLegacyOAuthCallback(url, env, savedState, { fetchImpl });
-  }
+  const legacyState = parseLegacyState(savedState, { now });
+  if (legacyState) return handleLegacyOAuthCallback(request, url, env, legacyState, { fetchImpl, now });
 
   if (url.searchParams.get("error") || !code) {
     return safeAppConnectionResult(request, "failed");
@@ -234,7 +284,7 @@ export async function handleOAuthCallback(
   const state = parseConnectedAccountState(savedState, { now });
   if (!state) return safeAppConnectionResult(request, "failed");
 
-  const current = await resolveCurrentSession(request, env);
+  const current = await resolveCallbackSession(request, env, state);
   if (!current || current.session.legacy || current.sessionId !== state.sessionId || current.user.id !== state.userId) {
     return safeAppConnectionResult(request, "failed");
   }
