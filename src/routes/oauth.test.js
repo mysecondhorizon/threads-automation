@@ -335,6 +335,7 @@ test("authenticated connect page uses POST forms and rejects personal login", as
   assert.equal((await handleConnectPage(request("/connect", { sessionId: null }), env)).status, 302);
   const response = await handleConnectPage(request("/connect", { sessionId: "legacy-session" }), env);
   assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("referrer-policy"), "same-origin");
   assert.equal((await response.text()).match(/method="post"/g).length, 3);
 });
 

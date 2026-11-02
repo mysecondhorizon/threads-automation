@@ -49,7 +49,9 @@ function renderWorkspaceContext(appContext) {
     ? `<form class="app-workspace-form" method="POST" action="/app/connected-accounts/threads/start">
         <button type="submit">Connect Threads account</button>
       </form>`
-    : "";
+    : currentWorkspace?.id === DEFAULT_WORKSPACE_ID
+      ? '<a href="/app/threads/reconnect">기존 Threads 재연결</a>'
+      : "";
   const logout = `<form class="app-workspace-form" method="POST" action="/app/logout">
       <button type="submit">Logout</button>
     </form>`;

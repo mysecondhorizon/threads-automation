@@ -46,6 +46,8 @@ import {
   handleOAuthStart,
   handleOAuthCallback,
   handleConnectedAccountOAuthStart,
+  handleDefaultThreadsReconnectPage,
+  handleDefaultThreadsReconnectStart,
 } from "./routes/oauth.js";
 
 import {
@@ -282,6 +284,13 @@ export default {
 
     if (pathname === "/app/workspace" && method === "POST") {
       return handleAppWorkspaceSelection(request, env);
+    }
+
+    if (pathname === "/app/threads/reconnect") {
+      return handleDefaultThreadsReconnectPage(request, env);
+    }
+    if (pathname === "/app/threads/reconnect/start") {
+      return handleDefaultThreadsReconnectStart(request, env);
     }
 
     if (
