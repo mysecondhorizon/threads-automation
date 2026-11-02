@@ -100,10 +100,11 @@ async function resolveCallbackSession(request, env, state) {
   } catch { return null; }
 }
 
-function connectionResult(path, outcome) {
+function connectionResult(path, outcome, diagnostic = "") {
   // End the provider's cross-site redirect chain before navigating with the
   // Strict login cookie. Only fixed local paths/status values enter this page.
-  const response = html(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>Threads 연결 결과</title></head><body><p>${outcome === "success" ? "Threads 연결 처리가 완료됐습니다." : "Threads 연결을 완료하지 못했습니다. 다시 시작해 주세요."}</p><a href="${path}?threadsConnection=${outcome}">돌아가기</a></body></html>`);
+  const diagnosticText = RECONNECT_FAILURE_MESSAGES[diagnostic] || "";
+  const response = html(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>Threads 연결 결과</title></head><body><p>${outcome === "success" ? "Threads 연결 처리가 완료됐습니다." : "Threads 연결을 완료하지 못했습니다. 다시 시작해 주세요."}</p>${diagnosticText ? `<p>확인 결과: ${diagnosticText}</p>` : ""}<a href="${path}?threadsConnection=${outcome}">돌아가기</a></body></html>`);
   response.headers.set("cache-control", "no-store");
   response.headers.set("referrer-policy", "no-referrer");
   response.headers.set("content-security-policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
@@ -111,8 +112,23 @@ function connectionResult(path, outcome) {
   return response;
 }
 
-function safeAppConnectionResult(request, outcome) {
-  return connectionResult("/app", outcome);
+const RECONNECT_FAILURE_MESSAGES = Object.freeze({
+  state: "인증 요청이 만료됐거나 유효하지 않습니다. 재연결 화면에서 다시 시작해 주세요.",
+  browser: "브라우저 인증 확인에 실패했습니다. 재연결 화면에서 다시 시작해 주세요.",
+  session: "로그인 또는 운영 공간 권한을 확인하지 못했습니다. 앱에 다시 로그인해 주세요.",
+  credential: "기존 연결 정보가 변경됐습니다. 재연결 화면에서 다시 시작해 주세요.",
+  consent: "Threads 인증 응답을 처리하지 못했습니다. 재연결 화면에서 다시 시작해 주세요.",
+  exchange: "Threads 인증 코드 교환에 실패했습니다. 관리자에게 이 단계를 알려 주세요.",
+  short_identity: "Threads가 반환한 계정이 기존 연결 계정과 다릅니다. 기존 계정으로 다시 인증해 주세요.",
+  long_exchange: "장기 인증정보 교환에 실패했습니다. 관리자에게 이 단계를 알려 주세요.",
+  profile: "새 인증정보로 Threads 계정을 조회하지 못했습니다.",
+  profile_identity: "확인된 Threads 계정이 기존 계정과 다르거나 프로필 정보가 불완전합니다.",
+  recheck: "인증 도중 로그인·권한 또는 기존 연결 정보가 변경됐습니다.",
+  save: "인증정보 저장을 확인하지 못했습니다. 중복 실행 전에 관리자에게 확인해 주세요.",
+});
+
+function safeAppConnectionResult(request, outcome, diagnostic = "") {
+  return connectionResult("/app", outcome, diagnostic);
 }
 
 async function exchangeAuthorizationCode(env, code, { fetchImpl = fetch } = {}) {
@@ -246,27 +262,38 @@ function parseReconnectState(value, { now = Date.now() } = {}) {
 }
 
 async function handleDefaultReconnectCallback(request, url, env, state, { fetchImpl, getThreadsProfileImpl, now }) {
-  const result = outcome => connectionResult("/app", outcome);
+  let stage = "browser";
+  const result = outcome => connectionResult("/app", outcome, outcome === "failed" ? stage : "");
   try {
     if (getCookieValue(request, BINDING_COOKIE) !== state.browserBinding) return result("failed");
+    stage = "session";
     const current = await resolveCallbackSession(request, env, state);
     if (!current || current.sessionId !== state.sessionId || current.user.id !== state.userId ||
         !await isDefaultReconnectOwner(env, current)) return result("failed");
+    stage = "credential";
     const original = await getText(env, "threads_auth");
     if (!original || await credentialRevision(original) !== state.credentialRevision) return result("failed");
     const existing = JSON.parse(original);
     if (existing.user_id !== state.expectedThreadsUserId) return result("failed");
+    stage = "consent";
     await deleteKey(env, oauthStateKey(url.searchParams.get("state")));
     const code = url.searchParams.get("code");
     if (!code || url.searchParams.get("error")) return result("failed");
+    stage = "exchange";
     const short = await exchangeAuthorizationCode(env, code, { fetchImpl });
+    stage = "short_identity";
     if (short.user_id !== state.expectedThreadsUserId) return result("failed");
+    stage = "long_exchange";
     const long = await exchangeLongLivedToken(env, short.access_token, { fetchImpl });
+    stage = "profile";
     const profile = await getThreadsProfileImpl(long.access_token);
+    stage = "profile_identity";
     if (profile?.id !== state.expectedThreadsUserId || !isNonEmptyString(profile?.username)) return result("failed");
+    stage = "recheck";
     const live = await resolveCallbackSession(request, env, state);
     if (!live || live.sessionId !== state.sessionId || live.user.id !== state.userId ||
         !await isDefaultReconnectOwner(env, live) || await getText(env, "threads_auth") !== original) return result("failed");
+    stage = "save";
     await putJson(env, "threads_auth", {
       ...existing, access_token: long.access_token, user_id: profile.id, username: profile.username.trim(),
       token_type: long.token_type ?? null, expires_in: Number.isFinite(long.expires_in) ? long.expires_in : null,
@@ -375,7 +402,7 @@ export async function handleOAuthCallback(
   const code = url.searchParams.get("code");
   const stateId = url.searchParams.get("state");
   if (!stateId) {
-    return safeAppConnectionResult(request, "failed");
+    return safeAppConnectionResult(request, "failed", "state");
   }
 
   const savedState = await getText(env, oauthStateKey(stateId));
@@ -389,7 +416,7 @@ export async function handleOAuthCallback(
   }
 
   const state = parseConnectedAccountState(savedState, { now });
-  if (!state) return safeAppConnectionResult(request, "failed");
+  if (!state) return safeAppConnectionResult(request, "failed", "state");
 
   const current = await resolveCallbackSession(request, env, state);
   if (!current || current.session.legacy || current.sessionId !== state.sessionId || current.user.id !== state.userId) {

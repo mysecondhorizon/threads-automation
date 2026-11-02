@@ -123,6 +123,7 @@ test("same-account checks reject mismatched code and profile identities without 
     const setup = fixture(), state = await start(setup);
     const result = await callback(setup, state, { fetcher: provider({ shortId: mode === "code" ? "different" : CREDENTIAL.user_id }), profileId: mode === "profile" ? "different" : CREDENTIAL.user_id });
     assert.match(result.text, /threadsConnection=failed/u);
+    assert.ok(result.text.includes(mode === "code" ? "Threads가 반환한 계정이 기존 연결 계정과 다릅니다" : "확인된 Threads 계정이 기존 계정과 다르거나"));
     unchanged(setup);
     assert.deepEqual(setup.writes, [STATE_KEY]);
   }
@@ -151,6 +152,10 @@ test("expired, malformed, wrong-session and changed-credential callbacks fail be
     if (mode === "credential-change") setup.values.set("threads_auth", JSON.stringify({ ...CREDENTIAL, access_token: "newer-credential" }));
     const before = setup.values.get("threads_auth");
     assert.match((await callback(setup, state, options)).text, /threadsConnection=failed/u);
+    if (["expired", "extra-key", "wrong-type"].includes(mode)) {
+      const expiredResult = await callback(setup, state, options);
+      assert.match(expiredResult.text, /인증 요청이 만료됐거나 유효하지 않습니다/u);
+    }
     assert.equal(fetcher.calls, 0, mode);
     assert.equal(setup.values.get("threads_auth"), before, mode);
   }
@@ -182,7 +187,10 @@ test("provider, profile and write failures return generic result without partial
     if (mode === "profile") options.profileImpl = async () => { throw Error("private-provider-secret"); };
     if (mode === "write") setup.failWrite = true;
     if (mode === "credential-concurrency") options.fetcher = provider({ duringExchange: () => setup.values.set("threads_auth", JSON.stringify({ ...CREDENTIAL, access_token: "newer-credential" })) });
-    assert.match((await callback(setup, state, options)).text, /threadsConnection=failed/u);
+    const result = await callback(setup, state, options);
+    assert.match(result.text, /threadsConnection=failed/u);
+    const messages = { provider: "Threads 인증 코드 교환에 실패", profile: "새 인증정보로 Threads 계정을 조회하지 못했습니다", write: "인증정보 저장을 확인하지 못했습니다", "credential-concurrency": "인증 도중 로그인·권한 또는 기존 연결 정보가 변경" };
+    assert.ok(result.text.includes(messages[mode]), mode);
     if (mode === "credential-concurrency") assert.equal(JSON.parse(setup.values.get("threads_auth")).access_token, "newer-credential");
     else unchanged(setup);
     assert.deepEqual(setup.writes, [STATE_KEY]);
