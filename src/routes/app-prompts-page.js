@@ -1,6 +1,5 @@
 import { requireAdminSession } from "../middleware/auth.js";
 import { resolveCurrentAppContext } from "../services/app-context.js";
-import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
 import { renderAppShell, renderAppWorkspaceUnavailable } from "./app-shell.js";
 
 const fields = [
@@ -113,10 +112,7 @@ export async function handleAppPromptsPage(request, env) {
   const auth = await requireAdminSession(request, env);
   if (!auth.ok) return auth.response;
   const appContext = await resolveCurrentAppContext(request, env);
-  if (!auth.session.legacy && (
-    !auth.session.selectedWorkspaceId ||
-    (auth.session.selectedWorkspaceId !== DEFAULT_WORKSPACE_ID && !appContext?.currentWorkspace)
-  )) {
+  if (!auth.session.legacy && !appContext?.currentWorkspace) {
     return renderAppWorkspaceUnavailable(appContext, "/app/prompts");
   }
   return renderAppShell({

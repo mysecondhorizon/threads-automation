@@ -1,3 +1,4 @@
+import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
 import { resolveCurrentSession } from "../middleware/auth.js";
 import {
   AppContextError,
@@ -35,7 +36,7 @@ function renderWorkspaceContext(appContext) {
     : workspaces.length
       ? "Select a workspace to establish your app context."
       : "No workspace available.";
-  const selector = workspaces.length >= 2
+  const selector = (workspaces.length >= 2 || (!currentWorkspace && workspaces.length === 1))
     ? `<form class="app-workspace-form" method="POST" action="/app/workspace">
         <label for="app-workspace-id">Workspace</label>
         <select id="app-workspace-id" name="workspaceId">
@@ -44,7 +45,7 @@ function renderWorkspaceContext(appContext) {
         <button type="submit">Select</button>
       </form>`
     : "";
-  const threadsConnection = currentWorkspace
+  const threadsConnection = currentWorkspace && currentWorkspace.id !== DEFAULT_WORKSPACE_ID
     ? `<form class="app-workspace-form" method="POST" action="/app/connected-accounts/threads/start">
         <button type="submit">Connect Threads account</button>
       </form>`

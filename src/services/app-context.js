@@ -64,7 +64,7 @@ export async function resolveCurrentAppContext(request, env) {
     selectedWorkspaceId,
     resolved.user.id,
   );
-  const currentWorkspace = selected?.active && selected.id !== DEFAULT_WORKSPACE_ID
+  const currentWorkspace = selected?.active
     ? sanitizeWorkspace(selected)
     : null;
 
@@ -108,7 +108,7 @@ export async function selectCurrentWorkspace(request, env, workspaceId, { now = 
     fail("Workspace selection is invalid", "workspace_selection_invalid");
   }
 
-  if (!workspace || !workspace.active || workspace.id === DEFAULT_WORKSPACE_ID) {
+  if (!workspace || !workspace.active) {
     fail("Workspace selection is invalid", "workspace_selection_invalid");
   }
 

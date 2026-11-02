@@ -224,6 +224,40 @@ export async function createUser(
   return user;
 }
 
+// Explicit deployment-held ownership of the existing compatibility scope.
+// This does not turn a personal session into a legacy session or grant access
+// to global maintenance routes. Missing/malformed identity data denies access.
+async function getAssignedDefaultWorkspace(env, ownerUserId) {
+  const assignedId = env.LEGACY_WORKSPACE_OWNER_USER_ID;
+  if (
+    typeof assignedId !== "string" ||
+    !ID_PATTERN.test(assignedId) ||
+    assignedId === LEGACY_USER_ID ||
+    assignedId !== ownerUserId
+  ) return null;
+
+  const stored = await getJson(env, USERS_KEY);
+  if (!isPlainObject(stored) || stored.version !== STORE_VERSION || !Array.isArray(stored.users)) {
+    return null;
+  }
+  const ids = new Set();
+  const logins = new Set();
+  let assignedUser = null;
+  for (const value of stored.users) {
+    const user = normalizeStoredUser(value);
+    if (!user || ids.has(user.id) || logins.has(user.loginId)) return null;
+    ids.add(user.id);
+    logins.add(user.loginId);
+    if (user.id === assignedId) {
+      if (value.id !== assignedId) return null;
+      assignedUser = user;
+    }
+  }
+  return assignedUser?.active
+    ? { ...getDefaultWorkspace(), ownerUserId: assignedId }
+    : null;
+}
+
 export async function listWorkspacesForOwner(
   env,
   ownerUserId,
@@ -236,6 +270,9 @@ export async function listWorkspacesForOwner(
 
   if (normalizedOwnerUserId === DEFAULT_WORKSPACE_OWNER_USER_ID) {
     workspaces.unshift(getDefaultWorkspace());
+  } else {
+    const assigned = await getAssignedDefaultWorkspace(env, normalizedOwnerUserId);
+    if (assigned) workspaces.unshift(assigned);
   }
 
   return workspaces.filter((workspace) => !activeOnly || workspace.active);
@@ -248,7 +285,7 @@ export async function getWorkspaceForOwner(env, workspaceId, ownerUserId) {
   if (normalizedWorkspaceId === DEFAULT_WORKSPACE_ID) {
     return normalizedOwnerUserId === DEFAULT_WORKSPACE_OWNER_USER_ID
       ? getDefaultWorkspace()
-      : null;
+      : getAssignedDefaultWorkspace(env, normalizedOwnerUserId);
   }
 
   return (await readWorkspaces(env)).find(

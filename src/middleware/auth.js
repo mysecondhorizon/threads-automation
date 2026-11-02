@@ -98,7 +98,7 @@ export async function requireAdminApiSession(
       if (result.session.legacy) {
         return { ...result, workspaceId: DEFAULT_WORKSPACE_ID };
       }
-      if (!result.session.selectedWorkspaceId || result.session.selectedWorkspaceId === DEFAULT_WORKSPACE_ID) {
+      if (!result.session.selectedWorkspaceId) {
         return { ok: false, response: fail("Workspace data access is not available yet", 409) };
       }
       const workspace = await getWorkspaceForOwner(

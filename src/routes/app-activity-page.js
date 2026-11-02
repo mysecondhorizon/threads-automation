@@ -1,6 +1,5 @@
 import { requireAdminSession } from "../middleware/auth.js";
 import { resolveCurrentAppContext } from "../services/app-context.js";
-import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
 import { renderAppShell, renderAppWorkspaceUnavailable } from "./app-shell.js";
 
 function content() {
@@ -33,10 +32,7 @@ export async function handleAppActivityPage(request, env) {
   const auth = await requireAdminSession(request, env);
   if (!auth.ok) return auth.response;
   const appContext = await resolveCurrentAppContext(request, env);
-  if (!auth.session.legacy && (
-    !auth.session.selectedWorkspaceId ||
-    (auth.session.selectedWorkspaceId !== DEFAULT_WORKSPACE_ID && !appContext?.currentWorkspace)
-  )) {
+  if (!auth.session.legacy && !appContext?.currentWorkspace) {
     return renderAppWorkspaceUnavailable(appContext, "/app/activity");
   }
   return renderAppShell({ activePath: "/app/activity", title: "운영 활동", description: "최근 자동 실행, 제품 후기, 직접 게시 활동을 확인합니다.", content: content() });
