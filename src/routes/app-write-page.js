@@ -1,4 +1,5 @@
 import { requireAdminSession } from "../middleware/auth.js";
+import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
 import { resolveCurrentAppContext } from "../services/app-context.js";
 import { buildWritePageClientScript } from "./app-write-client.js";
 import { renderAppShell, renderAppWorkspaceUnavailable } from "./app-shell.js";
@@ -99,7 +100,9 @@ export async function handleAppWritePage(request, env) {
     activePath: "/app/write",
     title: "글 작성",
     description: "직접 작성한 글을 저장하고 게시 준비 상태를 관리합니다.",
-    content: (!auth.session.legacy ? '<p role="status">공용 앱 설정과 Topic 조회·새로고침은 현재 개인 계정에서 사용할 수 없습니다. 내 작업공간의 글 작성·저장 기능은 계속 사용할 수 있습니다.</p>' : '') + renderWritePageContent(),
+    content: (!auth.session.legacy ? (appContext?.currentWorkspace?.id === DEFAULT_WORKSPACE_ID
+      ? '<p role="status">기존 운영 공간의 Topic 조회·가져오기를 사용할 수 있습니다. 공용 앱 설정은 기존 관리 화면에서 관리합니다.</p>'
+      : '<p role="status">공용 앱 설정과 Topic 조회·새로고침은 현재 개인 계정에서 사용할 수 없습니다. 내 작업공간의 글 작성·저장 기능은 계속 사용할 수 있습니다.</p>') : '') + renderWritePageContent(),
     appContext,
   });
 }

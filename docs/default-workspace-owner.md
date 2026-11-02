@@ -20,3 +20,9 @@ App listing, selection, context, pages and workspace API authorization resolve t
 ## Rollback
 
 Remove `LEGACY_WORKSPACE_OWNER_USER_ID` and deploy the reviewed config, or roll back the release. The next authorization check denies personal default access even with an existing selected session. No data cleanup, credential rollback or registry ownership edits are required. Legacy maintenance remains available. User activity changes made while access was authorized are not undone. KV user state is eventually consistent; do not claim immediate cross-region revocation or cancellation of already authorized in-flight work.
+
+## Topic access follow-up (local, 2026-11-02 KST)
+
+The assigned owner with default selected can use `GET /api/topics` and `POST /api/topics/refresh` from the write page. Responses keep the existing narrow projection: id, title, summary and updatedAt. POST refresh requires an exact same-origin Origin header for personal sessions and runs the existing inventory refresh, which may invoke AI and update the shared default inventory when the user clicks the control. Regression verification uses injected mocks only.
+
+Unselected, revoked, inactive and other-workspace users remain denied before inventory reads or refreshes; operator status alone is insufficient. `/api/apps`, global settings, raw inventory and other legacy maintenance routes remain unchanged and unavailable to personal sessions. This exception does not provide shared Topic inventory to other workspaces. The write page explains this distinction.

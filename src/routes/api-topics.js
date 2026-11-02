@@ -1,4 +1,5 @@
 import { requireAdminApiSession } from "../middleware/auth.js";
+import { DEFAULT_WORKSPACE_ID } from "../services/workspace-foundation.js";
 import {
   readCurrentTopicInventory,
   refreshCurrentTopicInventory,
@@ -28,8 +29,18 @@ function operatorTopics(inventory) {
 }
 
 async function authorize(request, env) {
-  const auth = await requireAdminApiSession(request, env);
-  return auth.ok ? null : auth.response;
+  const auth = await requireAdminApiSession(request, env, { allowSelectedWorkspace: true });
+  if (!auth.ok) return auth.response;
+  // This inventory belongs to the existing default runtime. A platform grant
+  // or ownership of a different workspace must not confer access to it.
+  if (!auth.session.legacy && auth.workspaceId !== DEFAULT_WORKSPACE_ID) {
+    return fail("Topic access is not available for this workspace", 409);
+  }
+  if (!auth.session.legacy && request.method === "POST" &&
+      request.headers.get("origin") !== new URL(request.url).origin) {
+    return fail("Forbidden", 403);
+  }
+  return null;
 }
 
 function topicError(error, fallback) {

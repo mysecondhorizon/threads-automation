@@ -133,7 +133,11 @@ test("direct global handlers deny personal sessions before credentials, data, or
         const f = fixture(selection, { grant });
         const response = await handler(request(path, method), f.env);
         assert.equal(response.status, 409, `${method} ${path}, selection=${selection}, grant=${grant}`);
-        assert.deepEqual(f.calls.reads, [sessionKey, USERS_KEY]);
+        // Topic authorization now resolves selected ownership before applying
+        // the default-only inventory boundary. Other global APIs stay legacy-only.
+        assert.deepEqual(f.calls.reads, path.startsWith("/api/topics") && selection === "owned"
+          ? [sessionKey, USERS_KEY, WORKSPACES_KEY]
+          : [sessionKey, USERS_KEY]);
         noEffects(f.calls);
       }
     }
